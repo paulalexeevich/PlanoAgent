@@ -185,7 +185,7 @@ def fill_products():
 
     # Build rules
     rules = ProductLogicRules(
-        fill_target_pct=float(data.get("fill_target_pct", 95)),
+        fill_target_pct=float(data.get("fill_target_pct", 99)),
         max_facings=int(data.get("max_facings", 5)),
         group_by=data.get("group_by", "subcategory"),
     )

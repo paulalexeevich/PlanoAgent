@@ -35,7 +35,7 @@ DEFAULT_TOP_SELLER_BRANDS = [
 class ProductLogicRules:
     """Configurable rule-set that governs how products fill equipment."""
 
-    fill_target_pct: float = 95.0           # Target fill rate (was 85)
+    fill_target_pct: float = 99.0           # Target fill rate
     max_facings: int = 5                     # Max facings per product
     group_by: str = "subcategory"            # "subcategory" | "brand"
 
