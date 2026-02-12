@@ -56,6 +56,7 @@ class Product:
     cost: float
     abv: float
     color_hex: str = "#CCCCCC"
+    weekly_units_sold: int = 0
 
     @property
     def margin(self) -> float:

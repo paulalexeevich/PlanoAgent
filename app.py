@@ -21,7 +21,9 @@ from planogram_generator import (
 from planogram_schema import Planogram, Equipment
 from gemini_agent import generate_planogram_with_ai, fill_products_with_ai
 from product_logic import (
-    ProductLogicRules, fill_equipment_rule_based, build_fill_prompt
+    ProductLogicRules, fill_equipment_rule_based, build_fill_prompt,
+    compute_facings_for_ai, get_total_shelf_width, phase1_capacity_check,
+    phase2_optimal_facings, validate_and_fix_shelves,
 )
 from decision_tree import (
     get_tree_for_category, validate_compliance, BEER_DECISION_TREE
@@ -162,12 +164,11 @@ def generate_equipment():
 @app.route("/api/fill-products", methods=["POST"])
 def fill_products():
     """
-    Step 2: Fill the current empty equipment with products using Product Logic.
+    Step 2: Fill equipment with products using 3-phase algorithm.
 
-    Uses Gemini AI first; on failure falls back to rule-based algorithm.
-
-    Expects optional JSON body with rule overrides:
-      fill_target_pct, max_facings, group_by, top_seller_brands, etc.
+    Phase 1: Capacity check — select products by sales priority.
+    Phase 2: Optimal facings — algorithm distributes facings to ~95% fill.
+    Phase 3: Placement — Gemini AI arranges on shelves; rule-based fallback.
     """
     global current_planogram, current_summary, current_equipment
 
@@ -182,40 +183,57 @@ def fill_products():
             "error": "No equipment generated yet. Run Step 1 first.",
         }), 400
 
-    # Build rules (apply any overrides from request)
+    # Build rules
     rules = ProductLogicRules(
-        fill_target_pct=float(data.get("fill_target_pct", 85)),
-        max_facings=int(data.get("max_facings", 3)),
+        fill_target_pct=float(data.get("fill_target_pct", 95)),
+        max_facings=int(data.get("max_facings", 5)),
         group_by=data.get("group_by", "subcategory"),
     )
 
     products_json = _load_products_json()
 
-    # Deep copy equipment so we don't mutate stored state for retries
     import copy
     equipment_copy = copy.deepcopy(current_equipment)
 
-    # Get decision tree for category
     decision_tree = get_tree_for_category("Beer")
+
+    # ── Phase 1 + 2: Compute selected products & optimal facings ──
+    selected_products, facings = compute_facings_for_ai(
+        equipment_copy, products_json, rules
+    )
+
+    total_w = get_total_shelf_width(equipment_copy)
+    used_w = sum(p["width_in"] * facings[p["id"]] for p in selected_products)
+    print(f"[Fill] Phase 1+2: {len(selected_products)} products selected, "
+          f"{sum(facings.values())} total facings, "
+          f"used={used_w:.1f}in / {total_w:.1f}in ({used_w/total_w*100:.1f}%)")
 
     source = "gemini_ai"
     try:
-        # Primary: Gemini AI
-        prompt = build_fill_prompt(equipment_copy, products_json, rules,
-                                   decision_tree=decision_tree)
+        # ── Phase 3a: Gemini AI placement ──
+        prompt = build_fill_prompt(
+            equipment_copy, selected_products, facings, rules,
+            decision_tree=decision_tree,
+        )
         result = fill_products_with_ai(equipment_copy, products_json, prompt)
         filled_equipment = result["equipment"]
         placed_products = result["products"]
     except Exception as ai_err:
-        # Fallback: rule-based
+        # ── Phase 3b: Rule-based fallback ──
         print(f"[Fill] AI failed ({ai_err}), falling back to rule-based")
         traceback.print_exc()
         equipment_copy = copy.deepcopy(current_equipment)
-        result = fill_equipment_rule_based(equipment_copy, products_json, rules,
-                                           decision_tree=decision_tree)
+        result = fill_equipment_rule_based(
+            equipment_copy, products_json, rules,
+            decision_tree=decision_tree,
+        )
         filled_equipment = result["equipment"]
         placed_products = result["products"]
         source = "rule_based_fallback"
+
+    # ── Post-processing: validate & fix any shelf overflows ──
+    prod_map = {p["id"]: p for p in products_json}
+    filled_equipment = validate_and_fix_shelves(filled_equipment, prod_map)
 
     # Build planogram object
     from datetime import date
@@ -228,7 +246,9 @@ def fill_products():
         "metadata": {
             "version": "1.0",
             "generated_by": f"Product Logic ({source})",
-            "placement_strategy": f"fill_target={rules.fill_target_pct}%, group_by={rules.group_by}",
+            "placement_strategy": f"fill_target={rules.fill_target_pct}%, "
+                                  f"{len(selected_products)} products, "
+                                  f"{sum(facings.values())} facings",
         },
         "equipment": filled_equipment,
         "products": placed_products,

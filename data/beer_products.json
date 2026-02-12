@@ -15,9 +15,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 15.99,
-    "cost": 11.50,
+    "cost": 11.5,
     "abv": 4.2,
-    "color_hex": "#003DA5"
+    "color_hex": "#003DA5",
+    "weekly_units_sold": 129
   },
   {
     "id": "BEER-002",
@@ -35,9 +36,10 @@
     "height_in": 5.0,
     "depth_in": 5.0,
     "price": 8.99,
-    "cost": 6.30,
+    "cost": 6.3,
     "abv": 4.2,
-    "color_hex": "#003DA5"
+    "color_hex": "#003DA5",
+    "weekly_units_sold": 180
   },
   {
     "id": "BEER-003",
@@ -55,9 +57,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 15.99,
-    "cost": 11.50,
+    "cost": 11.5,
     "abv": 5.0,
-    "color_hex": "#C8102E"
+    "color_hex": "#C8102E",
+    "weekly_units_sold": 72
   },
   {
     "id": "BEER-004",
@@ -75,9 +78,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 9.49,
-    "cost": 6.80,
+    "cost": 6.8,
     "abv": 5.0,
-    "color_hex": "#C8102E"
+    "color_hex": "#C8102E",
+    "weekly_units_sold": 100
   },
   {
     "id": "BEER-005",
@@ -95,9 +99,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 15.99,
-    "cost": 11.40,
+    "cost": 11.4,
     "abv": 4.2,
-    "color_hex": "#C0C0C0"
+    "color_hex": "#C0C0C0",
+    "weekly_units_sold": 115
   },
   {
     "id": "BEER-006",
@@ -115,9 +120,10 @@
     "height_in": 5.0,
     "depth_in": 5.0,
     "price": 8.99,
-    "cost": 6.20,
+    "cost": 6.2,
     "abv": 4.2,
-    "color_hex": "#C0C0C0"
+    "color_hex": "#C0C0C0",
+    "weekly_units_sold": 160
   },
   {
     "id": "BEER-007",
@@ -135,9 +141,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 15.49,
-    "cost": 11.20,
+    "cost": 11.2,
     "abv": 4.2,
-    "color_hex": "#002D72"
+    "color_hex": "#002D72",
+    "weekly_units_sold": 108
   },
   {
     "id": "BEER-008",
@@ -155,9 +162,10 @@
     "height_in": 5.0,
     "depth_in": 5.0,
     "price": 8.49,
-    "cost": 6.10,
+    "cost": 6.1,
     "abv": 4.2,
-    "color_hex": "#002D72"
+    "color_hex": "#002D72",
+    "weekly_units_sold": 150
   },
   {
     "id": "BEER-009",
@@ -175,9 +183,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 17.99,
-    "cost": 13.00,
+    "cost": 13.0,
     "abv": 4.2,
-    "color_hex": "#1D1D1D"
+    "color_hex": "#1D1D1D",
+    "weekly_units_sold": 93
   },
   {
     "id": "BEER-010",
@@ -195,9 +204,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 10.99,
-    "cost": 7.90,
+    "cost": 7.9,
     "abv": 4.2,
-    "color_hex": "#1D1D1D"
+    "color_hex": "#1D1D1D",
+    "weekly_units_sold": 130
   },
   {
     "id": "BEER-011",
@@ -215,9 +225,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 11.49,
-    "cost": 8.20,
+    "cost": 8.2,
     "abv": 4.6,
-    "color_hex": "#FDB913"
+    "color_hex": "#FDB913",
+    "weekly_units_sold": 80
   },
   {
     "id": "BEER-012",
@@ -235,9 +246,10 @@
     "height_in": 9.5,
     "depth_in": 7.5,
     "price": 18.99,
-    "cost": 13.70,
+    "cost": 13.7,
     "abv": 4.6,
-    "color_hex": "#FDB913"
+    "color_hex": "#FDB913",
+    "weekly_units_sold": 48
   },
   {
     "id": "BEER-013",
@@ -255,9 +267,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 11.49,
-    "cost": 8.30,
+    "cost": 8.3,
     "abv": 4.4,
-    "color_hex": "#C5A253"
+    "color_hex": "#C5A253",
+    "weekly_units_sold": 75
   },
   {
     "id": "BEER-014",
@@ -275,9 +288,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 18.49,
-    "cost": 13.40,
+    "cost": 13.4,
     "abv": 4.4,
-    "color_hex": "#C5A253"
+    "color_hex": "#C5A253",
+    "weekly_units_sold": 45
   },
   {
     "id": "BEER-015",
@@ -295,9 +309,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 11.99,
-    "cost": 8.60,
+    "cost": 8.6,
     "abv": 5.0,
-    "color_hex": "#00A651"
+    "color_hex": "#00A651",
+    "weekly_units_sold": 55
   },
   {
     "id": "BEER-016",
@@ -315,9 +330,10 @@
     "height_in": 9.5,
     "depth_in": 7.5,
     "price": 19.99,
-    "cost": 14.50,
+    "cost": 14.5,
     "abv": 5.0,
-    "color_hex": "#00A651"
+    "color_hex": "#00A651",
+    "weekly_units_sold": 33
   },
   {
     "id": "BEER-017",
@@ -335,9 +351,10 @@
     "height_in": 9.0,
     "depth_in": 5.0,
     "price": 11.99,
-    "cost": 8.70,
+    "cost": 8.7,
     "abv": 5.2,
-    "color_hex": "#A6192E"
+    "color_hex": "#A6192E",
+    "weekly_units_sold": 40
   },
   {
     "id": "BEER-018",
@@ -355,9 +372,10 @@
     "height_in": 6.5,
     "depth_in": 5.5,
     "price": 10.99,
-    "cost": 7.90,
+    "cost": 7.9,
     "abv": 4.2,
-    "color_hex": "#1C1C1C"
+    "color_hex": "#1C1C1C",
+    "weekly_units_sold": 10
   },
   {
     "id": "BEER-019",
@@ -375,9 +393,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 10.99,
-    "cost": 7.80,
+    "cost": 7.8,
     "abv": 5.4,
-    "color_hex": "#4A90D9"
+    "color_hex": "#4A90D9",
+    "weekly_units_sold": 45
   },
   {
     "id": "BEER-020",
@@ -395,9 +414,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 17.99,
-    "cost": 13.00,
+    "cost": 13.0,
     "abv": 5.4,
-    "color_hex": "#4A90D9"
+    "color_hex": "#4A90D9",
+    "weekly_units_sold": 27
   },
   {
     "id": "BEER-021",
@@ -415,9 +435,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 10.99,
-    "cost": 7.70,
+    "cost": 7.7,
     "abv": 5.0,
-    "color_hex": "#8B0000"
+    "color_hex": "#8B0000",
+    "weekly_units_sold": 30
   },
   {
     "id": "BEER-022",
@@ -435,9 +456,10 @@
     "height_in": 9.5,
     "depth_in": 7.5,
     "price": 17.99,
-    "cost": 12.90,
+    "cost": 12.9,
     "abv": 5.0,
-    "color_hex": "#8B0000"
+    "color_hex": "#8B0000",
+    "weekly_units_sold": 18
   },
   {
     "id": "BEER-023",
@@ -455,9 +477,10 @@
     "height_in": 5.0,
     "depth_in": 5.0,
     "price": 10.49,
-    "cost": 7.50,
+    "cost": 7.5,
     "abv": 5.6,
-    "color_hex": "#2E6B2E"
+    "color_hex": "#2E6B2E",
+    "weekly_units_sold": 28
   },
   {
     "id": "BEER-024",
@@ -475,9 +498,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 17.49,
-    "cost": 12.60,
+    "cost": 12.6,
     "abv": 5.6,
-    "color_hex": "#2E6B2E"
+    "color_hex": "#2E6B2E",
+    "weekly_units_sold": 16
   },
   {
     "id": "BEER-025",
@@ -495,9 +519,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 10.99,
-    "cost": 7.80,
+    "cost": 7.8,
     "abv": 6.2,
-    "color_hex": "#D4A017"
+    "color_hex": "#D4A017",
+    "weekly_units_sold": 22
   },
   {
     "id": "BEER-026",
@@ -515,9 +540,10 @@
     "height_in": 5.0,
     "depth_in": 5.0,
     "price": 11.49,
-    "cost": 8.20,
+    "cost": 8.2,
     "abv": 6.0,
-    "color_hex": "#4682B4"
+    "color_hex": "#4682B4",
+    "weekly_units_sold": 18
   },
   {
     "id": "BEER-027",
@@ -535,9 +561,10 @@
     "height_in": 5.0,
     "depth_in": 5.0,
     "price": 10.49,
-    "cost": 7.40,
+    "cost": 7.4,
     "abv": 5.2,
-    "color_hex": "#CC5500"
+    "color_hex": "#CC5500",
+    "weekly_units_sold": 20
   },
   {
     "id": "BEER-028",
@@ -555,9 +582,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 14.99,
-    "cost": 10.80,
+    "cost": 10.8,
     "abv": 4.5,
-    "color_hex": "#8B4513"
+    "color_hex": "#8B4513",
+    "weekly_units_sold": 36
   },
   {
     "id": "BEER-029",
@@ -575,9 +603,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 8.99,
-    "cost": 6.40,
+    "cost": 6.4,
     "abv": 4.5,
-    "color_hex": "#8B4513"
+    "color_hex": "#8B4513",
+    "weekly_units_sold": 50
   },
   {
     "id": "BEER-030",
@@ -595,9 +624,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 11.99,
-    "cost": 8.40,
+    "cost": 8.4,
     "abv": 4.7,
-    "color_hex": "#003399"
+    "color_hex": "#003399",
+    "weekly_units_sold": 28
   },
   {
     "id": "BEER-031",
@@ -615,9 +645,10 @@
     "height_in": 6.5,
     "depth_in": 5.5,
     "price": 9.49,
-    "cost": 6.60,
+    "cost": 6.6,
     "abv": 4.7,
-    "color_hex": "#003399"
+    "color_hex": "#003399",
+    "weekly_units_sold": 40
   },
   {
     "id": "BEER-032",
@@ -635,9 +666,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 10.99,
-    "cost": 7.90,
+    "cost": 7.9,
     "abv": 4.2,
-    "color_hex": "#006847"
+    "color_hex": "#006847",
+    "weekly_units_sold": 45
   },
   {
     "id": "BEER-033",
@@ -655,9 +687,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 17.49,
-    "cost": 12.60,
+    "cost": 12.6,
     "abv": 4.2,
-    "color_hex": "#006847"
+    "color_hex": "#006847",
+    "weekly_units_sold": 27
   },
   {
     "id": "BEER-034",
@@ -675,9 +708,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 14.99,
-    "cost": 10.80,
+    "cost": 10.8,
     "abv": 4.5,
-    "color_hex": "#DC143C"
+    "color_hex": "#DC143C",
+    "weekly_units_sold": 12
   },
   {
     "id": "BEER-035",
@@ -695,9 +729,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 10.99,
-    "cost": 7.90,
+    "cost": 7.9,
     "abv": 4.4,
-    "color_hex": "#FFD700"
+    "color_hex": "#FFD700",
+    "weekly_units_sold": 25
   },
   {
     "id": "BEER-036",
@@ -715,9 +750,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 10.49,
-    "cost": 7.50,
+    "cost": 7.5,
     "abv": 5.9,
-    "color_hex": "#228B22"
+    "color_hex": "#228B22",
+    "weekly_units_sold": 18
   },
   {
     "id": "BEER-037",
@@ -735,9 +771,10 @@
     "height_in": 5.0,
     "depth_in": 10.0,
     "price": 18.99,
-    "cost": 13.70,
+    "cost": 13.7,
     "abv": 4.7,
-    "color_hex": "#556B2F"
+    "color_hex": "#556B2F",
+    "weekly_units_sold": 8
   },
   {
     "id": "BEER-038",
@@ -755,9 +792,10 @@
     "height_in": 5.0,
     "depth_in": 5.0,
     "price": 10.99,
-    "cost": 7.80,
+    "cost": 7.8,
     "abv": 7.0,
-    "color_hex": "#FF6347"
+    "color_hex": "#FF6347",
+    "weekly_units_sold": 16
   },
   {
     "id": "BEER-039",
@@ -775,9 +813,10 @@
     "height_in": 5.0,
     "depth_in": 5.0,
     "price": 10.99,
-    "cost": 7.80,
+    "cost": 7.8,
     "abv": 6.9,
-    "color_hex": "#696969"
+    "color_hex": "#696969",
+    "weekly_units_sold": 15
   },
   {
     "id": "BEER-040",
@@ -795,9 +834,10 @@
     "height_in": 5.0,
     "depth_in": 5.0,
     "price": 10.49,
-    "cost": 7.40,
+    "cost": 7.4,
     "abv": 7.0,
-    "color_hex": "#800080"
+    "color_hex": "#800080",
+    "weekly_units_sold": 20
   },
   {
     "id": "BEER-041",
@@ -815,9 +855,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 9.49,
-    "cost": 6.70,
+    "cost": 6.7,
     "abv": 4.4,
-    "color_hex": "#DAA520"
+    "color_hex": "#DAA520",
+    "weekly_units_sold": 18
   },
   {
     "id": "BEER-042",
@@ -835,9 +876,10 @@
     "height_in": 5.0,
     "depth_in": 5.0,
     "price": 10.49,
-    "cost": 7.40,
+    "cost": 7.4,
     "abv": 4.4,
-    "color_hex": "#FF8C00"
+    "color_hex": "#FF8C00",
+    "weekly_units_sold": 14
   },
   {
     "id": "BEER-043",
@@ -855,9 +897,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 10.99,
-    "cost": 7.80,
+    "cost": 7.8,
     "abv": 5.0,
-    "color_hex": "#B22222"
+    "color_hex": "#B22222",
+    "weekly_units_sold": 22
   },
   {
     "id": "BEER-044",
@@ -875,9 +918,10 @@
     "height_in": 5.0,
     "depth_in": 5.0,
     "price": 10.99,
-    "cost": 7.90,
+    "cost": 7.9,
     "abv": 4.9,
-    "color_hex": "#000080"
+    "color_hex": "#000080",
+    "weekly_units_sold": 12
   },
   {
     "id": "BEER-045",
@@ -895,9 +939,10 @@
     "height_in": 9.0,
     "depth_in": 5.0,
     "price": 11.49,
-    "cost": 8.30,
+    "cost": 8.3,
     "abv": 5.1,
-    "color_hex": "#003DA5"
+    "color_hex": "#003DA5",
+    "weekly_units_sold": 12
   },
   {
     "id": "BEER-046",
@@ -915,9 +960,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 11.49,
-    "cost": 8.20,
+    "cost": 8.2,
     "abv": 5.4,
-    "color_hex": "#2F1810"
+    "color_hex": "#2F1810",
+    "weekly_units_sold": 15
   },
   {
     "id": "BEER-047",
@@ -935,9 +981,10 @@
     "height_in": 9.5,
     "depth_in": 5.0,
     "price": 10.99,
-    "cost": 7.90,
+    "cost": 7.9,
     "abv": 4.7,
-    "color_hex": "#B8860B"
+    "color_hex": "#B8860B",
+    "weekly_units_sold": 45
   },
   {
     "id": "BEER-048",
@@ -955,9 +1002,10 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 11.49,
-    "cost": 8.00,
+    "cost": 8.0,
     "abv": 4.6,
-    "color_hex": "#FFD700"
+    "color_hex": "#FFD700",
+    "weekly_units_sold": 25
   },
   {
     "id": "BEER-049",
@@ -975,9 +1023,10 @@
     "height_in": 5.0,
     "depth_in": 10.5,
     "price": 18.99,
-    "cost": 13.30,
+    "cost": 13.3,
     "abv": 4.2,
-    "color_hex": "#87CEEB"
+    "color_hex": "#87CEEB",
+    "weekly_units_sold": 27
   },
   {
     "id": "BEER-050",
@@ -995,8 +1044,9 @@
     "height_in": 5.0,
     "depth_in": 7.5,
     "price": 12.99,
-    "cost": 9.10,
+    "cost": 9.1,
     "abv": 4.1,
-    "color_hex": "#4682B4"
+    "color_hex": "#4682B4",
+    "weekly_units_sold": 61
   }
 ]

@@ -1,17 +1,19 @@
 """
 Product Logic — Rules & Algorithms for Filling Equipment
 =========================================================
-Defines configurable rules for product placement and provides:
-  1. A deterministic rule-based fill algorithm (fallback)
-  2. A prompt builder for Gemini AI-based filling
+Three-phase approach:
+  Phase 1: Capacity check — can all products fit at 1 facing? If not, trim by sales.
+  Phase 2: Optimal facings — distribute extra facings by sales velocity until ~95% full.
+  Phase 3: Placement — Gemini arranges products on shelves by decision tree; rule-based fallback.
 
-The rules control which products go on which shelf tiers,
-facing allocations, grouping strategy, and target fill rate.
+The key principle: the ALGORITHM decides "how many facings" (math),
+while Gemini AI decides "where to place" (merchandising logic).
 """
 
 import json
+import copy
 from dataclasses import dataclass, field, asdict
-from typing import List, Optional
+from typing import List, Dict, Optional, Tuple
 
 from planogram_schema import Equipment, Bay, Shelf, Position, Product
 from decision_tree import (
@@ -21,32 +23,6 @@ from decision_tree import (
 
 
 # ── Default rule values ──────────────────────────────────────────────────────
-
-DEFAULT_BOTTOM_SHELF = {
-    "min_pack_size": 12,
-    "subcategories": [],                     # empty = any subcategory
-    "description": "Large/heavy packs (12+, 15, 24-packs)",
-}
-
-DEFAULT_EYE_LEVEL = {
-    "min_pack_size": 0,
-    "max_pack_size": 6,
-    "subcategories": [
-        "Craft IPA", "Craft Pale Ale", "Craft Amber Ale",
-        "Craft Session IPA", "Craft Wheat Beer", "Craft Lager",
-    ],
-    "description": "Craft & premium 6-packs — highest margin at eye level",
-}
-
-DEFAULT_TOP_SHELF = {
-    "min_pack_size": 0,
-    "max_pack_size": 6,
-    "subcategories": [
-        "Import Lager", "Import Dark Lager", "Import Stout",
-        "Hard Cider",
-    ],
-    "description": "Import 6-packs, specialty & cider",
-}
 
 DEFAULT_TOP_SELLER_BRANDS = [
     "Bud Light", "Coors Light", "Miller Lite", "Michelob Ultra",
@@ -59,26 +35,26 @@ DEFAULT_TOP_SELLER_BRANDS = [
 class ProductLogicRules:
     """Configurable rule-set that governs how products fill equipment."""
 
-    fill_target_pct: float = 85.0
-    max_facings: int = 3
-    group_by: str = "subcategory"              # "subcategory" | "brand"
+    fill_target_pct: float = 95.0           # Target fill rate (was 85)
+    max_facings: int = 5                     # Max facings per product
+    group_by: str = "subcategory"            # "subcategory" | "brand"
 
     # Shelf-tier assignments (bottom → top)
     bottom_shelf_min_pack: int = 12
     bottom_shelf_subcategories: List[str] = field(default_factory=list)
 
-    eye_level_subcategories: List[str] = field(default_factory=lambda: list(
-        DEFAULT_EYE_LEVEL["subcategories"]
-    ))
+    eye_level_subcategories: List[str] = field(default_factory=lambda: [
+        "Craft IPA", "Craft Pale Ale", "Craft Amber Ale",
+        "Craft Session IPA", "Craft Wheat Beer", "Craft Lager",
+    ])
 
-    top_shelf_subcategories: List[str] = field(default_factory=lambda: list(
-        DEFAULT_TOP_SHELF["subcategories"]
-    ))
+    top_shelf_subcategories: List[str] = field(default_factory=lambda: [
+        "Import Lager", "Import Dark Lager", "Import Stout", "Hard Cider",
+    ])
 
-    top_seller_brands: List[str] = field(default_factory=lambda: list(
-        DEFAULT_TOP_SELLER_BRANDS
-    ))
-    top_seller_extra_facings: int = 2          # facings for top-seller brands
+    top_seller_brands: List[str] = field(
+        default_factory=lambda: list(DEFAULT_TOP_SELLER_BRANDS)
+    )
 
     # ── helpers ───────────────────────────────────────────────────────────
 
@@ -101,9 +77,6 @@ class ProductLogicRules:
             f"  Top shelves (upper 1–2): Subcategories: {', '.join(self.top_shelf_subcategories)}.",
             f"  Remaining products: distribute to shelves with available space.",
             "",
-            f"TOP-SELLER BRANDS (give {self.top_seller_extra_facings} facings): "
-            + ", ".join(self.top_seller_brands) + ".",
-            "",
             "GENERAL MERCHANDISING:",
             "- Place heavier/larger items on lower shelves.",
             "- Premium & high-margin items at eye level (shelves 3–4 of 5).",
@@ -112,7 +85,117 @@ class ProductLogicRules:
         return "\n".join(lines)
 
 
-# ── Rule-based fill algorithm (deterministic fallback) ───────────────────────
+# ==============================================================================
+# PHASE 1: Capacity Check
+# ==============================================================================
+
+def phase1_capacity_check(
+    products: List[dict],
+    total_shelf_width: float,
+) -> List[dict]:
+    """
+    Check if all products fit at 1 facing each.
+    If not, drop lowest-selling products until they fit.
+
+    Returns the list of selected products (sorted by sales DESC).
+    """
+    # Sort by weekly_units_sold DESC (highest sellers first)
+    sorted_products = sorted(
+        products,
+        key=lambda p: p.get("weekly_units_sold", 0),
+        reverse=True,
+    )
+
+    total_width_1facing = sum(p["width_in"] for p in sorted_products)
+
+    if total_width_1facing <= total_shelf_width:
+        # All products fit
+        return sorted_products
+
+    # Drop lowest sellers until products fit
+    selected = []
+    running_width = 0.0
+    for p in sorted_products:
+        if running_width + p["width_in"] <= total_shelf_width:
+            selected.append(p)
+            running_width += p["width_in"]
+        # else: product is dropped (doesn't fit)
+
+    return selected
+
+
+# ==============================================================================
+# PHASE 2: Optimal Facings Calculation
+# ==============================================================================
+
+def phase2_optimal_facings(
+    selected_products: List[dict],
+    total_shelf_width: float,
+    rules: ProductLogicRules,
+) -> Dict[str, int]:
+    """
+    Calculate optimal facing count for each product to fill ~95% of shelf space.
+
+    Algorithm:
+      1. Start with 1 facing per product.
+      2. Remaining space = total - sum(widths).
+      3. Iterate through products by sales rank.
+      4. For each product, try adding 1 more facing. If it fits, add it.
+      5. Repeat rounds until no more facings can be added or we hit target.
+
+    Returns: dict mapping product_id → facing count.
+    """
+    target_width = total_shelf_width * (rules.fill_target_pct / 100.0)
+
+    # Initialize: 1 facing each
+    facings: Dict[str, int] = {}
+    for p in selected_products:
+        facings[p["id"]] = 1
+
+    used_width = sum(p["width_in"] for p in selected_products)
+
+    # Sort by sales DESC for extra facings priority
+    sales_sorted = sorted(
+        selected_products,
+        key=lambda p: p.get("weekly_units_sold", 0),
+        reverse=True,
+    )
+
+    # Minimum product width (used as stop threshold)
+    min_width = min(p["width_in"] for p in selected_products) if selected_products else 0
+
+    # Iteratively add facings
+    max_rounds = 20  # safety cap
+    for round_num in range(max_rounds):
+        added_any = False
+
+        for p in sales_sorted:
+            pid = p["id"]
+            pw = p["width_in"]
+
+            # Already at max facings?
+            if facings[pid] >= rules.max_facings:
+                continue
+
+            # Can we fit one more facing?
+            if used_width + pw <= total_shelf_width:
+                facings[pid] += 1
+                used_width += pw
+                added_any = True
+
+            # Hit target?
+            if used_width >= target_width:
+                break
+
+        if not added_any or used_width >= target_width:
+            break
+
+    return facings
+
+
+# ==============================================================================
+# PHASE 3a: Rule-based placement (deterministic fallback)
+# ==============================================================================
 
 def _classify_product(product: dict, rules: ProductLogicRules) -> str:
     """Return tier label for a product: 'bottom', 'eye', 'top', or 'middle'."""
@@ -132,46 +215,39 @@ def _shelf_tier_for_index(shelf_idx: int, total_shelves: int) -> str:
     """Map a shelf index (0-based, bottom=0) to a tier label."""
     if total_shelves <= 2:
         return ["bottom", "eye"][shelf_idx] if shelf_idx < 2 else "top"
-    # Divide shelves into zones
     bottom_end = max(1, total_shelves // 4)
     top_start = total_shelves - max(1, total_shelves // 4)
     if shelf_idx < bottom_end:
         return "bottom"
     if shelf_idx >= top_start:
         return "top"
-    # middle zone — upper half is "eye", lower half is "middle"
     mid = (bottom_end + top_start) // 2
     return "eye" if shelf_idx >= mid else "middle"
 
 
-def fill_equipment_rule_based(
+def phase3_rule_based_placement(
     equipment_dict: dict,
-    products_json: list,
+    selected_products: List[dict],
+    facings: Dict[str, int],
     rules: ProductLogicRules,
     decision_tree: Optional[DecisionTree] = None,
 ) -> dict:
     """
-    Deterministic algorithm: fill empty equipment with products.
-
-    Args:
-        equipment_dict:  equipment JSON (bays → shelves with empty positions)
-        products_json:   full product catalog (list of dicts)
-        rules:           ProductLogicRules instance
-        decision_tree:   optional DecisionTree — if provided, products within
-                         each tier are sorted by the tree's grouping order
-
-    Returns:
-        dict with keys:
-          "equipment" — the filled equipment dict (original structure preserved)
-          "products"  — list of product dicts actually placed
+    Place products on shelves using deterministic rules.
+    Uses pre-calculated facings from Phase 2.
     """
+    # Build product lookup
+    prod_map = {p["id"]: p for p in selected_products}
+
     # Classify products into tiers
-    tier_buckets: dict[str, list] = {"bottom": [], "middle": [], "eye": [], "top": []}
-    for p in products_json:
+    tier_buckets: Dict[str, List[dict]] = {
+        "bottom": [], "middle": [], "eye": [], "top": []
+    }
+    for p in selected_products:
         tier = _classify_product(p, rules)
         tier_buckets[tier].append(p)
 
-    # Sort within each tier using the decision tree (if provided) for grouping
+    # Sort within each tier
     for tier in tier_buckets.values():
         if decision_tree:
             tier.sort(key=lambda p: get_product_group_tuple(p, decision_tree))
@@ -189,10 +265,9 @@ def fill_equipment_rule_based(
         for s_idx, shelf in enumerate(shelves):
             shelf_w = shelf.get("width_in", 48)
             shelf_h = shelf.get("height_in", 12)
-            target_w = shelf_w * (rules.fill_target_pct / 100.0)
             tier_label = _shelf_tier_for_index(s_idx, total_shelves)
 
-            # Primary bucket for this tier, fallback to 'middle', then others
+            # Priority order for this shelf tier
             priority = [tier_label, "middle", "eye", "bottom", "top"]
             seen = set()
             ordered_buckets = []
@@ -207,41 +282,43 @@ def fill_equipment_rule_based(
             for bucket_name in ordered_buckets:
                 bucket = tier_buckets[bucket_name]
                 i = 0
-                while i < len(bucket) and x_pos < target_w:
+                while i < len(bucket):
                     prod = bucket[i]
+                    pid = prod["id"]
+                    pw = prod["width_in"]
+                    f = facings.get(pid, 1)
+                    total_w = pw * f
 
                     # Height check
                     if prod["height_in"] > shelf_h:
                         i += 1
                         continue
 
-                    # Determine facings
-                    pw = prod["width_in"]
-                    is_top_seller = prod["brand"] in rules.top_seller_brands
-                    desired = rules.top_seller_extra_facings if is_top_seller else 1
-                    max_fit = int((shelf_w - x_pos) / pw) if pw > 0 else 0
-                    facings = min(desired, max_fit, rules.max_facings)
-                    if facings < 1:
-                        i += 1
-                        continue
+                    # Width check — must fit on this shelf
+                    if x_pos + total_w > shelf_w + 0.1:  # small tolerance
+                        # Try with fewer facings
+                        max_fit = int((shelf_w - x_pos) / pw) if pw > 0 else 0
+                        if max_fit < 1:
+                            i += 1
+                            continue
+                        f = min(f, max_fit)
+                        total_w = pw * f
 
                     positions.append({
-                        "product_id": prod["id"],
+                        "product_id": pid,
                         "x_position": round(x_pos, 2),
-                        "facings_wide": facings,
+                        "facings_wide": f,
                         "facings_high": 1,
                         "facings_deep": 1,
                         "orientation": "front",
                     })
-                    x_pos += pw * facings
-                    placed_product_ids.add(prod["id"])
-                    bucket.pop(i)  # remove so it isn't reused
-                    # don't increment i — next element shifted into place
+                    x_pos += total_w
+                    placed_product_ids.add(pid)
+                    bucket.pop(i)
 
             shelf["positions"] = positions
 
-    # Collect only placed products
-    placed_products = [p for p in products_json if p["id"] in placed_product_ids]
+    placed_products = [p for p in selected_products if p["id"] in placed_product_ids]
 
     return {
         "equipment": equipment_dict,
@@ -249,24 +326,194 @@ def fill_equipment_rule_based(
     }
 
 
-# ── Gemini prompt builder ────────────────────────────────────────────────────
+# ==============================================================================
+# Helper: calculate total shelf width from equipment
+# ==============================================================================
+
+def get_total_shelf_width(equipment_dict: dict) -> float:
+    """Sum of all shelf widths across all bays."""
+    total = 0.0
+    for bay in equipment_dict.get("bays", []):
+        for shelf in bay.get("shelves", []):
+            total += shelf.get("width_in", 48)
+    return total
+
+
+# ==============================================================================
+# POST-PROCESSING: Validate & fix shelf overflows
+# ==============================================================================
+
+def validate_and_fix_shelves(equipment_dict: dict, products_map: dict) -> dict:
+    """
+    Post-process AI output: ensure no shelf exceeds its width.
+
+    For any overflowing shelf:
+      1. Reduce facings on lowest-priority products.
+      2. Remove products that still don't fit.
+      3. Recalculate x_positions sequentially.
+
+    Args:
+        equipment_dict: filled equipment from AI
+        products_map: dict of product_id → product dict (with weekly_units_sold)
+
+    Returns:
+        The fixed equipment dict (modified in-place).
+    """
+    fixes = 0
+
+    for bay in equipment_dict.get("bays", []):
+        for shelf in bay.get("shelves", []):
+            shelf_w = shelf.get("width_in", 48)
+            positions = shelf.get("positions", [])
+
+            if not positions:
+                continue
+
+            # Calculate current total width
+            total_used = 0.0
+            for pos in positions:
+                pid = pos.get("product_id", "")
+                prod = products_map.get(pid)
+                if prod:
+                    pw = prod.get("width_in", 0)
+                    facings = pos.get("facings_wide", 1)
+                    total_used += pw * facings
+
+            if total_used <= shelf_w + 0.5:  # tolerance
+                # Shelf is fine, just re-calculate x_positions
+                x = 0.0
+                for pos in positions:
+                    pos["x_position"] = round(x, 2)
+                    prod = products_map.get(pos.get("product_id", ""))
+                    if prod:
+                        x += prod.get("width_in", 0) * pos.get("facings_wide", 1)
+                continue
+
+            # ── Shelf overflows — fix it ──
+            fixes += 1
+
+            # Sort positions by sales (lowest sales last = first to trim)
+            positions.sort(
+                key=lambda pos: products_map.get(
+                    pos.get("product_id", ""), {}
+                ).get("weekly_units_sold", 0),
+                reverse=True,
+            )
+
+            # Pass 1: reduce facings on lowest sellers
+            for pos in reversed(positions):
+                pid = pos.get("product_id", "")
+                prod = products_map.get(pid)
+                if not prod:
+                    continue
+                pw = prod.get("width_in", 0)
+                while total_used > shelf_w + 0.5 and pos.get("facings_wide", 1) > 1:
+                    pos["facings_wide"] -= 1
+                    total_used -= pw
+
+            # Pass 2: remove products that still cause overflow
+            new_positions = []
+            running = 0.0
+            for pos in positions:
+                pid = pos.get("product_id", "")
+                prod = products_map.get(pid)
+                if not prod:
+                    continue
+                pw = prod.get("width_in", 0) * pos.get("facings_wide", 1)
+                if running + pw <= shelf_w + 0.5:
+                    new_positions.append(pos)
+                    running += pw
+
+            # Recalculate x_positions
+            x = 0.0
+            for pos in new_positions:
+                pos["x_position"] = round(x, 2)
+                prod = products_map.get(pos.get("product_id", ""))
+                if prod:
+                    x += prod.get("width_in", 0) * pos.get("facings_wide", 1)
+
+            shelf["positions"] = new_positions
+
+    if fixes > 0:
+        print(f"[PostProcess] Fixed {fixes} overflowing shelf(s)")
+
+    return equipment_dict
+
+
+# ==============================================================================
+# COMBINED: full pipeline (all 3 phases, rule-based fallback)
+# ==============================================================================
+
+def fill_equipment_rule_based(
+    equipment_dict: dict,
+    products_json: list,
+    rules: ProductLogicRules,
+    decision_tree: Optional[DecisionTree] = None,
+) -> dict:
+    """
+    Full pipeline: capacity check → optimal facings → rule-based placement.
+    """
+    total_w = get_total_shelf_width(equipment_dict)
+
+    # Phase 1
+    selected = phase1_capacity_check(products_json, total_w)
+
+    # Phase 2
+    facings = phase2_optimal_facings(selected, total_w, rules)
+
+    # Phase 3
+    return phase3_rule_based_placement(
+        equipment_dict, selected, facings, rules, decision_tree
+    )
+
+
+# ==============================================================================
+# COMBINED: Compute facings + build Gemini prompt (Phase 1+2 → Phase 3 via AI)
+# ==============================================================================
+
+def compute_facings_for_ai(
+    equipment_dict: dict,
+    products_json: list,
+    rules: ProductLogicRules,
+) -> Tuple[List[dict], Dict[str, int]]:
+    """
+    Run Phase 1 + Phase 2 to produce the selected product list and facing counts.
+    Returns: (selected_products, facings_dict)
+    """
+    total_w = get_total_shelf_width(equipment_dict)
+    selected = phase1_capacity_check(products_json, total_w)
+    facings = phase2_optimal_facings(selected, total_w, rules)
+    return selected, facings
+
 
 def build_fill_prompt(
     equipment_json: dict,
-    products_json: list,
+    selected_products: list,
+    facings: Dict[str, int],
     rules: ProductLogicRules,
     decision_tree: Optional[DecisionTree] = None,
 ) -> str:
     """
-    Build a Gemini prompt for Step 2: fill an existing equipment with products.
+    Build Gemini prompt for Phase 3: place products with pre-calculated facings.
 
-    The prompt tells Gemini to keep equipment dimensions/structure unchanged
-    and only populate the `positions` arrays on each shelf.
-    If a decision_tree is provided, its grouping instructions are included.
+    AI receives:
+      - Equipment structure (empty)
+      - Product list with EXACT facing counts (non-negotiable)
+      - Decision tree instructions for grouping/ordering
+      - Shelf tier guidelines
     """
     equip_compact = json.dumps(equipment_json, indent=2)
-    products_compact = json.dumps(products_json, separators=(",", ":"))
     rules_text = rules.to_prompt_text()
+
+    # Build product list with facings embedded
+    products_with_facings = []
+    for p in selected_products:
+        pw = copy.copy(p)
+        pw["assigned_facings"] = facings.get(p["id"], 1)
+        pw["total_width"] = round(p["width_in"] * pw["assigned_facings"], 2)
+        products_with_facings.append(pw)
+
+    products_compact = json.dumps(products_with_facings, separators=(",", ":"))
 
     # Decision tree section
     dt_section = ""
@@ -276,34 +523,53 @@ def build_fill_prompt(
 
 """
 
-    return f"""You are a retail planogram expert AI. You are given an EMPTY equipment fixture and a product catalog.
-Your task is to FILL the shelves with products by populating the "positions" arrays.
+    return f"""You are a retail planogram expert AI. You are given an EMPTY equipment fixture and a product catalog with PRE-CALCULATED facing counts.
+
+## YOUR TASK
+Assign each product to a specific shelf and position. The number of facings is ALREADY DECIDED — you must NOT change them.
 
 ## CRITICAL CONSTRAINTS
 1. Do NOT change ANY equipment dimensions (width_in, height_in, depth_in, y_position, bay_number, shelf_number).
 2. Do NOT add or remove bays or shelves.
 3. ONLY populate the "positions" array on each shelf.
-4. Every product_id in positions MUST exist in the products array you return.
-5. The products array must contain ONLY products that appear in at least one position.
-6. Products must physically fit: total width of positions on a shelf must not exceed shelf width_in.
-7. Product height must not exceed shelf clearance (height_in).
-8. x_position = previous product's x_position + (previous product's width_in * facings_wide). First product starts at 0.
-9. Use the actual product dimensions from the catalog — do not invent dimensions.
+4. Each product MUST use EXACTLY the "assigned_facings" value as facings_wide. DO NOT change facing counts.
+5. Total width of products on each shelf must NOT exceed the shelf width_in.
+   Calculate: sum of (product width_in × facings_wide) for all positions on a shelf ≤ shelf width_in.
+6. Product height must not exceed shelf height_in.
+7. x_position must be sequential: first product x_position=0, next = prev_x + prev_width*prev_facings, etc.
+8. Every product in the list below must be placed on exactly one shelf. Do not skip any product.
+9. Use the actual product dimensions — do not invent values.
 {dt_section}## {rules_text}
 
 ## EMPTY EQUIPMENT (preserve this structure exactly)
 {equip_compact}
 
-## AVAILABLE PRODUCT CATALOG ({len(products_json)} products)
-Each product has: id, name, brand, subcategory, beer_type, package_type, pack_size, unit_size_oz, width_in, height_in, depth_in, price, cost, abv, color_hex.
+## PRODUCTS WITH PRE-CALCULATED FACINGS ({len(products_with_facings)} products, {sum(f for f in facings.values())} total facings)
+Each product has "assigned_facings" (MUST use as facings_wide) and "total_width" (width × facings).
 
 {products_compact}
+
+## SHELF CAPACITY SUMMARY
+{_shelf_capacity_summary(equipment_json)}
 
 ## REQUIRED OUTPUT FORMAT
 Return a single JSON object with exactly two keys:
 {{
-  "equipment": <the equipment object above with positions filled in — same structure, same dimensions>,
-  "products": [<ONLY the products that are placed on at least one shelf, copied from the catalog>]
+  "equipment": <the equipment object with positions filled — same structure, same dimensions>,
+  "products": [<ONLY the products placed, copied from catalog (without assigned_facings/total_width fields)>]
 }}
 
 Return ONLY valid JSON, no markdown fences, no explanation."""
+
+
+def _shelf_capacity_summary(equipment_json: dict) -> str:
+    """Generate a shelf capacity table to help AI verify fits."""
+    lines = []
+    for bay in equipment_json.get("bays", []):
+        bn = bay.get("bay_number", "?")
+        for shelf in bay.get("shelves", []):
+            sn = shelf.get("shelf_number", "?")
+            w = shelf.get("width_in", 48)
+            h = shelf.get("height_in", 12)
+            lines.append(f"Bay {bn} / Shelf {sn}: width={w}in, height={h}in")
+    return "\n".join(lines)
