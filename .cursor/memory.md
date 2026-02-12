@@ -7,11 +7,16 @@
 - **Always use `python3`** on this macOS system (`python` not found).
 - **Product dimensions in inches** (US retail standard). Standard gondola: 48"W x 72"H x 24"D, 5 shelves.
 
-## Two-Step Generation (v0.3)
-- **Step 1**: Structured equipment form → `/api/generate-equipment` → empty shelves (no products).
-- **Step 2**: "Fill Products" → `/api/fill-products` → Gemini AI primary, rule-based fallback.
-- **`product_logic.py`**: `ProductLogicRules` dataclass controls shelf-tier assignments, fill targets (85%), max facings (3), grouping strategy, top-seller brands.
-- **Server state**: `current_equipment` (dict) persists between steps. Flask debug mode restarts clear it — re-generate equipment after code changes.
+## Two-Step Generation (v0.3) → 3-Phase Algorithm (v0.5)
+- **Step 1**: Structured equipment form → `/api/generate-equipment` → empty shelves. Form + Generate button hidden behind collapsible "Equipment Config" toggle.
+- **Step 2**: "Fill Products" → `/api/fill-products` → 3-phase pipeline:
+  - **Phase 1 (Capacity Check)**: Sort products by `weekly_units_sold` DESC. If total width at 1 facing each > total shelf width, drop lowest sellers until they fit.
+  - **Phase 2 (Optimal Facings)**: Start at 1 facing per product. Iterate through products by sales rank, adding 1 facing if it fits, until ~95% target fill. Returns `{product_id: facing_count}` dict.
+  - **Phase 3 (Placement)**: Send products + pre-calculated facings to Gemini AI (it only decides *where* to place, not *how many*). Rule-based fallback if AI fails.
+  - **Post-processing**: `validate_and_fix_shelves()` catches any AI shelf overflows — reduces facings on low sellers, removes excess products, recalculates x_positions.
+- **`product_logic.py`**: `ProductLogicRules` dataclass — fill_target_pct=95%, max_facings=5.
+- **Sales data**: `weekly_units_sold` field on each product (fake data for demo). Domestic Light Lagers ~130-180 units, Craft IPAs ~15-22 units.
+- **Server state resilience**: `init_default_planogram()` now sets `current_equipment`. Frontend sends equipment in fill request body as fallback for server restarts.
 - **Empty shelf visualization**: CSS class `empty-shelf` with dashed border + dimension labels.
 
 ## Gemini AI Integration
@@ -40,9 +45,12 @@
 - **UI**: Bottom panel shows tree levels as L1→L2→L3→L4 pills, overall % score (color-coded), per-level compliance bars, and break count.
 - **Shelf overlays**: Colored bands + labels (Domestic/Craft/Import/Specialty) drawn behind product groups using `SEGMENT_COLORS` and `_addGroupBand()`.
 
+## CSS Layout Lessons
+- **Never use `justify-content: center` on scrollable flex containers** — when content overflows, left side becomes inaccessible. Use `width: fit-content; margin: 0 auto` instead for centering that scrolls correctly.
+- **Collapsible panels**: Use `max-height` + `overflow: hidden` + `opacity` transitions. Set `max-height` high enough for content (200px for form + button). Toggle `.open` class on wrapper, not content.
+
 ## Known Issues & TODOs
-- Rule-based fallback achieves ~93% fill but only ~43% decision tree compliance (tier logic conflicts with tree grouping).
-- Gemini AI fill quality varies — sometimes truncates, adds extra fields, or leaves shelves empty. Fallback catches most issues.
+- Rule-based fallback achieves ~93% fill but ~43% decision tree compliance (tier logic conflicts with tree grouping).
+- Gemini AI: 30-120s response time, sometimes ignores constraints. Post-processing validator now catches shelf overflows.
 - API key in `.env` file (gitignored). Never commit secrets.
-- Flask debug mode restarts clear server state (current_equipment). Production needs persistent storage.
-- Some Gemini fills overfill shelves (>100% width). Need server-side width constraint validation.
+- 3-phase algorithm separates "how many facings" (math) from "where to place" (AI). This is the right separation of concerns — AI is unreliable for math constraints but good for merchandising logic.
