@@ -38,9 +38,12 @@ current_rules = None          # ProductLogicRules (for Step 2)
 
 def init_default_planogram():
     """Initialize with default beer planogram."""
-    global current_planogram, current_summary
+    global current_planogram, current_summary, current_equipment
     current_planogram = generate_planogram()
     current_summary = generate_summary(current_planogram)
+    # Also store the equipment dict so Fill Products works without Step 1
+    from dataclasses import asdict
+    current_equipment = asdict(current_planogram.equipment)
 
 
 def _load_products_json() -> list:
@@ -168,13 +171,16 @@ def fill_products():
     """
     global current_planogram, current_summary, current_equipment
 
-    if current_equipment is None:
+    data = request.json or {}
+
+    # Accept equipment from request body as fallback if server state was lost
+    if current_equipment is None and "equipment" in data:
+        current_equipment = data["equipment"]
+    elif current_equipment is None:
         return jsonify({
             "status": "error",
             "error": "No equipment generated yet. Run Step 1 first.",
         }), 400
-
-    data = request.json or {}
 
     # Build rules (apply any overrides from request)
     rules = ProductLogicRules(

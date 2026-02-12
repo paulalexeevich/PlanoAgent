@@ -58,22 +58,29 @@
             border-bottom: 1px solid var(--border);
             padding: 10px 24px 12px;
         }
-        .form-row {
-            display: flex;
-            gap: 10px;
-            align-items: flex-end;
-            flex-wrap: wrap;
-            margin-bottom: 10px;
+        .equipment-config-panel {
             overflow: hidden;
             max-height: 0;
             opacity: 0;
             transition: max-height 0.3s ease, opacity 0.2s ease, margin 0.3s ease;
             margin-top: 0;
         }
-        .form-row.open {
-            max-height: 80px;
+        .equipment-config-panel.open {
+            max-height: 200px;
             opacity: 1;
             margin-top: 10px;
+        }
+        .form-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        .config-actions {
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         .config-toggle {
             display: inline-flex;
@@ -738,13 +745,6 @@
                 <span class="toggle-caret">&#9660;</span>
             </button>
             <div class="action-divider"></div>
-            <span class="step-label s1">Step 1</span>
-            <button class="btn btn-primary" id="genEquipBtn" onclick="generateEquipment()">
-                <span id="genEquipLabel">Generate Equipment</span>
-                <span id="genEquipSpinner" style="display:none" class="btn-spinner"></span>
-            </button>
-            <div class="action-divider"></div>
-            <span class="step-label s2">Step 2</span>
             <button class="btn btn-green" id="fillBtn" onclick="fillProducts()" disabled>
                 <span id="fillLabel">Fill Products</span>
                 <span id="fillSpinner" style="display:none" class="btn-spinner"></span>
@@ -753,37 +753,45 @@
             <button class="btn btn-secondary" onclick="resetDefault()">Reset Default</button>
             <span id="sourceTag" class="source-tag"></span>
         </div>
-        <!-- Equipment Form (hidden by default) -->
-        <div class="form-row" id="equipmentForm">
-            <div class="form-group">
-                <label>Equipment Type</label>
-                <select id="eqType">
-                    <option value="gondola">Gondola</option>
-                    <option value="cooler">Cooler</option>
-                    <option value="endcap">Endcap</option>
-                    <option value="wall_section">Wall Section</option>
-                    <option value="island">Island</option>
-                </select>
+        <!-- Equipment Config (hidden by default) -->
+        <div class="equipment-config-panel" id="equipmentForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Equipment Type</label>
+                    <select id="eqType">
+                        <option value="gondola">Gondola</option>
+                        <option value="cooler">Cooler</option>
+                        <option value="endcap">Endcap</option>
+                        <option value="wall_section">Wall Section</option>
+                        <option value="island">Island</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Bays</label>
+                    <input type="number" id="eqBays" value="3" min="1" max="10" style="width:60px">
+                </div>
+                <div class="form-group">
+                    <label>Shelves / Bay</label>
+                    <input type="number" id="eqShelves" value="5" min="1" max="10" style="width:60px">
+                </div>
+                <div class="form-group">
+                    <label>Bay Width (in)</label>
+                    <input type="number" id="eqWidth" value="48" min="12" max="120" step="1" style="width:70px">
+                </div>
+                <div class="form-group">
+                    <label>Bay Height (in)</label>
+                    <input type="number" id="eqHeight" value="72" min="24" max="120" step="1" style="width:70px">
+                </div>
+                <div class="form-group">
+                    <label>Bay Depth (in)</label>
+                    <input type="number" id="eqDepth" value="24" min="6" max="48" step="1" style="width:70px">
+                </div>
             </div>
-            <div class="form-group">
-                <label>Bays</label>
-                <input type="number" id="eqBays" value="3" min="1" max="10" style="width:60px">
-            </div>
-            <div class="form-group">
-                <label>Shelves / Bay</label>
-                <input type="number" id="eqShelves" value="5" min="1" max="10" style="width:60px">
-            </div>
-            <div class="form-group">
-                <label>Bay Width (in)</label>
-                <input type="number" id="eqWidth" value="48" min="12" max="120" step="1" style="width:70px">
-            </div>
-            <div class="form-group">
-                <label>Bay Height (in)</label>
-                <input type="number" id="eqHeight" value="72" min="24" max="120" step="1" style="width:70px">
-            </div>
-            <div class="form-group">
-                <label>Bay Depth (in)</label>
-                <input type="number" id="eqDepth" value="24" min="6" max="48" step="1" style="width:70px">
+            <div class="config-actions">
+                <button class="btn btn-primary" id="genEquipBtn" onclick="generateEquipment()">
+                    <span id="genEquipLabel">Generate Equipment</span>
+                    <span id="genEquipSpinner" style="display:none" class="btn-spinner"></span>
+                </button>
             </div>
         </div>
     </div>
@@ -972,10 +980,15 @@
             showLoading(true, 'Gemini AI is filling products...');
             hideError();
             try {
+                // Send current equipment data so server can recover from restarts
+                const payload = {};
+                if (planogramData && planogramData.equipment) {
+                    payload.equipment = planogramData.equipment;
+                }
                 const res = await fetch('/api/fill-products', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({})
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
 
