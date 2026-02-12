@@ -455,6 +455,59 @@
             color: var(--text-secondary);
             white-space: pre-wrap;
         }
+
+        /* BUTTON SPINNER */
+        .btn-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+            margin-left: 6px;
+        }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* SOURCE TAG */
+        .source-tag {
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+        .source-tag.ai { background: rgba(74,158,255,0.15); color: var(--accent); }
+        .source-tag.rules { background: rgba(52,211,153,0.15); color: var(--accent-green); }
+        .source-tag.error { background: rgba(239,68,68,0.15); color: var(--accent-red); }
+
+        /* ERROR TOAST */
+        .error-toast {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2d1215;
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 13px;
+            z-index: 2000;
+            max-width: 600px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            display: none;
+        }
+        .error-toast.active { display: block; }
+        .error-toast .close-toast {
+            float: right;
+            cursor: pointer;
+            margin-left: 16px;
+            font-weight: bold;
+            opacity: 0.7;
+        }
+        .error-toast .close-toast:hover { opacity: 1; }
     </style>
 </head>
 <body>
@@ -478,10 +531,14 @@
     <!-- INPUT BAR -->
     <div class="input-panel">
         <input type="text" id="userInput"
-            placeholder="e.g. 'Create 4-bay cooler with 6 shelves, 48 inches wide' or paste JSON config..."
+            placeholder="e.g. 'Create 4-bay cooler with 6 shelves for craft beer focus' ..."
             onkeydown="if(event.key==='Enter') generateFromInput()">
-        <button class="btn btn-primary" onclick="generateFromInput()">Generate Planogram</button>
+        <button class="btn btn-primary" id="generateBtn" onclick="generateFromInput()">
+            <span id="btnLabel">Generate with AI</span>
+            <span id="btnSpinner" style="display:none" class="btn-spinner"></span>
+        </button>
         <button class="btn btn-secondary" onclick="resetDefault()">Reset Default</button>
+        <span id="sourceTag" class="source-tag"></span>
     </div>
 
     <!-- MAIN LAYOUT -->
@@ -490,7 +547,7 @@
         <div class="viz-area" id="vizArea">
             <div class="loading" id="loadingIndicator">
                 <div class="spinner"></div>
-                Loading planogram...
+                <span id="loadingText">Loading planogram...</span>
             </div>
             <div id="planogramView" style="display:none;">
                 <div class="planogram-container" id="planogramContainer"></div>
@@ -529,6 +586,12 @@
 
     <!-- TOOLTIP -->
     <div class="tooltip" id="tooltip"></div>
+
+    <!-- ERROR TOAST -->
+    <div class="error-toast" id="errorToast">
+        <span class="close-toast" onclick="hideError()">&times;</span>
+        <span id="errorMsg"></span>
+    </div>
 
     <script>
         // ============================================================
@@ -589,6 +652,7 @@
                 summaryData = data.summary;
                 buildProductsMap();
                 renderAll();
+                setSourceTag('rule_based');
             } catch (err) {
                 console.error('Failed to load planogram:', err);
             }
@@ -599,36 +663,39 @@
             const input = document.getElementById('userInput').value.trim();
             if (!input) return;
 
-            showLoading(true);
+            setBtnLoading(true);
+            showLoading(true, 'Gemini AI is generating your planogram...');
+            hideError();
             try {
-                let body;
-                // Try to parse as JSON
-                try {
-                    const parsed = JSON.parse(input);
-                    body = { equipment_config: parsed };
-                } catch {
-                    body = { user_input: input };
-                }
-
-                const res = await fetch('/api/generate', {
+                // Always use AI endpoint when user types a request
+                const res = await fetch('/api/generate-ai', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
+                    body: JSON.stringify({ user_input: input })
                 });
                 const data = await res.json();
+
+                if (data.status === 'error') {
+                    throw new Error(data.error || 'AI generation failed');
+                }
+
                 planogramData = data.planogram;
                 summaryData = data.summary;
                 buildProductsMap();
                 renderAll();
+                setSourceTag(data.source || 'gemini_ai');
             } catch (err) {
-                console.error('Generation failed:', err);
+                console.error('AI generation failed:', err);
+                showError('AI generation failed: ' + err.message + '. Try a different prompt or use Reset Default.');
             }
             showLoading(false);
+            setBtnLoading(false);
         }
 
         async function resetDefault() {
             document.getElementById('userInput').value = '';
             showLoading(true);
+            hideError();
             try {
                 const res = await fetch('/api/generate', {
                     method: 'POST',
@@ -640,6 +707,7 @@
                 summaryData = data.summary;
                 buildProductsMap();
                 renderAll();
+                setSourceTag('rule_based');
             } catch (err) {
                 console.error('Reset failed:', err);
             }
@@ -656,9 +724,41 @@
             }
         }
 
-        function showLoading(show) {
+        function showLoading(show, msg) {
             document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
             document.getElementById('planogramView').style.display = show ? 'none' : 'block';
+            if (msg) document.getElementById('loadingText').textContent = msg;
+        }
+
+        function setBtnLoading(loading) {
+            const btn = document.getElementById('generateBtn');
+            const label = document.getElementById('btnLabel');
+            const spinner = document.getElementById('btnSpinner');
+            btn.disabled = loading;
+            label.textContent = loading ? 'Generating...' : 'Generate with AI';
+            spinner.style.display = loading ? 'inline-block' : 'none';
+        }
+
+        function setSourceTag(source) {
+            const tag = document.getElementById('sourceTag');
+            if (source === 'gemini_ai') {
+                tag.textContent = 'Gemini AI';
+                tag.className = 'source-tag ai';
+            } else {
+                tag.textContent = 'Rule-based';
+                tag.className = 'source-tag rules';
+            }
+        }
+
+        function showError(msg) {
+            const toast = document.getElementById('errorToast');
+            document.getElementById('errorMsg').textContent = msg;
+            toast.classList.add('active');
+            setTimeout(() => toast.classList.remove('active'), 10000);
+        }
+
+        function hideError() {
+            document.getElementById('errorToast').classList.remove('active');
         }
 
         // ============================================================
