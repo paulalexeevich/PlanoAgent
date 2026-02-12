@@ -32,8 +32,18 @@
 - Color-coded product blocks by brand `color_hex`. Scale slider, unit toggle (in/cm).
 - Bottom collapsible summary: metrics, category mix, fill rates, brands.
 
+## Decision Tree (v0.4)
+- **`decision_tree.py`**: Pre-built trees per category. Beer tree: Segment → Style (subcategory) → Package → Brand.
+- **Derivation functions**: `_derive_beer_segment()` maps subcategory prefix to Domestic/Craft/Import/Specialty. Stored by name in `_DERIVE_REGISTRY` (JSON-safe).
+- **Compliance validation**: Walk positions in planogram order (bay→shelf→left-to-right). Count "breaks" — group reappearing after interruption. Score: 0-100% per level, weighted average for overall.
+- **Rule-based sort by tree**: `fill_equipment_rule_based()` accepts optional `decision_tree` param. Products within each tier bucket sorted by `get_product_group_tuple()` — improves in-tier grouping but tier logic (heavy items low) still disrupts pure tree order.
+- **AI prompt includes tree**: `build_fill_prompt()` accepts `decision_tree`, injects `to_prompt_text()` — instructs Gemini to follow hierarchical grouping. AI compliance much higher than rule-based.
+- **UI**: Bottom panel shows tree levels as L1→L2→L3→L4 pills, overall % score (color-coded), per-level compliance bars, and break count.
+- **Shelf overlays**: Colored bands + labels (Domestic/Craft/Import/Specialty) drawn behind product groups using `SEGMENT_COLORS` and `_addGroupBand()`.
+
 ## Known Issues & TODOs
-- Rule-based fallback achieves ~93% fill (improved from 53% via product_logic tier system).
-- Gemini AI fill quality varies — sometimes truncates or adds extra fields, but fallback catches it.
+- Rule-based fallback achieves ~93% fill but only ~43% decision tree compliance (tier logic conflicts with tree grouping).
+- Gemini AI fill quality varies — sometimes truncates, adds extra fields, or leaves shelves empty. Fallback catches most issues.
 - API key in `.env` file (gitignored). Never commit secrets.
 - Flask debug mode restarts clear server state (current_equipment). Production needs persistent storage.
+- Some Gemini fills overfill shelves (>100% width). Need server-side width constraint validation.
