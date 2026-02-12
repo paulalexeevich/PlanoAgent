@@ -129,7 +129,7 @@ Now generate the complete planogram JSON. Return ONLY valid JSON, no markdown fe
 
 
 def _extract_json(text: str) -> dict:
-    """Extract JSON from Gemini response, handling common issues."""
+    """Extract JSON from Gemini response, handling common issues including truncation."""
     text = text.strip()
 
     # Strip markdown code fences if present
@@ -141,16 +141,90 @@ def _extract_json(text: str) -> dict:
     # Fix trailing commas before } or ] (common Gemini issue)
     text = re.sub(r',\s*([}\]])', r'\1', text)
 
-    # Try to parse
+    # Try to parse directly
     try:
         return json.loads(text)
-    except json.JSONDecodeError as e:
-        # Last resort: try to find the outermost JSON object
-        match = re.search(r'\{[\s\S]*\}', text)
-        if match:
-            cleaned = re.sub(r',\s*([}\]])', r'\1', match.group(0))
+    except json.JSONDecodeError:
+        pass
+
+    # Try to find the outermost JSON object
+    match = re.search(r'\{[\s\S]*\}', text)
+    if match:
+        cleaned = re.sub(r',\s*([}\]])', r'\1', match.group(0))
+        try:
             return json.loads(cleaned)
-        raise e
+        except json.JSONDecodeError:
+            pass
+
+    # Truncated JSON repair: close unclosed brackets/braces
+    repaired = _repair_truncated_json(text)
+    try:
+        result = json.loads(repaired)
+        print(f"[JSON-Repair] Successfully repaired truncated JSON "
+              f"({len(text)} → {len(repaired)} chars)", flush=True)
+        return result
+    except json.JSONDecodeError as final_err:
+        raise final_err
+
+
+def _repair_truncated_json(text: str) -> str:
+    """
+    Attempt to repair truncated JSON by:
+    1. Removing any trailing incomplete key-value pair
+    2. Closing all unclosed brackets and braces
+    """
+    # Remove trailing incomplete string (unterminated quote)
+    # Find last complete value (ends with }, ], number, true, false, null, or ")
+    # First, strip trailing whitespace and commas
+    text = text.rstrip()
+    text = text.rstrip(',')
+
+    # If text ends mid-string (odd number of unescaped quotes), truncate to last complete entry
+    # Count unmatched quotes (simple heuristic)
+    in_string = False
+    last_good_pos = 0
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == '\\' and in_string:
+            i += 2  # skip escaped character
+            continue
+        if ch == '"':
+            in_string = not in_string
+        elif not in_string and ch in '{}[],':
+            last_good_pos = i
+        i += 1
+
+    if in_string:
+        # Truncate to last position before the unmatched quote started
+        # Find the last quote that opened the string
+        text = text[:last_good_pos + 1]
+        text = text.rstrip(',')
+
+    # Now close unclosed brackets/braces
+    stack = []
+    in_str = False
+    for i, ch in enumerate(text):
+        if ch == '\\' and in_str:
+            continue
+        if ch == '"' and (i == 0 or text[i-1] != '\\'):
+            in_str = not in_str
+        elif not in_str:
+            if ch in '{[':
+                stack.append(ch)
+            elif ch == '}':
+                if stack and stack[-1] == '{':
+                    stack.pop()
+            elif ch == ']':
+                if stack and stack[-1] == '[':
+                    stack.pop()
+
+    # Close in reverse order
+    closers = {'[': ']', '{': '}'}
+    for bracket in reversed(stack):
+        text += closers.get(bracket, '')
+
+    return text
 
 
 def fill_products_with_ai(
@@ -174,7 +248,7 @@ def fill_products_with_ai(
     """
     client = _get_client()
 
-    print(f"[Gemini-Fill] Sending fill prompt ({len(rules_prompt)} chars) ...")
+    print(f"[Gemini-Fill] Sending fill prompt ({len(rules_prompt)} chars) ...", flush=True)
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",
@@ -187,7 +261,7 @@ def fill_products_with_ai(
     )
 
     raw_text = response.text
-    print(f"[Gemini-Fill] Received response ({len(raw_text)} chars)")
+    print(f"[Gemini-Fill] Received response ({len(raw_text)} chars)", flush=True)
 
     result = _extract_json(raw_text)
 

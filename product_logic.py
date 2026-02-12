@@ -435,7 +435,353 @@ def validate_and_fix_shelves(equipment_dict: dict, products_map: dict) -> dict:
             shelf["positions"] = new_positions
 
     if fixes > 0:
-        print(f"[PostProcess] Fixed {fixes} overflowing shelf(s)")
+        print(f"[PostProcess] Fixed {fixes} overflowing shelf(s)", flush=True)
+
+    return equipment_dict
+
+
+# ==============================================================================
+# POST-PROCESSING: Recover products missed by AI
+# ==============================================================================
+
+def recover_missing_products(
+    equipment_dict: dict,
+    selected_products: List[dict],
+    facings: Dict[str, int],
+    products_map: dict,
+) -> Tuple[dict, List[str]]:
+    """
+    After AI placement + overflow fixing, find products that were NOT placed
+    and insert them into shelves with remaining space.
+
+    Strategy:
+      1. Collect all product IDs currently on shelves.
+      2. Find missing products (in selected list but not placed).
+      3. Sort missing products by sales DESC (highest sellers recovered first).
+      4. For each missing product, scan shelves for remaining space.
+         - Try with assigned facings first, then reduce to 1 if needed.
+      5. Recalculate x_positions on any modified shelf.
+
+    Args:
+        equipment_dict: equipment after validate_and_fix_shelves
+        selected_products: list from Phase 1
+        facings: dict from Phase 2 (product_id → facing count)
+        products_map: dict of product_id → product dict
+
+    Returns:
+        (equipment_dict, list_of_recovered_product_ids)
+    """
+    # Step 1: collect placed product IDs
+    placed_ids = set()
+    for bay in equipment_dict.get("bays", []):
+        for shelf in bay.get("shelves", []):
+            for pos in shelf.get("positions", []):
+                placed_ids.add(pos.get("product_id", ""))
+
+    # Step 2: find missing products
+    missing = [p for p in selected_products if p["id"] not in placed_ids]
+    if not missing:
+        return equipment_dict, []
+
+    # Sort by sales DESC — recover best sellers first
+    missing.sort(key=lambda p: p.get("weekly_units_sold", 0), reverse=True)
+
+    recovered = []
+
+    # Step 3: build a shelf-space index (remaining width per shelf)
+    shelf_refs = []  # list of (bay_dict, shelf_dict, remaining_width)
+    for bay in equipment_dict.get("bays", []):
+        for shelf in bay.get("shelves", []):
+            shelf_w = shelf.get("width_in", 48)
+            shelf_h = shelf.get("height_in", 12)
+            used = 0.0
+            for pos in shelf.get("positions", []):
+                prod = products_map.get(pos.get("product_id", ""))
+                if prod:
+                    used += prod.get("width_in", 0) * pos.get("facings_wide", 1)
+            shelf_refs.append({
+                "shelf": shelf,
+                "remaining": shelf_w - used,
+                "height": shelf_h,
+                "width": shelf_w,
+            })
+
+    # Step 4: place each missing product
+    for prod in missing:
+        pid = prod["id"]
+        pw = prod["width_in"]
+        ph = prod["height_in"]
+        assigned = facings.get(pid, 1)
+
+        placed = False
+        # Try with assigned facings, then reduce down to 1
+        for try_facings in range(assigned, 0, -1):
+            need_width = pw * try_facings
+
+            # Find best-fit shelf (smallest remaining that still fits)
+            best_idx = -1
+            best_remaining = float("inf")
+            for i, sr in enumerate(shelf_refs):
+                if ph <= sr["height"] and need_width <= sr["remaining"] + 0.5:
+                    if sr["remaining"] < best_remaining:
+                        best_remaining = sr["remaining"]
+                        best_idx = i
+
+            if best_idx >= 0:
+                sr = shelf_refs[best_idx]
+                shelf = sr["shelf"]
+                positions = shelf.get("positions", [])
+
+                # Calculate x_position = end of current positions
+                x_pos = 0.0
+                for pos in positions:
+                    p_data = products_map.get(pos.get("product_id", ""))
+                    if p_data:
+                        x_pos += p_data.get("width_in", 0) * pos.get("facings_wide", 1)
+
+                positions.append({
+                    "product_id": pid,
+                    "x_position": round(x_pos, 2),
+                    "facings_wide": try_facings,
+                    "facings_high": 1,
+                    "facings_deep": 1,
+                    "orientation": "front",
+                })
+                shelf["positions"] = positions
+                sr["remaining"] -= need_width
+                recovered.append(pid)
+                placed = True
+                break
+
+        if not placed:
+            # Could not fit this product anywhere — skip it
+            pass
+
+    if recovered:
+        print(f"[Recovery] Placed {len(recovered)} missing product(s) "
+              f"({len(missing)} were missing, {len(missing) - len(recovered)} could not fit)",
+              flush=True)
+
+    return equipment_dict, recovered
+
+
+# ==============================================================================
+# POST-PROCESSING: Reconcile facings (boost underused shelves)
+# ==============================================================================
+
+def boost_underused_shelves(
+    equipment_dict: dict,
+    products_map: dict,
+    facings: Dict[str, int],
+    max_facings: int = 5,
+) -> dict:
+    """
+    After recovery, if shelves still have significant remaining space,
+    boost facings on existing products (highest sellers first) to fill gaps.
+
+    This addresses the case where AI used fewer facings than assigned.
+
+    Returns:
+        The modified equipment dict.
+    """
+    boosted = 0
+
+    for bay in equipment_dict.get("bays", []):
+        for shelf in bay.get("shelves", []):
+            shelf_w = shelf.get("width_in", 48)
+            positions = shelf.get("positions", [])
+            if not positions:
+                continue
+
+            # Calculate current usage
+            used = 0.0
+            for pos in positions:
+                prod = products_map.get(pos.get("product_id", ""))
+                if prod:
+                    used += prod.get("width_in", 0) * pos.get("facings_wide", 1)
+
+            remaining = shelf_w - used
+            if remaining < 2.0:  # less than 2 inches free — not worth boosting
+                continue
+
+            # Sort positions by sales DESC — boost best sellers first
+            scored = []
+            for pos in positions:
+                prod = products_map.get(pos.get("product_id", ""))
+                sales = prod.get("weekly_units_sold", 0) if prod else 0
+                scored.append((sales, pos, prod))
+            scored.sort(key=lambda x: x[0], reverse=True)
+
+            changed = False
+            # Pass 1: restore facings up to Phase 2 target
+            for sales, pos, prod in scored:
+                if not prod:
+                    continue
+                pw = prod["width_in"]
+                pid = pos["product_id"]
+                current_f = pos.get("facings_wide", 1)
+                target_f = facings.get(pid, current_f)
+
+                while current_f < target_f and remaining >= pw - 0.5:
+                    current_f += 1
+                    remaining -= pw
+                    changed = True
+                    boosted += 1
+
+                pos["facings_wide"] = current_f
+
+            # Pass 2: if still space, boost best sellers beyond Phase 2 (up to max_facings)
+            for sales, pos, prod in scored:
+                if not prod:
+                    continue
+                pw = prod["width_in"]
+                current_f = pos.get("facings_wide", 1)
+
+                while current_f < max_facings and remaining >= pw - 0.5:
+                    current_f += 1
+                    remaining -= pw
+                    changed = True
+                    boosted += 1
+
+                pos["facings_wide"] = current_f
+
+            # Recalculate x_positions if changed
+            if changed:
+                x = 0.0
+                for pos in positions:
+                    pos["x_position"] = round(x, 2)
+                    prod = products_map.get(pos.get("product_id", ""))
+                    if prod:
+                        x += prod.get("width_in", 0) * pos.get("facings_wide", 1)
+
+    if boosted > 0:
+        print(f"[Boost] Added {boosted} extra facing(s) to underused shelves", flush=True)
+
+    return equipment_dict
+
+
+# ==============================================================================
+# POST-PROCESSING: Fill remaining shelf gaps with best sellers
+# ==============================================================================
+
+def fill_shelf_gaps(
+    equipment_dict: dict,
+    selected_products: List[dict],
+    products_map: dict,
+    target_pct: float = 99.0,
+) -> dict:
+    """
+    Final gap-filler: for each shelf with remaining space, add facings of
+    the highest-selling product that fits (height-compatible).
+
+    A product may gain extra facings on a shelf it's already on, or appear
+    as a new entry on a shelf it wasn't assigned to.
+
+    This runs as the last post-processing step to push fill toward 99%.
+    """
+    total_shelf_width = get_total_shelf_width(equipment_dict)
+    target_width = total_shelf_width * (target_pct / 100.0)
+    added = 0
+
+    # Sort products by sales DESC — prefer best sellers
+    sales_sorted = sorted(
+        selected_products,
+        key=lambda p: p.get("weekly_units_sold", 0),
+        reverse=True,
+    )
+
+    max_rounds = 50  # safety cap to prevent infinite loop
+    for _ in range(max_rounds):
+        # Calculate current total usage
+        current_used = 0.0
+        for bay in equipment_dict.get("bays", []):
+            for shelf in bay.get("shelves", []):
+                for pos in shelf.get("positions", []):
+                    prod = products_map.get(pos.get("product_id", ""))
+                    if prod:
+                        current_used += prod.get("width_in", 0) * pos.get("facings_wide", 1)
+
+        if current_used >= target_width:
+            break  # Target reached!
+
+        # Find shelf with most remaining space
+        best_shelf = None
+        best_remaining = 0.0
+        best_shelf_h = 0.0
+        for bay in equipment_dict.get("bays", []):
+            for shelf in bay.get("shelves", []):
+                shelf_w = shelf.get("width_in", 48)
+                shelf_h = shelf.get("height_in", 12)
+                used = 0.0
+                for pos in shelf.get("positions", []):
+                    prod = products_map.get(pos.get("product_id", ""))
+                    if prod:
+                        used += prod.get("width_in", 0) * pos.get("facings_wide", 1)
+                remaining = shelf_w - used
+                if remaining > best_remaining:
+                    best_remaining = remaining
+                    best_shelf = shelf
+                    best_shelf_h = shelf_h
+
+        if best_shelf is None or best_remaining < 2.0:
+            break  # No shelf has usable space
+
+        # Find the best product to add to this shelf
+        placed = False
+        for prod in sales_sorted:
+            pw = prod["width_in"]
+            ph = prod["height_in"]
+            if pw > best_remaining + 0.5:
+                continue  # Too wide
+            if ph > best_shelf_h:
+                continue  # Too tall
+
+            positions = best_shelf.get("positions", [])
+
+            # Check if product is already on this shelf — boost its facings
+            existing_pos = None
+            for pos in positions:
+                if pos.get("product_id") == prod["id"]:
+                    existing_pos = pos
+                    break
+
+            if existing_pos:
+                existing_pos["facings_wide"] = existing_pos.get("facings_wide", 1) + 1
+            else:
+                # Add as new entry at end
+                x_pos = 0.0
+                for pos in positions:
+                    p_data = products_map.get(pos.get("product_id", ""))
+                    if p_data:
+                        x_pos += p_data.get("width_in", 0) * pos.get("facings_wide", 1)
+                positions.append({
+                    "product_id": prod["id"],
+                    "x_position": round(x_pos, 2),
+                    "facings_wide": 1,
+                    "facings_high": 1,
+                    "facings_deep": 1,
+                    "orientation": "front",
+                })
+                best_shelf["positions"] = positions
+
+            added += 1
+            placed = True
+            break
+
+        if not placed:
+            break  # No product fits anywhere
+
+        # Recalculate x_positions for the modified shelf
+        positions = best_shelf.get("positions", [])
+        x = 0.0
+        for pos in positions:
+            pos["x_position"] = round(x, 2)
+            prod = products_map.get(pos.get("product_id", ""))
+            if prod:
+                x += prod.get("width_in", 0) * pos.get("facings_wide", 1)
+
+    if added > 0:
+        print(f"[GapFill] Added {added} facing(s) to fill shelf gaps", flush=True)
 
     return equipment_dict
 

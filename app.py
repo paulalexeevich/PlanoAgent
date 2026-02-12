@@ -24,6 +24,7 @@ from product_logic import (
     ProductLogicRules, fill_equipment_rule_based, build_fill_prompt,
     compute_facings_for_ai, get_total_shelf_width, phase1_capacity_check,
     phase2_optimal_facings, validate_and_fix_shelves,
+    recover_missing_products, boost_underused_shelves, fill_shelf_gaps,
 )
 from decision_tree import (
     get_tree_for_category, validate_compliance, BEER_DECISION_TREE
@@ -206,7 +207,8 @@ def fill_products():
     used_w = sum(p["width_in"] * facings[p["id"]] for p in selected_products)
     print(f"[Fill] Phase 1+2: {len(selected_products)} products selected, "
           f"{sum(facings.values())} total facings, "
-          f"used={used_w:.1f}in / {total_w:.1f}in ({used_w/total_w*100:.1f}%)")
+          f"used={used_w:.1f}in / {total_w:.1f}in ({used_w/total_w*100:.1f}%)",
+          flush=True)
 
     source = "gemini_ai"
     try:
@@ -220,7 +222,7 @@ def fill_products():
         placed_products = result["products"]
     except Exception as ai_err:
         # ── Phase 3b: Rule-based fallback ──
-        print(f"[Fill] AI failed ({ai_err}), falling back to rule-based")
+        print(f"[Fill] AI failed ({ai_err}), falling back to rule-based", flush=True)
         traceback.print_exc()
         equipment_copy = copy.deepcopy(current_equipment)
         result = fill_equipment_rule_based(
@@ -231,9 +233,65 @@ def fill_products():
         placed_products = result["products"]
         source = "rule_based_fallback"
 
-    # ── Post-processing: validate & fix any shelf overflows ──
+    # ── Post-processing pipeline ──────────────────────────────────────────
     prod_map = {p["id"]: p for p in products_json}
+
+    # Step A: Count what AI returned
+    ai_placed_ids = set()
+    ai_total_facings = 0
+    for bay in filled_equipment.get("bays", []):
+        for shelf in bay.get("shelves", []):
+            for pos in shelf.get("positions", []):
+                ai_placed_ids.add(pos.get("product_id", ""))
+                ai_total_facings += pos.get("facings_wide", 1)
+    print(f"[PostProcess] AI returned: {len(ai_placed_ids)} products, "
+          f"{ai_total_facings} facings "
+          f"(expected {len(selected_products)} products, {sum(facings.values())} facings)",
+          flush=True)
+
+    # Step B: Fix shelf overflows
     filled_equipment = validate_and_fix_shelves(filled_equipment, prod_map)
+
+    # Step C: Recover any products missed by AI
+    filled_equipment, recovered_ids = recover_missing_products(
+        filled_equipment, selected_products, facings, prod_map,
+    )
+
+    # Step D: Boost facings on underused shelves
+    filled_equipment = boost_underused_shelves(
+        filled_equipment, prod_map, facings, rules.max_facings,
+    )
+
+    # Step E: Fill remaining shelf gaps with best sellers
+    filled_equipment = fill_shelf_gaps(
+        filled_equipment, selected_products, prod_map,
+        target_pct=rules.fill_target_pct,
+    )
+
+    # Step F: Final audit
+    final_placed_ids = set()
+    final_facings = 0
+    final_used_width = 0.0
+    for bay in filled_equipment.get("bays", []):
+        for shelf in bay.get("shelves", []):
+            for pos in shelf.get("positions", []):
+                pid = pos.get("product_id", "")
+                final_placed_ids.add(pid)
+                f_w = pos.get("facings_wide", 1)
+                final_facings += f_w
+                prod = prod_map.get(pid)
+                if prod:
+                    final_used_width += prod.get("width_in", 0) * f_w
+
+    total_w_audit = get_total_shelf_width(filled_equipment)
+    fill_pct = (final_used_width / total_w_audit * 100) if total_w_audit > 0 else 0
+    print(f"[PostProcess] Final: {len(final_placed_ids)} products, "
+          f"{final_facings} facings, "
+          f"{final_used_width:.1f}in / {total_w_audit:.1f}in ({fill_pct:.1f}%)",
+          flush=True)
+
+    # Update placed_products to reflect what's actually on shelves
+    placed_products = [p for p in products_json if p["id"] in final_placed_ids]
 
     # Build planogram object
     from datetime import date
