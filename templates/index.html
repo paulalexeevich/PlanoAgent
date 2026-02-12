@@ -411,6 +411,31 @@
             accent-color: var(--accent);
         }
 
+        /* UNIT TOGGLE */
+        .unit-toggle {
+            display: inline-flex;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+            font-size: 12px;
+        }
+        .unit-toggle button {
+            padding: 5px 10px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+        .unit-toggle button.active {
+            background: var(--accent);
+            color: white;
+        }
+        .unit-toggle button:not(.active):hover {
+            background: var(--bg-shelf);
+        }
+
         /* JSON PANEL */
         .json-panel {
             display: none;
@@ -437,6 +462,10 @@
     <div class="header">
         <h1>Planogram Agent <span>/ Beer Category</span></h1>
         <div class="header-actions">
+            <div class="unit-toggle">
+                <button id="unitIn" class="active" onclick="setUnit('in')">in</button>
+                <button id="unitCm" onclick="setUnit('cm')">cm</button>
+            </div>
             <div class="scale-control">
                 <span>Scale:</span>
                 <input type="range" id="scaleSlider" min="3" max="12" value="6" step="0.5">
@@ -509,6 +538,32 @@
         let summaryData = null;
         let productsMap = {};
         let scale = 6; // pixels per inch
+        let useMetric = false; // false = inches, true = cm
+
+        // ============================================================
+        // UNIT CONVERSION HELPERS
+        // ============================================================
+        const IN_TO_CM = 2.54;
+        const IN_TO_M = 0.0254;
+
+        function d(inches) {
+            // Convert dimension value based on current unit
+            if (!useMetric) return inches;
+            return +(inches * IN_TO_CM).toFixed(1);
+        }
+        function dUnit() { return useMetric ? 'cm' : 'in'; }
+        function dFmt(inches) { return d(inches) + (useMetric ? ' cm' : '"'); }
+        function mFmt(inches) {
+            // For large dimensions, show meters when metric
+            if (!useMetric) return (inches / 12).toFixed(1) + ' ft';
+            return (inches * IN_TO_M).toFixed(2) + ' m';
+        }
+        function setUnit(unit) {
+            useMetric = (unit === 'cm');
+            document.getElementById('unitIn').classList.toggle('active', !useMetric);
+            document.getElementById('unitCm').classList.toggle('active', useMetric);
+            if (planogramData) renderAll();
+        }
 
         // ============================================================
         // INIT
@@ -634,7 +689,7 @@
                 // Bay header
                 const header = document.createElement('div');
                 header.className = 'bay-header';
-                header.textContent = `Bay ${bay.bay_number} — ${bay.width_in}" x ${bay.height_in}"`;
+                header.textContent = `Bay ${bay.bay_number} — ${dFmt(bay.width_in)} x ${dFmt(bay.height_in)}`;
                 bayEl.appendChild(header);
 
                 // Bay body (shelves rendered bottom-to-top)
@@ -724,13 +779,17 @@
         function showTooltip(event, product, position) {
             const tt = document.getElementById('tooltip');
             const margin = ((product.price - product.cost) / product.price * 100).toFixed(1);
+            const sizeStr = `${dFmt(product.width_in)} x ${dFmt(product.height_in)} x ${dFmt(product.depth_in)}`;
+            const volStr = useMetric
+                ? `${(product.unit_size_oz * 29.5735).toFixed(0)} ml`
+                : `${product.unit_size_oz} oz`;
             tt.innerHTML = `
                 <h4>${product.name}</h4>
                 <div class="row"><span class="label">Brand</span><span class="value">${product.brand}</span></div>
                 <div class="row"><span class="label">Type</span><span class="value">${product.beer_type}</span></div>
-                <div class="row"><span class="label">Package</span><span class="value">${product.pack_size}x ${product.unit_size_oz}oz ${product.package_type}</span></div>
+                <div class="row"><span class="label">Package</span><span class="value">${product.pack_size}x ${volStr} ${product.package_type}</span></div>
                 <div class="row"><span class="label">ABV</span><span class="value">${product.abv}%</span></div>
-                <div class="row"><span class="label">Size</span><span class="value">${product.width_in}" x ${product.height_in}" x ${product.depth_in}"</span></div>
+                <div class="row"><span class="label">Size (${dUnit()})</span><span class="value">${sizeStr}</span></div>
                 <div class="row"><span class="label">Price</span><span class="value">$${product.price.toFixed(2)}</span></div>
                 <div class="row"><span class="label">Cost</span><span class="value">$${product.cost.toFixed(2)}</span></div>
                 <div class="row"><span class="label">Margin</span><span class="value">${margin}%</span></div>
@@ -774,7 +833,7 @@
                 <div class="metric-chip"><span class="mv">${summaryData.products.total_placed}</span><span class="ml">Placed</span></div>
                 <div class="metric-chip"><span class="mv">${summaryData.products.total_facings}</span><span class="ml">Facings</span></div>
                 <div class="metric-chip green"><span class="mv">${summaryData.space_utilization.avg_shelf_fill_rate}%</span><span class="ml">Fill</span></div>
-                <div class="metric-chip"><span class="mv">${summaryData.equipment.total_width_ft}ft</span><span class="ml">Width</span></div>
+                <div class="metric-chip"><span class="mv">${mFmt(summaryData.equipment.total_width_in)}</span><span class="ml">Width</span></div>
                 <div class="metric-chip green"><span class="mv">$${summaryData.financials.total_revenue_potential.toLocaleString()}</span><span class="ml">Revenue</span></div>
                 <div class="metric-chip orange"><span class="mv">$${summaryData.financials.total_margin.toLocaleString()}</span><span class="ml">Margin</span></div>
                 <div class="metric-chip"><span class="mv">${summaryData.financials.margin_pct}%</span><span class="ml">Margin%</span></div>
