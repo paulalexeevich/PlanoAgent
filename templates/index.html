@@ -151,7 +151,9 @@
             border: 2px solid var(--border);
             border-radius: 8px;
             padding: 0;
-            overflow: hidden;
+            overflow: visible;
+            box-sizing: content-box;
+            flex-shrink: 0;
         }
         .bay-header {
             background: var(--bg-shelf);
@@ -165,22 +167,16 @@
             letter-spacing: 0.5px;
         }
         .bay-body {
-            display: flex;
-            flex-direction: column-reverse;
-            padding: 0;
             position: relative;
+            padding: 0;
+            overflow: hidden;
         }
 
         .shelf-row {
             position: relative;
             border-top: 3px solid var(--shelf-metal);
             min-height: 40px;
-            display: flex;
-            align-items: flex-end;
-            padding: 4px 4px 0 4px;
-            gap: 2px;
-            flex-wrap: nowrap;
-            overflow: hidden;
+            overflow: visible;
         }
         .shelf-row:first-child { border-top: none; }
         .shelf-label {
@@ -205,11 +201,10 @@
             border-radius: 3px;
             padding: 2px;
             cursor: pointer;
-            transition: all 0.15s;
-            position: relative;
+            transition: opacity 0.15s, box-shadow 0.15s;
+            position: absolute;
+            bottom: 0;
             overflow: hidden;
-            min-width: 0;
-            flex-shrink: 0;
         }
         .product-block:hover {
             transform: translateY(-2px);
@@ -1073,7 +1068,7 @@
             // Background band
             const band = document.createElement('div');
             band.className = 'group-band';
-            band.style.left = (startX + 22) + 'px';  // offset for shelf label
+            band.style.left = startX + 'px';
             band.style.width = width + 'px';
             band.style.borderColor = color;
             band.style.backgroundColor = color;
@@ -1081,7 +1076,7 @@
             // Label at bottom of band
             const lbl = document.createElement('div');
             lbl.className = 'group-label-overlay';
-            lbl.style.left = (startX + 24) + 'px';
+            lbl.style.left = (startX + 2) + 'px';
             lbl.style.color = color;
             lbl.textContent = segment;
             shelfEl.appendChild(lbl);
@@ -1099,7 +1094,7 @@
             equipment.bays.forEach(bay => {
                 const bayEl = document.createElement('div');
                 bayEl.className = 'bay';
-                bayEl.style.width = (bay.width_in * scale + 16) + 'px';
+                bayEl.style.width = (bay.width_in * scale) + 'px';
 
                 // Bay header
                 const header = document.createElement('div');
@@ -1124,7 +1119,7 @@
                     shelfEl.style.width = bay.width_in * scale + 'px';
                     shelfEl.style.position = 'absolute';
                     shelfEl.style.bottom = (shelf.y_position * scale) + 'px';
-                    shelfEl.style.left = '4px';
+                    shelfEl.style.left = '0';
 
                     // Shelf label
                     const label = document.createElement('span');
@@ -1175,8 +1170,8 @@
 
                             block.style.width = blockWidth + 'px';
                             block.style.height = blockHeight + 'px';
+                            block.style.left = (pos.x_position * scale) + 'px';
                             block.style.backgroundColor = product.color_hex || '#666';
-                            block.style.marginLeft = '1px';
 
                             const labelEl = document.createElement('div');
                             labelEl.className = 'product-label';
