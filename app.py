@@ -23,6 +23,9 @@ from gemini_agent import generate_planogram_with_ai, fill_products_with_ai
 from product_logic import (
     ProductLogicRules, fill_equipment_rule_based, build_fill_prompt
 )
+from decision_tree import (
+    get_tree_for_category, validate_compliance, BEER_DECISION_TREE
+)
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
@@ -186,10 +189,14 @@ def fill_products():
     import copy
     equipment_copy = copy.deepcopy(current_equipment)
 
+    # Get decision tree for category
+    decision_tree = get_tree_for_category("Beer")
+
     source = "gemini_ai"
     try:
         # Primary: Gemini AI
-        prompt = build_fill_prompt(equipment_copy, products_json, rules)
+        prompt = build_fill_prompt(equipment_copy, products_json, rules,
+                                   decision_tree=decision_tree)
         result = fill_products_with_ai(equipment_copy, products_json, prompt)
         filled_equipment = result["equipment"]
         placed_products = result["products"]
@@ -198,7 +205,8 @@ def fill_products():
         print(f"[Fill] AI failed ({ai_err}), falling back to rule-based")
         traceback.print_exc()
         equipment_copy = copy.deepcopy(current_equipment)
-        result = fill_equipment_rule_based(equipment_copy, products_json, rules)
+        result = fill_equipment_rule_based(equipment_copy, products_json, rules,
+                                           decision_tree=decision_tree)
         filled_equipment = result["equipment"]
         placed_products = result["products"]
         source = "rule_based_fallback"
@@ -223,11 +231,18 @@ def fill_products():
     current_planogram = Planogram.from_dict(planogram_data)
     current_summary = generate_summary(current_planogram)
 
+    # Validate decision tree compliance
+    compliance = None
+    if decision_tree:
+        compliance = validate_compliance(planogram_data, decision_tree)
+
     return jsonify({
         "planogram": current_planogram.to_dict(),
         "summary": current_summary,
         "status": "success",
         "source": source,
+        "decision_tree": decision_tree.to_dict() if decision_tree else None,
+        "compliance": compliance.to_dict() if compliance else None,
     })
 
 
@@ -281,6 +296,16 @@ def generate_ai():
             "error": str(e),
             "source": "gemini_ai"
         }), 500
+
+
+@app.route("/api/decision-tree", methods=["GET"])
+def get_decision_tree():
+    """Return the pre-built decision tree for a category."""
+    category = request.args.get("category", "Beer")
+    tree = get_tree_for_category(category)
+    if tree:
+        return jsonify(tree.to_dict())
+    return jsonify({"error": f"No decision tree for category: {category}"}), 404
 
 
 @app.route("/api/products", methods=["GET"])

@@ -14,6 +14,10 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Optional
 
 from planogram_schema import Equipment, Bay, Shelf, Position, Product
+from decision_tree import (
+    DecisionTree, get_product_group_tuple, sort_products_by_tree,
+    get_tree_for_category,
+)
 
 
 # ── Default rule values ──────────────────────────────────────────────────────
@@ -144,14 +148,17 @@ def fill_equipment_rule_based(
     equipment_dict: dict,
     products_json: list,
     rules: ProductLogicRules,
+    decision_tree: Optional[DecisionTree] = None,
 ) -> dict:
     """
     Deterministic algorithm: fill empty equipment with products.
 
     Args:
-        equipment_dict: equipment JSON (bays → shelves with empty positions)
-        products_json:  full product catalog (list of dicts)
-        rules:          ProductLogicRules instance
+        equipment_dict:  equipment JSON (bays → shelves with empty positions)
+        products_json:   full product catalog (list of dicts)
+        rules:           ProductLogicRules instance
+        decision_tree:   optional DecisionTree — if provided, products within
+                         each tier are sorted by the tree's grouping order
 
     Returns:
         dict with keys:
@@ -164,9 +171,11 @@ def fill_equipment_rule_based(
         tier = _classify_product(p, rules)
         tier_buckets[tier].append(p)
 
-    # Sort within each tier by subcategory then brand (for grouping)
+    # Sort within each tier using the decision tree (if provided) for grouping
     for tier in tier_buckets.values():
-        if rules.group_by == "subcategory":
+        if decision_tree:
+            tier.sort(key=lambda p: get_product_group_tuple(p, decision_tree))
+        elif rules.group_by == "subcategory":
             tier.sort(key=lambda p: (p["subcategory"], p["brand"], p["name"]))
         else:
             tier.sort(key=lambda p: (p["brand"], p["subcategory"], p["name"]))
@@ -246,16 +255,26 @@ def build_fill_prompt(
     equipment_json: dict,
     products_json: list,
     rules: ProductLogicRules,
+    decision_tree: Optional[DecisionTree] = None,
 ) -> str:
     """
     Build a Gemini prompt for Step 2: fill an existing equipment with products.
 
     The prompt tells Gemini to keep equipment dimensions/structure unchanged
     and only populate the `positions` arrays on each shelf.
+    If a decision_tree is provided, its grouping instructions are included.
     """
     equip_compact = json.dumps(equipment_json, indent=2)
     products_compact = json.dumps(products_json, separators=(",", ":"))
     rules_text = rules.to_prompt_text()
+
+    # Decision tree section
+    dt_section = ""
+    if decision_tree:
+        dt_section = f"""
+## {decision_tree.to_prompt_text()}
+
+"""
 
     return f"""You are a retail planogram expert AI. You are given an EMPTY equipment fixture and a product catalog.
 Your task is to FILL the shelves with products by populating the "positions" arrays.
@@ -270,8 +289,7 @@ Your task is to FILL the shelves with products by populating the "positions" arr
 7. Product height must not exceed shelf clearance (height_in).
 8. x_position = previous product's x_position + (previous product's width_in * facings_wide). First product starts at 0.
 9. Use the actual product dimensions from the catalog — do not invent dimensions.
-
-## {rules_text}
+{dt_section}## {rules_text}
 
 ## EMPTY EQUIPMENT (preserve this structure exactly)
 {equip_compact}

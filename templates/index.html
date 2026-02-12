@@ -541,6 +541,115 @@
             pointer-events: none;
         }
 
+        /* DECISION TREE & COMPLIANCE */
+        .dt-tree-visual {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .dt-level {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background: var(--bg-dark);
+            border-radius: 4px;
+            font-size: 10px;
+        }
+        .dt-level .dt-num {
+            font-weight: 700;
+            color: var(--accent);
+            font-size: 9px;
+        }
+        .dt-level .dt-name {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+        .dt-arrow {
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+        .compliance-score {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+        .compliance-score .score-value {
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .compliance-score .score-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        .score-good { color: var(--accent-green); }
+        .score-ok { color: var(--accent-orange); }
+        .score-bad { color: var(--accent-red); }
+        .compliance-levels {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .cl-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+        }
+        .cl-row .cl-name {
+            width: 65px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        .cl-bar {
+            flex: 1;
+            height: 4px;
+            background: var(--bg-dark);
+            border-radius: 2px;
+            overflow: hidden;
+            min-width: 40px;
+        }
+        .cl-bar-inner {
+            height: 100%;
+            border-radius: 2px;
+        }
+        .cl-pct {
+            width: 36px;
+            text-align: right;
+            font-weight: 600;
+        }
+
+        /* GROUP OVERLAY on planogram */
+        .group-band {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            border-left: 2px solid;
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: 1;
+        }
+        .group-label-overlay {
+            position: absolute;
+            bottom: 1px;
+            font-size: 7px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+            z-index: 6;
+            pointer-events: none;
+            padding: 0 2px;
+        }
+
         /* ERROR TOAST */
         .error-toast {
             position: fixed;
@@ -677,8 +786,10 @@
                     <div class="fill-rates-grid" id="fillRates"></div>
                 </div>
                 <div class="panel-section">
-                    <h4>Brands</h4>
-                    <ul class="brand-list" id="brandList"></ul>
+                    <h4>Decision Tree &amp; Compliance</h4>
+                    <div id="dtPanel">
+                        <div style="font-size:11px;color:var(--text-secondary);">Generate products to see compliance</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -703,6 +814,17 @@
         let scale = 6; // pixels per inch
         let useMetric = false; // false = inches, true = cm
         let equipmentGenerated = false; // true after Step 1
+        let decisionTreeData = null;   // decision tree definition
+        let complianceData = null;     // compliance report from backend
+
+        // Segment colors for group overlay
+        const SEGMENT_COLORS = {
+            'Domestic': '#4a9eff',
+            'Craft':    '#f59e0b',
+            'Import':   '#34d399',
+            'Specialty':'#a78bfa',
+            'Other':    '#9aa0a6',
+        };
 
         // ============================================================
         // UNIT CONVERSION HELPERS
@@ -825,6 +947,8 @@
 
                 planogramData = data.planogram;
                 summaryData = data.summary;
+                decisionTreeData = data.decision_tree || null;
+                complianceData = data.compliance || null;
                 buildProductsMap();
                 renderAll();
                 setSourceTag(data.source || 'gemini_ai');
@@ -936,12 +1060,33 @@
         function renderAll() {
             renderPlanogram();
             renderSummary();
+            renderDecisionTree();
             renderJSON();
         }
 
         // ============================================================
         // PLANOGRAM VISUALIZATION
         // ============================================================
+        function _addGroupBand(shelfEl, startX, width, segment, shelfHeight) {
+            if (width <= 0) return;
+            const color = SEGMENT_COLORS[segment] || SEGMENT_COLORS.Other;
+            // Background band
+            const band = document.createElement('div');
+            band.className = 'group-band';
+            band.style.left = (startX + 22) + 'px';  // offset for shelf label
+            band.style.width = width + 'px';
+            band.style.borderColor = color;
+            band.style.backgroundColor = color;
+            shelfEl.appendChild(band);
+            // Label at bottom of band
+            const lbl = document.createElement('div');
+            lbl.className = 'group-label-overlay';
+            lbl.style.left = (startX + 24) + 'px';
+            lbl.style.color = color;
+            lbl.textContent = segment;
+            shelfEl.appendChild(lbl);
+        }
+
         function renderPlanogram() {
             const container = document.getElementById('planogramContainer');
             container.innerHTML = '';
@@ -995,17 +1140,38 @@
                         shelfEl.appendChild(emptyLabel);
                     }
 
-                    // Products on shelf
+                    // Products on shelf + segment group overlays
                     if (hasProducts) {
-                        shelf.positions.forEach(pos => {
+                        const segMap = buildSegmentMap();
+                        let currentSegment = null;
+                        let segStartX = 0;
+
+                        shelf.positions.forEach((pos, posIdx) => {
                             const product = productsMap[pos.product_id];
                             if (!product) return;
 
-                            const block = document.createElement('div');
-                            block.className = 'product-block';
-
+                            const seg = segMap[pos.product_id] || null;
                             const blockWidth = product.width_in * pos.facings_wide * scale;
                             const blockHeight = Math.min(product.height_in * scale, shelfHeight - 4);
+
+                            // Track segment group bands
+                            if (seg && seg !== currentSegment) {
+                                // Close previous band
+                                if (currentSegment) {
+                                    _addGroupBand(shelfEl, segStartX, pos.x_position * scale - segStartX, currentSegment, shelfHeight);
+                                }
+                                currentSegment = seg;
+                                segStartX = pos.x_position * scale;
+                            }
+
+                            // Last position: close the band
+                            if (posIdx === shelf.positions.length - 1 && currentSegment) {
+                                const endX = pos.x_position * scale + blockWidth;
+                                _addGroupBand(shelfEl, segStartX, endX - segStartX, currentSegment, shelfHeight);
+                            }
+
+                            const block = document.createElement('div');
+                            block.className = 'product-block';
 
                             block.style.width = blockWidth + 'px';
                             block.style.height = blockHeight + 'px';
@@ -1115,7 +1281,6 @@
 
             renderCategoryBars();
             renderFillRates();
-            renderBrandList();
         }
 
         function renderCategoryBars() {
@@ -1173,25 +1338,73 @@
             }
         }
 
-        function renderBrandList() {
-            const container = document.getElementById('brandList');
-            container.innerHTML = '';
-            const brands = summaryData.brand_breakdown;
-            if (!brands || Object.keys(brands).length === 0) {
-                container.innerHTML = '<li style="font-size:11px;color:var(--text-secondary);">No products placed yet</li>';
+        // ============================================================
+        // DECISION TREE & COMPLIANCE
+        // ============================================================
+        function renderDecisionTree() {
+            const container = document.getElementById('dtPanel');
+            if (!container) return;
+
+            // If no tree or no products, show placeholder
+            if (!decisionTreeData || !planogramData || !planogramData.products || planogramData.products.length === 0) {
+                container.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">Fill products to see decision tree compliance</div>';
                 return;
             }
 
-            Object.entries(brands)
-                .sort((a, b) => b[1].facings - a[1].facings)
-                .forEach(([name, data]) => {
-                    container.innerHTML += `
-                        <li>
-                            <span class="brand-name">${name}</span>
-                            <span class="brand-facings">${data.facings}</span>
-                        </li>
-                    `;
+            let html = '';
+
+            // Tree levels visual: L1 → L2 → L3 → L4
+            html += '<div class="dt-tree-visual">';
+            decisionTreeData.levels.forEach((lvl, i) => {
+                if (i > 0) html += '<span class="dt-arrow">&#8594;</span>';
+                html += `<span class="dt-level"><span class="dt-num">L${i+1}</span> <span class="dt-name">${lvl.name}</span></span>`;
+            });
+            html += '</div>';
+
+            // Compliance score
+            if (complianceData) {
+                const overall = complianceData.overall_pct;
+                const scoreClass = overall >= 80 ? 'score-good' : overall >= 50 ? 'score-ok' : 'score-bad';
+                html += `<div class="compliance-score">
+                    <span class="score-value ${scoreClass}">${overall}%</span>
+                    <span class="score-label">Overall Compliance</span>
+                </div>`;
+
+                // Per-level bars
+                html += '<div class="compliance-levels">';
+                complianceData.levels.forEach(lvl => {
+                    const pct = lvl.compliance_pct;
+                    const barClass = pct >= 80 ? 'fill-good' : pct >= 50 ? 'fill-warn' : 'fill-low';
+                    html += `<div class="cl-row">
+                        <span class="cl-name">${lvl.level_name}</span>
+                        <div class="cl-bar"><div class="cl-bar-inner ${barClass}" style="width:${pct}%"></div></div>
+                        <span class="cl-pct">${pct}%</span>
+                    </div>`;
                 });
+                html += '</div>';
+
+                // Breaks info
+                const totalBreaks = complianceData.levels.reduce((s, l) => s + l.break_count, 0);
+                if (totalBreaks > 0) {
+                    html += `<div style="font-size:9px;color:var(--accent-orange);margin-top:4px;">${totalBreaks} grouping break(s) detected</div>`;
+                } else {
+                    html += `<div style="font-size:9px;color:var(--accent-green);margin-top:4px;">Perfect grouping — no breaks</div>`;
+                }
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Build a map from product_id → segment (Level 1 group) for overlay
+        function buildSegmentMap() {
+            if (!complianceData || !complianceData.position_groups) return {};
+            const map = {};
+            complianceData.position_groups.forEach(pg => {
+                if (pg.groups && pg.groups.Segment) {
+                    map[pg.product_id] = pg.groups.Segment;
+                }
+            });
+            return map;
         }
 
         // ============================================================
