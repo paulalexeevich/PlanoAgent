@@ -26,11 +26,10 @@
 
 ## UI/UX Notes
 - Two-step UI: equipment form (dropdowns + numbers) + "Generate Equipment" / "Fill Products" buttons.
-- Step labels (Step 1 / Step 2) with color-coded badges.
-- "Fill Products" disabled until equipment exists.
 - Source tags: "Empty Equipment" (orange), "Gemini AI" (blue), "Rule-based (fallback)" (purple), "Rule-based" (green).
-- Color-coded product blocks by brand `color_hex`. Scale slider, unit toggle (in/cm).
-- Bottom collapsible summary: metrics, category mix, fill rates, brands.
+- **Planogram rendering**: Products use **absolute positioning** (`left: x_position * scale`), NOT flexbox. Bay must have `flex-shrink: 0` + `box-sizing: content-box` to prevent flex container from shrinking bays below their actual width. Shelf has `overflow: visible`, bay-body clips at boundary.
+- Scale slider, unit toggle (in/cm). At high zoom, page scrolls horizontally.
+- Bottom collapsible summary: metrics, category mix, fill rates, decision tree compliance.
 
 ## Decision Tree (v0.4)
 - **`decision_tree.py`**: Pre-built trees per category. Beer tree: Segment → Style (subcategory) → Package → Brand.
