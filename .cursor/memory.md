@@ -1,24 +1,27 @@
 # Planogram Agent — Learnings & Memory
 
-## v0.1 — Initial Prototype (2026-02-12)
+## Architecture & Technical Notes
+- **Data model**: Blue Yonder hierarchy (Planogram > Equipment > Bay > Shelf > Position). `dataclass` with `asdict()` for clean serialization. `Planogram.from_dict()` for deserialization.
+- **Flask + vanilla JS** (no build step). Port 5001 (5000 conflicts with macOS AirPlay).
+- **Always use `python3`** on this macOS system (`python` not found).
+- **Product dimensions in inches** (US retail standard). Beer reference: 6-pack cans ~7.5"x5"x5", 12-pack cans ~10.5"x5"x7.5", 6-pack bottles ~7.5"x9.5"x5". Standard gondola: 48"W x 72"H x 24"D, 5 shelves.
 
-### Key Architecture Decisions
-- **Data model follows industry standard**: Blue Yonder Space Planning hierarchy (Project > Planogram > Equipment > Bay > Shelf > Position). This mirrors how real planogram software works and makes future integration easier.
-- **Placement algorithm uses weight-based tiering**: Heavy/large packs on bottom shelves, premium items at eye level. This is standard retail merchandising practice.
-- **Flask + vanilla JS chosen over React/etc.**: For prototype speed. The HTML template is self-contained — no build step needed. Can migrate to React later if complexity grows.
+## Gemini AI Integration (v0.2)
+- **SDK**: `google-genai` (not `google-generativeai`). Client: `genai.Client(api_key=...)`. Model: `gemini-2.5-flash`.
+- **Structured output**: Use `response_mime_type="application/json"` in `GenerateContentConfig` — Gemini returns JSON directly without markdown fences.
+- **Trailing comma bug**: Even with JSON mode, Gemini sometimes produces trailing commas before `}` or `]`. Fix with regex: `re.sub(r',\s*([}\]])', r'\1', text)` before `json.loads()`.
+- **Prompt design**: Send full product catalog (compact JSON) + exact schema description + merchandising rules. Temperature 0.7 works well for creative but valid layouts.
+- **Response time**: Gemini 2.5 Flash takes ~30-60 seconds for planogram generation (large prompt ~8K chars + complex structured output ~10K chars). Frontend needs loading spinner.
+- **Validation**: Always validate product_id references exist in products array — Gemini occasionally invents IDs.
 
-### What Went Well
-- Using `dataclass` for the schema made serialization/deserialization clean with `asdict()`.
-- Color-coded product blocks based on brand `color_hex` creates immediate visual differentiation.
-- The scale slider (px-per-inch) lets users zoom in/out on the planogram naturally.
+## UI/UX Notes
+- Color-coded product blocks by brand `color_hex` — instant visual differentiation.
+- Scale slider (px/in) for zoom. Unit toggle (in/cm) for metric conversion.
+- Bottom panel for summary (not sidebar) — gives planogram full width.
+- Collapsible summary with 4-column grid: metrics, category mix, fill rates, brands.
+- Source tag ("Gemini AI" / "Rule-based") shows generation method.
 
-### What Went Wrong & Fixes
-- `python` not found on macOS — must use `python3`. Always use `python3` for commands on this system.
-- 9 of 50 products unplaced (fill rate 53.8%) — the placement algorithm is greedy (left-to-right, one pass per shelf tier). Products that don't fit in first bay's shelves get skipped. **TODO**: Add multi-pass placement and overflow to next bay.
-- Product labels get clipped when blocks are too small at low scale — used CSS `-webkit-line-clamp` and `overflow: hidden` to handle gracefully.
-
-### Technical Notes
-- Product dimensions use inches (industry standard for US retail). All shelf/bay dimensions in inches.
-- Beer package sizes reference: 12oz can ~2.6"x4.83", 6-pack cans ~7.5"x5"x5", 12-pack cans ~10.5"x5"x7.5", 6-pack bottles ~7.5"x9.5"x5".
-- Standard gondola: 48" wide bays, 72" tall, 24" deep, typically 5 shelves.
-- Port 5001 used (5000 often conflicts with macOS AirPlay Receiver).
+## Known Issues & TODOs
+- Rule-based placement is greedy (one pass) — 9/50 products unplaced at 53.8% fill. Multi-pass would fix.
+- Gemini AI placement achieves 87-97% fill — much better than rule-based.
+- API key in `.env` file (gitignored). Never commit secrets.
