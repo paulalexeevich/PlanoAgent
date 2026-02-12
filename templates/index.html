@@ -52,30 +52,68 @@
             height: calc(100vh - 60px);
         }
 
-        /* INPUT PANEL */
+        /* INPUT PANEL — 2-step form */
         .input-panel {
             background: var(--bg-card);
             border-bottom: 1px solid var(--border);
-            padding: 16px 24px;
+            padding: 12px 24px 14px;
+        }
+        .form-row {
             display: flex;
-            gap: 12px;
+            gap: 10px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .form-group { display: flex; flex-direction: column; gap: 3px; }
+        .form-group label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            font-weight: 600;
+        }
+        .form-group select,
+        .form-group input[type="number"] {
+            padding: 7px 10px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+            min-width: 80px;
+        }
+        .form-group select { min-width: 120px; }
+        .form-group select:focus,
+        .form-group input[type="number"]:focus { border-color: var(--accent); }
+        .action-row {
+            display: flex;
+            gap: 10px;
             align-items: center;
             flex-wrap: wrap;
         }
-        .input-panel input[type="text"] {
-            flex: 1;
-            min-width: 300px;
-            padding: 10px 16px;
-            background: var(--bg-dark);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 14px;
-            outline: none;
-            transition: border-color 0.2s;
+        .step-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            line-height: 1;
         }
-        .input-panel input[type="text"]:focus { border-color: var(--accent); }
-        .input-panel input[type="text"]::placeholder { color: var(--text-secondary); }
+        .step-label.s1 { background: rgba(74,158,255,0.15); color: var(--accent); }
+        .step-label.s2 { background: rgba(52,211,153,0.15); color: var(--accent-green); }
+        .action-divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border);
+            margin: 0 4px;
+        }
+        .btn-green { background: var(--accent-green); color: #0f1117; font-weight: 600; }
+        .btn-green:hover { background: #2bc48a; }
+        .btn-green:disabled { opacity: 0.4; cursor: not-allowed; }
 
         .btn {
             padding: 10px 20px;
@@ -480,7 +518,28 @@
         }
         .source-tag.ai { background: rgba(74,158,255,0.15); color: var(--accent); }
         .source-tag.rules { background: rgba(52,211,153,0.15); color: var(--accent-green); }
+        .source-tag.equipment { background: rgba(245,158,11,0.15); color: var(--accent-orange); }
+        .source-tag.fallback { background: rgba(167,139,250,0.15); color: #a78bfa; }
         .source-tag.error { background: rgba(239,68,68,0.15); color: var(--accent-red); }
+
+        /* EMPTY SHELF */
+        .shelf-row.empty-shelf {
+            border: 2px dashed var(--border);
+            border-top: 3px solid var(--shelf-metal);
+            background: rgba(42,45,58,0.3);
+        }
+        .empty-shelf-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 10px;
+            color: var(--text-secondary);
+            opacity: 0.5;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            pointer-events: none;
+        }
 
         /* ERROR TOAST */
         .error-toast {
@@ -528,17 +587,58 @@
         </div>
     </div>
 
-    <!-- INPUT BAR -->
+    <!-- TWO-STEP INPUT PANEL -->
     <div class="input-panel">
-        <input type="text" id="userInput"
-            placeholder="e.g. 'Create 4-bay cooler with 6 shelves for craft beer focus' ..."
-            onkeydown="if(event.key==='Enter') generateFromInput()">
-        <button class="btn btn-primary" id="generateBtn" onclick="generateFromInput()">
-            <span id="btnLabel">Generate with AI</span>
-            <span id="btnSpinner" style="display:none" class="btn-spinner"></span>
-        </button>
-        <button class="btn btn-secondary" onclick="resetDefault()">Reset Default</button>
-        <span id="sourceTag" class="source-tag"></span>
+        <!-- Equipment Form -->
+        <div class="form-row">
+            <div class="form-group">
+                <label>Equipment Type</label>
+                <select id="eqType">
+                    <option value="gondola">Gondola</option>
+                    <option value="cooler">Cooler</option>
+                    <option value="endcap">Endcap</option>
+                    <option value="wall_section">Wall Section</option>
+                    <option value="island">Island</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Bays</label>
+                <input type="number" id="eqBays" value="3" min="1" max="10" style="width:60px">
+            </div>
+            <div class="form-group">
+                <label>Shelves / Bay</label>
+                <input type="number" id="eqShelves" value="5" min="1" max="10" style="width:60px">
+            </div>
+            <div class="form-group">
+                <label>Bay Width (in)</label>
+                <input type="number" id="eqWidth" value="48" min="12" max="120" step="1" style="width:70px">
+            </div>
+            <div class="form-group">
+                <label>Bay Height (in)</label>
+                <input type="number" id="eqHeight" value="72" min="24" max="120" step="1" style="width:70px">
+            </div>
+            <div class="form-group">
+                <label>Bay Depth (in)</label>
+                <input type="number" id="eqDepth" value="24" min="6" max="48" step="1" style="width:70px">
+            </div>
+        </div>
+        <!-- Action Buttons -->
+        <div class="action-row">
+            <span class="step-label s1">Step 1</span>
+            <button class="btn btn-primary" id="genEquipBtn" onclick="generateEquipment()">
+                <span id="genEquipLabel">Generate Equipment</span>
+                <span id="genEquipSpinner" style="display:none" class="btn-spinner"></span>
+            </button>
+            <div class="action-divider"></div>
+            <span class="step-label s2">Step 2</span>
+            <button class="btn btn-green" id="fillBtn" onclick="fillProducts()" disabled>
+                <span id="fillLabel">Fill Products</span>
+                <span id="fillSpinner" style="display:none" class="btn-spinner"></span>
+            </button>
+            <div class="action-divider"></div>
+            <button class="btn btn-secondary" onclick="resetDefault()">Reset Default</button>
+            <span id="sourceTag" class="source-tag"></span>
+        </div>
     </div>
 
     <!-- MAIN LAYOUT -->
@@ -602,6 +702,7 @@
         let productsMap = {};
         let scale = 6; // pixels per inch
         let useMetric = false; // false = inches, true = cm
+        let equipmentGenerated = false; // true after Step 1
 
         // ============================================================
         // UNIT CONVERSION HELPERS
@@ -610,14 +711,12 @@
         const IN_TO_M = 0.0254;
 
         function d(inches) {
-            // Convert dimension value based on current unit
             if (!useMetric) return inches;
             return +(inches * IN_TO_CM).toFixed(1);
         }
         function dUnit() { return useMetric ? 'cm' : 'in'; }
         function dFmt(inches) { return d(inches) + (useMetric ? ' cm' : '"'); }
         function mFmt(inches) {
-            // For large dimensions, show meters when metric
             if (!useMetric) return (inches / 12).toFixed(1) + ' ft';
             return (inches * IN_TO_M).toFixed(2) + ' m';
         }
@@ -653,30 +752,75 @@
                 buildProductsMap();
                 renderAll();
                 setSourceTag('rule_based');
+                // Check if this has products — if so, equipment is already filled
+                if (planogramData.products && planogramData.products.length > 0) {
+                    equipmentGenerated = true;
+                    enableFillBtn(true);
+                }
             } catch (err) {
                 console.error('Failed to load planogram:', err);
             }
             showLoading(false);
         }
 
-        async function generateFromInput() {
-            const input = document.getElementById('userInput').value.trim();
-            if (!input) return;
+        // ── STEP 1: Generate empty equipment ──────────────────────
+        async function generateEquipment() {
+            const config = {
+                equipment_type: document.getElementById('eqType').value,
+                num_bays: document.getElementById('eqBays').value,
+                num_shelves: document.getElementById('eqShelves').value,
+                bay_width: document.getElementById('eqWidth').value,
+                bay_height: document.getElementById('eqHeight').value,
+                bay_depth: document.getElementById('eqDepth').value,
+            };
 
-            setBtnLoading(true);
-            showLoading(true, 'Gemini AI is generating your planogram...');
+            setGenEquipLoading(true);
+            showLoading(true, 'Generating empty equipment...');
             hideError();
             try {
-                // Always use AI endpoint when user types a request
-                const res = await fetch('/api/generate-ai', {
+                const res = await fetch('/api/generate-equipment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_input: input })
+                    body: JSON.stringify(config)
                 });
                 const data = await res.json();
 
                 if (data.status === 'error') {
-                    throw new Error(data.error || 'AI generation failed');
+                    throw new Error(data.error || 'Equipment generation failed');
+                }
+
+                planogramData = data.planogram;
+                summaryData = data.summary;
+                buildProductsMap();
+                renderAll();
+                setSourceTag('equipment_only');
+                equipmentGenerated = true;
+                enableFillBtn(true);
+            } catch (err) {
+                console.error('Equipment generation failed:', err);
+                showError('Equipment generation failed: ' + err.message);
+            }
+            showLoading(false);
+            setGenEquipLoading(false);
+        }
+
+        // ── STEP 2: Fill products ─────────────────────────────────
+        async function fillProducts() {
+            if (!equipmentGenerated) return;
+
+            setFillLoading(true);
+            showLoading(true, 'Gemini AI is filling products...');
+            hideError();
+            try {
+                const res = await fetch('/api/fill-products', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+
+                if (data.status === 'error') {
+                    throw new Error(data.error || 'Fill products failed');
                 }
 
                 planogramData = data.planogram;
@@ -685,15 +829,15 @@
                 renderAll();
                 setSourceTag(data.source || 'gemini_ai');
             } catch (err) {
-                console.error('AI generation failed:', err);
-                showError('AI generation failed: ' + err.message + '. Try a different prompt or use Reset Default.');
+                console.error('Fill products failed:', err);
+                showError('Fill products failed: ' + err.message);
             }
             showLoading(false);
-            setBtnLoading(false);
+            setFillLoading(false);
         }
 
+        // ── Reset Default (rule-based full planogram) ─────────────
         async function resetDefault() {
-            document.getElementById('userInput').value = '';
             showLoading(true);
             hideError();
             try {
@@ -708,6 +852,8 @@
                 buildProductsMap();
                 renderAll();
                 setSourceTag('rule_based');
+                equipmentGenerated = true;
+                enableFillBtn(true);
             } catch (err) {
                 console.error('Reset failed:', err);
             }
@@ -730,23 +876,46 @@
             if (msg) document.getElementById('loadingText').textContent = msg;
         }
 
-        function setBtnLoading(loading) {
-            const btn = document.getElementById('generateBtn');
-            const label = document.getElementById('btnLabel');
-            const spinner = document.getElementById('btnSpinner');
+        function setGenEquipLoading(loading) {
+            const btn = document.getElementById('genEquipBtn');
+            const label = document.getElementById('genEquipLabel');
+            const spinner = document.getElementById('genEquipSpinner');
             btn.disabled = loading;
-            label.textContent = loading ? 'Generating...' : 'Generate with AI';
+            label.textContent = loading ? 'Generating...' : 'Generate Equipment';
             spinner.style.display = loading ? 'inline-block' : 'none';
+        }
+
+        function setFillLoading(loading) {
+            const btn = document.getElementById('fillBtn');
+            const label = document.getElementById('fillLabel');
+            const spinner = document.getElementById('fillSpinner');
+            btn.disabled = loading;
+            label.textContent = loading ? 'Filling...' : 'Fill Products';
+            spinner.style.display = loading ? 'inline-block' : 'none';
+        }
+
+        function enableFillBtn(enabled) {
+            document.getElementById('fillBtn').disabled = !enabled;
         }
 
         function setSourceTag(source) {
             const tag = document.getElementById('sourceTag');
-            if (source === 'gemini_ai') {
-                tag.textContent = 'Gemini AI';
-                tag.className = 'source-tag ai';
-            } else {
-                tag.textContent = 'Rule-based';
-                tag.className = 'source-tag rules';
+            switch (source) {
+                case 'gemini_ai':
+                    tag.textContent = 'Gemini AI';
+                    tag.className = 'source-tag ai';
+                    break;
+                case 'rule_based_fallback':
+                    tag.textContent = 'Rule-based (fallback)';
+                    tag.className = 'source-tag fallback';
+                    break;
+                case 'equipment_only':
+                    tag.textContent = 'Empty Equipment';
+                    tag.className = 'source-tag equipment';
+                    break;
+                default:
+                    tag.textContent = 'Rule-based';
+                    tag.className = 'source-tag rules';
             }
         }
 
@@ -780,6 +949,7 @@
             if (!planogramData || !planogramData.equipment) return;
 
             const equipment = planogramData.equipment;
+            const isEmpty = !planogramData.products || planogramData.products.length === 0;
 
             equipment.bays.forEach(bay => {
                 const bayEl = document.createElement('div');
@@ -792,17 +962,17 @@
                 header.textContent = `Bay ${bay.bay_number} — ${dFmt(bay.width_in)} x ${dFmt(bay.height_in)}`;
                 bayEl.appendChild(header);
 
-                // Bay body (shelves rendered bottom-to-top)
+                // Bay body
                 const body = document.createElement('div');
                 body.className = 'bay-body';
                 body.style.height = (bay.height_in * scale) + 'px';
 
-                // Sort shelves by y_position (ascending = bottom first)
                 const sortedShelves = [...bay.shelves].sort((a, b) => a.y_position - b.y_position);
 
                 sortedShelves.forEach((shelf, idx) => {
+                    const hasProducts = shelf.positions && shelf.positions.length > 0;
                     const shelfEl = document.createElement('div');
-                    shelfEl.className = 'shelf-row';
+                    shelfEl.className = 'shelf-row' + ((!hasProducts && isEmpty) ? ' empty-shelf' : '');
 
                     const shelfHeight = shelf.height_in * scale;
                     shelfEl.style.height = shelfHeight + 'px';
@@ -817,53 +987,58 @@
                     label.textContent = `S${shelf.shelf_number}`;
                     shelfEl.appendChild(label);
 
+                    // Empty shelf indicator
+                    if (!hasProducts && isEmpty) {
+                        const emptyLabel = document.createElement('span');
+                        emptyLabel.className = 'empty-shelf-label';
+                        emptyLabel.textContent = `Empty — ${dFmt(shelf.width_in)} x ${dFmt(shelf.height_in)}`;
+                        shelfEl.appendChild(emptyLabel);
+                    }
+
                     // Products on shelf
-                    shelf.positions.forEach(pos => {
-                        const product = productsMap[pos.product_id];
-                        if (!product) return;
+                    if (hasProducts) {
+                        shelf.positions.forEach(pos => {
+                            const product = productsMap[pos.product_id];
+                            if (!product) return;
 
-                        const block = document.createElement('div');
-                        block.className = 'product-block';
+                            const block = document.createElement('div');
+                            block.className = 'product-block';
 
-                        const blockWidth = product.width_in * pos.facings_wide * scale;
-                        const blockHeight = Math.min(product.height_in * scale, shelfHeight - 4);
+                            const blockWidth = product.width_in * pos.facings_wide * scale;
+                            const blockHeight = Math.min(product.height_in * scale, shelfHeight - 4);
 
-                        block.style.width = blockWidth + 'px';
-                        block.style.height = blockHeight + 'px';
-                        block.style.backgroundColor = product.color_hex || '#666';
-                        block.style.marginLeft = '1px';
+                            block.style.width = blockWidth + 'px';
+                            block.style.height = blockHeight + 'px';
+                            block.style.backgroundColor = product.color_hex || '#666';
+                            block.style.marginLeft = '1px';
 
-                        // Label
-                        const labelEl = document.createElement('div');
-                        labelEl.className = 'product-label';
-                        // Show abbreviated name
-                        const shortName = product.brand + (product.pack_size > 1 ? ` ${product.pack_size}pk` : '');
-                        labelEl.textContent = shortName;
-                        block.appendChild(labelEl);
+                            const labelEl = document.createElement('div');
+                            labelEl.className = 'product-label';
+                            const shortName = product.brand + (product.pack_size > 1 ? ` ${product.pack_size}pk` : '');
+                            labelEl.textContent = shortName;
+                            block.appendChild(labelEl);
 
-                        // Price
-                        if (blockHeight > 25) {
-                            const priceEl = document.createElement('div');
-                            priceEl.className = 'product-price';
-                            priceEl.textContent = '$' + product.price.toFixed(2);
-                            block.appendChild(priceEl);
-                        }
+                            if (blockHeight > 25) {
+                                const priceEl = document.createElement('div');
+                                priceEl.className = 'product-price';
+                                priceEl.textContent = '$' + product.price.toFixed(2);
+                                block.appendChild(priceEl);
+                            }
 
-                        // Facings badge
-                        if (pos.facings_wide > 1) {
-                            const badge = document.createElement('div');
-                            badge.className = 'facing-badge';
-                            badge.textContent = pos.facings_wide + 'x';
-                            block.appendChild(badge);
-                        }
+                            if (pos.facings_wide > 1) {
+                                const badge = document.createElement('div');
+                                badge.className = 'facing-badge';
+                                badge.textContent = pos.facings_wide + 'x';
+                                block.appendChild(badge);
+                            }
 
-                        // Tooltip events
-                        block.addEventListener('mouseenter', (e) => showTooltip(e, product, pos));
-                        block.addEventListener('mousemove', (e) => moveTooltip(e));
-                        block.addEventListener('mouseleave', hideTooltip);
+                            block.addEventListener('mouseenter', (e) => showTooltip(e, product, pos));
+                            block.addEventListener('mousemove', (e) => moveTooltip(e));
+                            block.addEventListener('mouseleave', hideTooltip);
 
-                        shelfEl.appendChild(block);
-                    });
+                            shelfEl.appendChild(block);
+                        });
+                    }
 
                     body.appendChild(shelfEl);
                 });
@@ -904,7 +1079,6 @@
             const tt = document.getElementById('tooltip');
             let x = event.clientX + 16;
             let y = event.clientY + 16;
-            // Keep on screen
             if (x + 240 > window.innerWidth) x = event.clientX - 250;
             if (y + 200 > window.innerHeight) y = event.clientY - 210;
             tt.style.left = x + 'px';
@@ -925,7 +1099,6 @@
         function renderSummary() {
             if (!summaryData) return;
 
-            // Combined Overview + Financial metrics in one compact row
             const metricsRow = document.getElementById('metricsRow');
             metricsRow.innerHTML = `
                 <div class="metric-chip blue"><span class="mv">${summaryData.equipment.total_bays}</span><span class="ml">Bays</span></div>
@@ -940,13 +1113,8 @@
                 <div class="metric-chip"><span class="mv">${summaryData.products.total_in_catalog}</span><span class="ml">Catalog</span></div>
             `;
 
-            // Category bars
             renderCategoryBars();
-
-            // Fill rates
             renderFillRates();
-
-            // Brand list
             renderBrandList();
         }
 
@@ -954,12 +1122,16 @@
             const container = document.getElementById('categoryBars');
             container.innerHTML = '';
             const cats = summaryData.category_breakdown;
+            if (!cats || Object.keys(cats).length === 0) {
+                container.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">No products placed yet</div>';
+                return;
+            }
             const maxFacings = Math.max(...Object.values(cats).map(c => c.facings));
             const colors = ['#4a9eff', '#34d399', '#f59e0b', '#ef4444', '#a78bfa', '#ec4899', '#14b8a6', '#f97316'];
 
             Object.entries(cats).sort((a, b) => b[1].facings - a[1].facings).forEach(([name, data], i) => {
                 const pct = (data.facings / maxFacings * 100).toFixed(0);
-                const html = `
+                container.innerHTML += `
                     <div class="category-bar-container">
                         <div class="category-bar-label">
                             <span class="name">${name}</span>
@@ -970,7 +1142,6 @@
                         </div>
                     </div>
                 `;
-                container.innerHTML += html;
             });
         }
 
@@ -979,8 +1150,6 @@
             container.innerHTML = '';
             const rates = summaryData.space_utilization.shelf_fill_rates;
 
-            let bayIdx = 0;
-            let shelfIdx = 0;
             if (planogramData && planogramData.equipment) {
                 planogramData.equipment.bays.forEach((bay, bi) => {
                     bay.shelves.forEach((shelf, si) => {
@@ -1008,6 +1177,10 @@
             const container = document.getElementById('brandList');
             container.innerHTML = '';
             const brands = summaryData.brand_breakdown;
+            if (!brands || Object.keys(brands).length === 0) {
+                container.innerHTML = '<li style="font-size:11px;color:var(--text-secondary);">No products placed yet</li>';
+                return;
+            }
 
             Object.entries(brands)
                 .sort((a, b) => b[1].facings - a[1].facings)

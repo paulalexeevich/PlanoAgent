@@ -153,6 +153,63 @@ def _extract_json(text: str) -> dict:
         raise e
 
 
+def fill_products_with_ai(
+    equipment_json: dict,
+    products_json: list,
+    rules_prompt: str,
+) -> dict:
+    """
+    Call Gemini 2.5 Flash to fill an existing empty equipment with products.
+
+    This is Step 2 of the two-step approach: equipment is already defined,
+    Gemini only populates positions on each shelf.
+
+    Args:
+        equipment_json: Empty equipment dict (bays/shelves with no positions)
+        products_json:  Full product catalog
+        rules_prompt:   Pre-built prompt from product_logic.build_fill_prompt()
+
+    Returns:
+        dict with "equipment" (filled) and "products" (placed subset)
+    """
+    client = _get_client()
+
+    print(f"[Gemini-Fill] Sending fill prompt ({len(rules_prompt)} chars) ...")
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=rules_prompt,
+        config=types.GenerateContentConfig(
+            temperature=0.7,
+            max_output_tokens=65536,
+            response_mime_type="application/json",
+        ),
+    )
+
+    raw_text = response.text
+    print(f"[Gemini-Fill] Received response ({len(raw_text)} chars)")
+
+    result = _extract_json(raw_text)
+
+    # Validate structure
+    if "equipment" not in result:
+        raise ValueError("Gemini response missing 'equipment' key")
+    if "products" not in result:
+        raise ValueError("Gemini response missing 'products' key")
+
+    # Validate product references
+    product_ids = {p["id"] for p in result["products"]}
+    for bay in result["equipment"].get("bays", []):
+        for shelf in bay.get("shelves", []):
+            for pos in shelf.get("positions", []):
+                if pos["product_id"] not in product_ids:
+                    raise ValueError(
+                        f"Position references unknown product_id: {pos['product_id']}"
+                    )
+
+    return result
+
+
 def generate_planogram_with_ai(user_request: str, products_json: list) -> dict:
     """
     Call Gemini 2.5 Flash to generate a planogram.

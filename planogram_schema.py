@@ -188,8 +188,19 @@ class Planogram:
 
     @classmethod
     def from_dict(cls, data: dict) -> 'Planogram':
-        """Deserialize from dictionary."""
-        products = [Product(**p) for p in data.get("products", [])]
+        """Deserialize from dictionary.
+
+        Tolerant of extra keys (e.g. from AI-generated JSON) — unknown
+        fields are silently dropped for each dataclass.
+        """
+        import dataclasses as _dc
+
+        def _safe(klass, d: dict):
+            """Build *klass* from *d*, keeping only fields *klass* declares."""
+            valid = {f.name for f in _dc.fields(klass)}
+            return klass(**{k: v for k, v in d.items() if k in valid})
+
+        products = [_safe(Product, p) for p in data.get("products", [])]
 
         equipment_data = data.get("equipment")
         equipment = None
@@ -198,17 +209,17 @@ class Planogram:
             for bay_data in equipment_data.get("bays", []):
                 shelves = []
                 for shelf_data in bay_data.get("shelves", []):
-                    positions = [Position(**pos) for pos in shelf_data.get("positions", [])]
+                    positions = [_safe(Position, pos) for pos in shelf_data.get("positions", [])]
                     shelf_data_clean = {k: v for k, v in shelf_data.items() if k != "positions"}
-                    shelves.append(Shelf(**shelf_data_clean, positions=positions))
+                    shelves.append(_safe(Shelf, {**shelf_data_clean, "positions": positions}))
                 bay_data_clean = {k: v for k, v in bay_data.items() if k != "shelves"}
-                bays.append(Bay(**bay_data_clean, shelves=shelves))
+                bays.append(_safe(Bay, {**bay_data_clean, "shelves": shelves}))
             equip_data_clean = {k: v for k, v in equipment_data.items() if k != "bays"}
-            equipment = Equipment(**equip_data_clean, bays=bays)
+            equipment = _safe(Equipment, {**equip_data_clean, "bays": bays})
 
         return cls(
-            id=data["id"],
-            name=data["name"],
+            id=data.get("id", "PLN-001"),
+            name=data.get("name", "Planogram"),
             category=data.get("category", ""),
             store_type=data.get("store_type", ""),
             effective_date=data.get("effective_date", ""),
