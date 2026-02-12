@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planogram Agent — Beer Category</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-dark: #0f1117;
+            --bg-card: #1a1d27;
+            --bg-shelf: #2a2d3a;
+            --border: #333648;
+            --text-primary: #e8eaed;
+            --text-secondary: #9aa0a6;
+            --accent: #4a9eff;
+            --accent-green: #34d399;
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+            --shelf-metal: #5a5e70;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* HEADER */
+        .header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+        .header h1 span { color: var(--text-secondary); font-weight: 400; }
+        .header-actions { display: flex; gap: 12px; align-items: center; }
+
+        /* LAYOUT */
+        .app-layout {
+            display: grid;
+            grid-template-columns: 1fr 360px;
+            height: calc(100vh - 60px);
+        }
+
+        /* INPUT PANEL */
+        .input-panel {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .input-panel input[type="text"] {
+            flex: 1;
+            min-width: 300px;
+            padding: 10px 16px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-panel input[type="text"]:focus { border-color: var(--accent); }
+        .input-panel input[type="text"]::placeholder { color: var(--text-secondary); }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: #3a8eef; }
+        .btn-secondary { background: var(--bg-shelf); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: var(--border); }
+
+        /* MAIN VISUALIZATION AREA */
+        .viz-area {
+            overflow: auto;
+            padding: 24px;
+            background: var(--bg-dark);
+        }
+
+        /* PLANOGRAM VISUAL */
+        .planogram-container {
+            display: flex;
+            gap: 4px;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+
+        .bay {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 0;
+            overflow: hidden;
+        }
+        .bay-header {
+            background: var(--bg-shelf);
+            padding: 8px 12px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .bay-body {
+            display: flex;
+            flex-direction: column-reverse;
+            padding: 0;
+            position: relative;
+        }
+
+        .shelf-row {
+            position: relative;
+            border-top: 3px solid var(--shelf-metal);
+            min-height: 40px;
+            display: flex;
+            align-items: flex-end;
+            padding: 4px 4px 0 4px;
+            gap: 2px;
+            flex-wrap: nowrap;
+            overflow: hidden;
+        }
+        .shelf-row:first-child { border-top: none; }
+        .shelf-label {
+            position: absolute;
+            left: -2px;
+            top: 2px;
+            font-size: 9px;
+            color: var(--text-secondary);
+            background: var(--bg-card);
+            padding: 1px 4px;
+            border-radius: 2px;
+            z-index: 5;
+            opacity: 0.7;
+        }
+
+        /* PRODUCT BLOCKS */
+        .product-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            border-radius: 3px;
+            padding: 2px;
+            cursor: pointer;
+            transition: all 0.15s;
+            position: relative;
+            overflow: hidden;
+            min-width: 0;
+            flex-shrink: 0;
+        }
+        .product-block:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            z-index: 10;
+        }
+        .product-block .product-label {
+            font-size: 8px;
+            font-weight: 600;
+            color: white;
+            text-align: center;
+            line-height: 1.1;
+            word-break: break-word;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            padding: 1px;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+        .product-block .product-price {
+            font-size: 7px;
+            color: rgba(255,255,255,0.8);
+            font-weight: 700;
+            margin-top: 1px;
+        }
+        .product-block .facing-badge {
+            position: absolute;
+            top: 1px;
+            right: 1px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            font-size: 7px;
+            padding: 1px 3px;
+            border-radius: 2px;
+            font-weight: 700;
+        }
+
+        /* TOOLTIP */
+        .tooltip {
+            display: none;
+            position: fixed;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            z-index: 1000;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            min-width: 220px;
+            pointer-events: none;
+        }
+        .tooltip.active { display: block; }
+        .tooltip h4 { font-size: 13px; margin-bottom: 8px; color: var(--accent); }
+        .tooltip .row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; }
+        .tooltip .row .label { color: var(--text-secondary); }
+        .tooltip .row .value { font-weight: 600; }
+
+        /* SIDEBAR */
+        .sidebar {
+            background: var(--bg-card);
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 0;
+        }
+        .sidebar-section {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 20px;
+        }
+        .sidebar-section h3 {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        /* SUMMARY METRICS */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .metric-card {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .metric-card .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .metric-card .metric-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+        .metric-card.accent-green .metric-value { color: var(--accent-green); }
+        .metric-card.accent-blue .metric-value { color: var(--accent); }
+        .metric-card.accent-orange .metric-value { color: var(--accent-orange); }
+
+        /* CATEGORY BARS */
+        .category-bar-container { margin-bottom: 8px; }
+        .category-bar-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 3px;
+        }
+        .category-bar-label .name { color: var(--text-primary); }
+        .category-bar-label .count { color: var(--text-secondary); }
+        .category-bar {
+            height: 6px;
+            background: var(--bg-dark);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .category-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
+        /* BRAND LIST */
+        .brand-list { list-style: none; }
+        .brand-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .brand-list li:last-child { border-bottom: none; }
+        .brand-list .brand-name { color: var(--text-primary); }
+        .brand-list .brand-facings {
+            background: var(--bg-dark);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        /* FILL RATE BARS */
+        .fill-rate-item { margin-bottom: 6px; }
+        .fill-rate-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            margin-bottom: 2px;
+        }
+        .fill-bar {
+            height: 4px;
+            background: var(--bg-dark);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .fill-bar-inner {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+        .fill-good { background: var(--accent-green); }
+        .fill-warn { background: var(--accent-orange); }
+        .fill-low { background: var(--accent-red); }
+
+        /* LOADING */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 300px;
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* SCALE SELECTOR */
+        .scale-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .scale-control input[type="range"] {
+            width: 100px;
+            accent-color: var(--accent);
+        }
+
+        /* JSON PANEL */
+        .json-panel {
+            display: none;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+            max-height: 400px;
+            overflow: auto;
+        }
+        .json-panel.active { display: block; }
+        .json-panel pre {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <div class="header">
+        <h1>Planogram Agent <span>/ Beer Category</span></h1>
+        <div class="header-actions">
+            <div class="scale-control">
+                <span>Scale:</span>
+                <input type="range" id="scaleSlider" min="3" max="12" value="6" step="0.5">
+                <span id="scaleValue">6px/in</span>
+            </div>
+            <button class="btn btn-secondary" onclick="toggleJSON()">View JSON</button>
+        </div>
+    </div>
+
+    <!-- INPUT BAR -->
+    <div class="input-panel">
+        <input type="text" id="userInput"
+            placeholder="e.g. 'Create 4-bay cooler with 6 shelves, 48 inches wide' or paste JSON config..."
+            onkeydown="if(event.key==='Enter') generateFromInput()">
+        <button class="btn btn-primary" onclick="generateFromInput()">Generate Planogram</button>
+        <button class="btn btn-secondary" onclick="resetDefault()">Reset Default</button>
+    </div>
+
+    <!-- MAIN LAYOUT -->
+    <div class="app-layout">
+        <!-- Visualization -->
+        <div class="viz-area" id="vizArea">
+            <div class="loading" id="loadingIndicator">
+                <div class="spinner"></div>
+                Loading planogram...
+            </div>
+            <div id="planogramView" style="display:none;">
+                <div class="planogram-container" id="planogramContainer"></div>
+                <div class="json-panel" id="jsonPanel">
+                    <pre id="jsonContent"></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-section">
+                <h3>Overview</h3>
+                <div class="metrics-grid" id="metricsGrid"></div>
+            </div>
+            <div class="sidebar-section">
+                <h3>Financials</h3>
+                <div class="metrics-grid" id="financialGrid"></div>
+            </div>
+            <div class="sidebar-section">
+                <h3>Category Mix</h3>
+                <div id="categoryBars"></div>
+            </div>
+            <div class="sidebar-section">
+                <h3>Space Utilization</h3>
+                <div id="fillRates"></div>
+            </div>
+            <div class="sidebar-section">
+                <h3>Brand Presence</h3>
+                <ul class="brand-list" id="brandList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOOLTIP -->
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // ============================================================
+        // STATE
+        // ============================================================
+        let planogramData = null;
+        let summaryData = null;
+        let productsMap = {};
+        let scale = 6; // pixels per inch
+
+        // ============================================================
+        // INIT
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchPlanogram();
+            document.getElementById('scaleSlider').addEventListener('input', (e) => {
+                scale = parseFloat(e.target.value);
+                document.getElementById('scaleValue').textContent = scale + 'px/in';
+                if (planogramData) renderPlanogram();
+            });
+        });
+
+        // ============================================================
+        // API CALLS
+        // ============================================================
+        async function fetchPlanogram() {
+            showLoading(true);
+            try {
+                const res = await fetch('/api/planogram');
+                const data = await res.json();
+                planogramData = data.planogram;
+                summaryData = data.summary;
+                buildProductsMap();
+                renderAll();
+            } catch (err) {
+                console.error('Failed to load planogram:', err);
+            }
+            showLoading(false);
+        }
+
+        async function generateFromInput() {
+            const input = document.getElementById('userInput').value.trim();
+            if (!input) return;
+
+            showLoading(true);
+            try {
+                let body;
+                // Try to parse as JSON
+                try {
+                    const parsed = JSON.parse(input);
+                    body = { equipment_config: parsed };
+                } catch {
+                    body = { user_input: input };
+                }
+
+                const res = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                planogramData = data.planogram;
+                summaryData = data.summary;
+                buildProductsMap();
+                renderAll();
+            } catch (err) {
+                console.error('Generation failed:', err);
+            }
+            showLoading(false);
+        }
+
+        async function resetDefault() {
+            document.getElementById('userInput').value = '';
+            showLoading(true);
+            try {
+                const res = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+                planogramData = data.planogram;
+                summaryData = data.summary;
+                buildProductsMap();
+                renderAll();
+            } catch (err) {
+                console.error('Reset failed:', err);
+            }
+            showLoading(false);
+        }
+
+        // ============================================================
+        // DATA HELPERS
+        // ============================================================
+        function buildProductsMap() {
+            productsMap = {};
+            if (planogramData && planogramData.products) {
+                planogramData.products.forEach(p => { productsMap[p.id] = p; });
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingIndicator').style.display = show ? 'flex' : 'none';
+            document.getElementById('planogramView').style.display = show ? 'none' : 'block';
+        }
+
+        // ============================================================
+        // RENDER ALL
+        // ============================================================
+        function renderAll() {
+            renderPlanogram();
+            renderSummary();
+            renderJSON();
+        }
+
+        // ============================================================
+        // PLANOGRAM VISUALIZATION
+        // ============================================================
+        function renderPlanogram() {
+            const container = document.getElementById('planogramContainer');
+            container.innerHTML = '';
+
+            if (!planogramData || !planogramData.equipment) return;
+
+            const equipment = planogramData.equipment;
+
+            equipment.bays.forEach(bay => {
+                const bayEl = document.createElement('div');
+                bayEl.className = 'bay';
+                bayEl.style.width = (bay.width_in * scale + 16) + 'px';
+
+                // Bay header
+                const header = document.createElement('div');
+                header.className = 'bay-header';
+                header.textContent = `Bay ${bay.bay_number} — ${bay.width_in}" x ${bay.height_in}"`;
+                bayEl.appendChild(header);
+
+                // Bay body (shelves rendered bottom-to-top)
+                const body = document.createElement('div');
+                body.className = 'bay-body';
+                body.style.height = (bay.height_in * scale) + 'px';
+
+                // Sort shelves by y_position (ascending = bottom first)
+                const sortedShelves = [...bay.shelves].sort((a, b) => a.y_position - b.y_position);
+
+                sortedShelves.forEach((shelf, idx) => {
+                    const shelfEl = document.createElement('div');
+                    shelfEl.className = 'shelf-row';
+
+                    const shelfHeight = shelf.height_in * scale;
+                    shelfEl.style.height = shelfHeight + 'px';
+                    shelfEl.style.width = bay.width_in * scale + 'px';
+                    shelfEl.style.position = 'absolute';
+                    shelfEl.style.bottom = (shelf.y_position * scale) + 'px';
+                    shelfEl.style.left = '4px';
+
+                    // Shelf label
+                    const label = document.createElement('span');
+                    label.className = 'shelf-label';
+                    label.textContent = `S${shelf.shelf_number}`;
+                    shelfEl.appendChild(label);
+
+                    // Products on shelf
+                    shelf.positions.forEach(pos => {
+                        const product = productsMap[pos.product_id];
+                        if (!product) return;
+
+                        const block = document.createElement('div');
+                        block.className = 'product-block';
+
+                        const blockWidth = product.width_in * pos.facings_wide * scale;
+                        const blockHeight = Math.min(product.height_in * scale, shelfHeight - 4);
+
+                        block.style.width = blockWidth + 'px';
+                        block.style.height = blockHeight + 'px';
+                        block.style.backgroundColor = product.color_hex || '#666';
+                        block.style.marginLeft = '1px';
+
+                        // Label
+                        const labelEl = document.createElement('div');
+                        labelEl.className = 'product-label';
+                        // Show abbreviated name
+                        const shortName = product.brand + (product.pack_size > 1 ? ` ${product.pack_size}pk` : '');
+                        labelEl.textContent = shortName;
+                        block.appendChild(labelEl);
+
+                        // Price
+                        if (blockHeight > 25) {
+                            const priceEl = document.createElement('div');
+                            priceEl.className = 'product-price';
+                            priceEl.textContent = '$' + product.price.toFixed(2);
+                            block.appendChild(priceEl);
+                        }
+
+                        // Facings badge
+                        if (pos.facings_wide > 1) {
+                            const badge = document.createElement('div');
+                            badge.className = 'facing-badge';
+                            badge.textContent = pos.facings_wide + 'x';
+                            block.appendChild(badge);
+                        }
+
+                        // Tooltip events
+                        block.addEventListener('mouseenter', (e) => showTooltip(e, product, pos));
+                        block.addEventListener('mousemove', (e) => moveTooltip(e));
+                        block.addEventListener('mouseleave', hideTooltip);
+
+                        shelfEl.appendChild(block);
+                    });
+
+                    body.appendChild(shelfEl);
+                });
+
+                bayEl.appendChild(body);
+                container.appendChild(bayEl);
+            });
+        }
+
+        // ============================================================
+        // TOOLTIP
+        // ============================================================
+        function showTooltip(event, product, position) {
+            const tt = document.getElementById('tooltip');
+            const margin = ((product.price - product.cost) / product.price * 100).toFixed(1);
+            tt.innerHTML = `
+                <h4>${product.name}</h4>
+                <div class="row"><span class="label">Brand</span><span class="value">${product.brand}</span></div>
+                <div class="row"><span class="label">Type</span><span class="value">${product.beer_type}</span></div>
+                <div class="row"><span class="label">Package</span><span class="value">${product.pack_size}x ${product.unit_size_oz}oz ${product.package_type}</span></div>
+                <div class="row"><span class="label">ABV</span><span class="value">${product.abv}%</span></div>
+                <div class="row"><span class="label">Size</span><span class="value">${product.width_in}" x ${product.height_in}" x ${product.depth_in}"</span></div>
+                <div class="row"><span class="label">Price</span><span class="value">$${product.price.toFixed(2)}</span></div>
+                <div class="row"><span class="label">Cost</span><span class="value">$${product.cost.toFixed(2)}</span></div>
+                <div class="row"><span class="label">Margin</span><span class="value">${margin}%</span></div>
+                <div class="row"><span class="label">Facings</span><span class="value">${position.facings_wide}W x ${position.facings_high}H x ${position.facings_deep}D</span></div>
+                <div class="row"><span class="label">UPC</span><span class="value">${product.upc}</span></div>
+            `;
+            tt.classList.add('active');
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            const tt = document.getElementById('tooltip');
+            let x = event.clientX + 16;
+            let y = event.clientY + 16;
+            // Keep on screen
+            if (x + 240 > window.innerWidth) x = event.clientX - 250;
+            if (y + 200 > window.innerHeight) y = event.clientY - 210;
+            tt.style.left = x + 'px';
+            tt.style.top = y + 'px';
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').classList.remove('active');
+        }
+
+        // ============================================================
+        // SUMMARY SIDEBAR
+        // ============================================================
+        function renderSummary() {
+            if (!summaryData) return;
+
+            // Overview metrics
+            const metricsGrid = document.getElementById('metricsGrid');
+            metricsGrid.innerHTML = `
+                <div class="metric-card accent-blue">
+                    <div class="metric-value">${summaryData.equipment.total_bays}</div>
+                    <div class="metric-label">Bays</div>
+                </div>
+                <div class="metric-card accent-blue">
+                    <div class="metric-value">${summaryData.equipment.total_shelves}</div>
+                    <div class="metric-label">Shelves</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">${summaryData.products.total_placed}</div>
+                    <div class="metric-label">Products Placed</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">${summaryData.products.total_facings}</div>
+                    <div class="metric-label">Total Facings</div>
+                </div>
+                <div class="metric-card accent-green">
+                    <div class="metric-value">${summaryData.space_utilization.avg_shelf_fill_rate}%</div>
+                    <div class="metric-label">Avg Fill Rate</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">${summaryData.equipment.total_width_ft}ft</div>
+                    <div class="metric-label">Total Width</div>
+                </div>
+            `;
+
+            // Financial metrics
+            const financialGrid = document.getElementById('financialGrid');
+            financialGrid.innerHTML = `
+                <div class="metric-card accent-green">
+                    <div class="metric-value">$${summaryData.financials.total_revenue_potential.toLocaleString()}</div>
+                    <div class="metric-label">Revenue Potential</div>
+                </div>
+                <div class="metric-card accent-orange">
+                    <div class="metric-value">$${summaryData.financials.total_margin.toLocaleString()}</div>
+                    <div class="metric-label">Margin</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">${summaryData.financials.margin_pct}%</div>
+                    <div class="metric-label">Margin %</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">${summaryData.products.total_in_catalog}</div>
+                    <div class="metric-label">In Catalog</div>
+                </div>
+            `;
+
+            // Category bars
+            renderCategoryBars();
+
+            // Fill rates
+            renderFillRates();
+
+            // Brand list
+            renderBrandList();
+        }
+
+        function renderCategoryBars() {
+            const container = document.getElementById('categoryBars');
+            container.innerHTML = '';
+            const cats = summaryData.category_breakdown;
+            const maxFacings = Math.max(...Object.values(cats).map(c => c.facings));
+            const colors = ['#4a9eff', '#34d399', '#f59e0b', '#ef4444', '#a78bfa', '#ec4899', '#14b8a6', '#f97316'];
+
+            Object.entries(cats).sort((a, b) => b[1].facings - a[1].facings).forEach(([name, data], i) => {
+                const pct = (data.facings / maxFacings * 100).toFixed(0);
+                const html = `
+                    <div class="category-bar-container">
+                        <div class="category-bar-label">
+                            <span class="name">${name}</span>
+                            <span class="count">${data.facings} facings</span>
+                        </div>
+                        <div class="category-bar">
+                            <div class="category-bar-fill" style="width:${pct}%; background:${colors[i % colors.length]}"></div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += html;
+            });
+        }
+
+        function renderFillRates() {
+            const container = document.getElementById('fillRates');
+            container.innerHTML = '';
+            const rates = summaryData.space_utilization.shelf_fill_rates;
+
+            let bayIdx = 0;
+            let shelfIdx = 0;
+            if (planogramData && planogramData.equipment) {
+                planogramData.equipment.bays.forEach((bay, bi) => {
+                    bay.shelves.forEach((shelf, si) => {
+                        const idx = bi * bay.shelves.length + si;
+                        if (idx >= rates.length) return;
+                        const rate = rates[idx];
+                        const colorClass = rate >= 80 ? 'fill-good' : rate >= 50 ? 'fill-warn' : 'fill-low';
+                        container.innerHTML += `
+                            <div class="fill-rate-item">
+                                <div class="fill-rate-header">
+                                    <span>Bay ${bi + 1} / Shelf ${si + 1}</span>
+                                    <span>${rate}%</span>
+                                </div>
+                                <div class="fill-bar">
+                                    <div class="fill-bar-inner ${colorClass}" style="width:${rate}%"></div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                });
+            }
+        }
+
+        function renderBrandList() {
+            const container = document.getElementById('brandList');
+            container.innerHTML = '';
+            const brands = summaryData.brand_breakdown;
+
+            Object.entries(brands)
+                .sort((a, b) => b[1].facings - a[1].facings)
+                .forEach(([name, data]) => {
+                    container.innerHTML += `
+                        <li>
+                            <span class="brand-name">${name}</span>
+                            <span class="brand-facings">${data.facings} facings</span>
+                        </li>
+                    `;
+                });
+        }
+
+        // ============================================================
+        // JSON PANEL
+        // ============================================================
+        function renderJSON() {
+            if (planogramData) {
+                document.getElementById('jsonContent').textContent = JSON.stringify(planogramData, null, 2);
+            }
+        }
+
+        function toggleJSON() {
+            const panel = document.getElementById('jsonPanel');
+            panel.classList.toggle('active');
+        }
+    </script>
+</body>
+</html>
