@@ -535,7 +535,10 @@ def get_products():
     return jsonify(_load_products_json())
 
 
+# Initialize default planogram at module import time
+# (needed for Vercel serverless where __main__ is not called)
+init_default_planogram()
+
 if __name__ == "__main__":
-    init_default_planogram()
     print("\n  Planogram Agent running at http://localhost:5001\n")
     app.run(debug=True, port=5001)
