@@ -47,10 +47,17 @@
 - Scale slider, unit toggle (in/cm). At high zoom, page scrolls horizontally.
 - Bottom collapsible summary: metrics, category mix, fill rates, decision tree compliance.
 
-## Decision Tree (v0.4)
+## Decision Tree & Compliance (v0.8)
 - **`decision_tree.py`**: Pre-built trees per category. Beer tree: Segment → Style (subcategory) → Package → Brand.
-- **Compliance validation**: Walk positions in planogram order, count "breaks". Score: 0-100% per level, weighted average for overall.
+- **Compliance validation**: Walk positions in planogram order (Bay1/S1→SN, Bay2/S1→...), count "breaks" per level.
+- **CRITICAL: Hierarchical scoring** — Level N breaks are counted ONLY within contiguous runs of Level N-1. This correctly measures "within each Style, are Packages contiguous?" NOT "are ALL cans before ALL bottles globally." Without this, Package compliance is always ~15% even with perfect tree ordering.
+- **Tree-ordered placement** (algorithm mode): Sort ALL products by decision tree tuple, place sequentially in compliance walk order. Products split across shelf boundaries when full facings don't fit. This achieves 100% compliance.
+- **Post-processing destroys compliance**: `recover_missing_products()` and `fill_shelf_gaps()` insert products by available space, not tree position. Algorithm mode skips these steps; only runs `validate_and_fix_shelves()` (overflow fix).
 - **AI prompt includes tree**: `build_fill_prompt()` accepts `decision_tree`, injects `to_prompt_text()`.
+
+### Key compliance lesson: The root cause of low compliance was TWO bugs, not one:
+1. **Placement**: Old tier-based algorithm scattered tree groups across different shelf tiers (bottom/eye/top). Fix: sort by tree, place in walk order.
+2. **Scoring**: Non-hierarchical scoring penalized Package level for global interleaving that is correct within each Style group. Fix: partition positions by parent-level runs before counting breaks.
 
 ## CSS Layout Lessons
 - **Never use `justify-content: center` on scrollable flex containers** — left side becomes inaccessible. Use `width: fit-content; margin: 0 auto` instead.
@@ -70,9 +77,9 @@
 | Total time | **1ms** | 102,538ms |
 | Speedup | **102,538x** | — |
 
-### Conclusion: **Algorithm is the default**. Only 1.5% fill difference, but 100,000x faster. AI mode available for when merchandising grouping matters more than speed.
-- AI is still useful for decision tree compliance (shelf grouping by segment/style/package/brand).
-- The algorithm places products by tier rules then gap-fills; AI uses merchandising judgment but can't do math.
+### Conclusion: **Algorithm is the default**. Only 1.5% fill difference, but 100,000x faster. AI mode available for alternative placement.
+- Algorithm now achieves **100% decision tree compliance** (tree-ordered placement + hierarchical scoring).
+- Algorithm places products by tree order then boosts facings per-shelf; AI uses merchandising judgment but can't do math.
 
 ## Known Issues & TODOs
 - Fill target is 99% but achievable ~96% due to fractional inch gaps (product widths don't evenly divide shelf width).
