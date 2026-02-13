@@ -328,10 +328,20 @@ def fill_products():
               f"{before['facings']} facings, {before['fill_pct']}%", flush=True)
 
         # Post-processing pipeline
+        # For algorithm mode: Phase 3 already places products in tree order
+        # and distributes facings. Only run overflow fix (safe for compliance).
+        # For AI mode: run full pipeline (recover, boost, gap-fill).
         t_pp = _time.time()
-        filled_eq, pp_timings = _postprocess_pipeline(
-            filled_eq, selected_products, facings, prod_map, rules,
-        )
+        if run_mode == "algorithm":
+            # Minimal post-processing: only fix shelf overflows
+            filled_eq = validate_and_fix_shelves(filled_eq, prod_map)
+            pp_timings = {"overflow_fix": _time.time() - t_pp}
+            print(f"[{src}] Algorithm mode: skipping recover/boost/gap-fill "
+                  f"to preserve tree compliance", flush=True)
+        else:
+            filled_eq, pp_timings = _postprocess_pipeline(
+                filled_eq, selected_products, facings, prod_map, rules,
+            )
         timings["postprocess_ms"] = round((_time.time() - t_pp) * 1000)
         timings.update({f"pp_{k}_ms": round(v * 1000) for k, v in pp_timings.items()})
 

@@ -267,50 +267,75 @@ def validate_compliance(
             position_groups=ordered_positions,
         )
 
-    # Score each level independently
+    # Score each level HIERARCHICALLY:
+    # Level N is evaluated only within the contiguous runs of Level N-1.
+    # This correctly measures "within each Style group, are Packages contiguous?"
+    # instead of "are ALL cans before ALL bottles globally".
     level_results: List[LevelCompliance] = []
 
     for lvl_idx, level in enumerate(tree.levels):
-        # Extract the sequence of group values at this level
-        seq = [pos["groups"][level.name] for pos in ordered_positions]
 
-        # Count transitions and breaks
-        seen_groups: List[str] = []
-        finished_groups: set = set()
-        breaks = 0
-        transitions = 0
-        current_group = seq[0]
-        seen_groups.append(current_group)
+        if lvl_idx == 0:
+            # Top level: evaluate across all positions (no parent context)
+            partitions = [ordered_positions]
+        else:
+            # Partition positions by contiguous runs of the parent level
+            parent_level = tree.levels[lvl_idx - 1]
+            partitions = []
+            current_run: List[dict] = [ordered_positions[0]]
+            for pos in ordered_positions[1:]:
+                if pos["groups"][parent_level.name] == current_run[-1]["groups"][parent_level.name]:
+                    current_run.append(pos)
+                else:
+                    partitions.append(current_run)
+                    current_run = [pos]
+            partitions.append(current_run)
 
-        for val in seq[1:]:
-            if val != current_group:
-                transitions += 1
-                if val in finished_groups:
-                    breaks += 1          # group came back after being interrupted
-                finished_groups.add(current_group)
-                current_group = val
-                if val not in seen_groups:
-                    seen_groups.append(val)
+        # Aggregate breaks and transitions across all partitions
+        total_breaks = 0
+        total_transitions = 0
+        all_seen: List[str] = []
 
-        unique = len(seen_groups)
-        # Perfect compliance: exactly (unique - 1) transitions, 0 breaks
-        # Compliance % = positions that don't cause a break / total
-        if transitions == 0:
+        for partition in partitions:
+            if len(partition) < 2:
+                val = partition[0]["groups"][level.name]
+                if val not in all_seen:
+                    all_seen.append(val)
+                continue
+
+            seq = [p["groups"][level.name] for p in partition]
+            seen: set = set()
+            finished: set = set()
+            current = seq[0]
+            seen.add(current)
+            if current not in all_seen:
+                all_seen.append(current)
+
+            for val in seq[1:]:
+                if val != current:
+                    total_transitions += 1
+                    if val in finished:
+                        total_breaks += 1
+                    finished.add(current)
+                    current = val
+                    seen.add(current)
+                    if val not in all_seen:
+                        all_seen.append(val)
+
+        unique = len(all_seen)
+        if total_transitions == 0:
             pct = 100.0
         else:
-            # Each break is a disruption.  Score based on how close we are
-            # to the minimum transitions (unique_groups - 1).
-            min_transitions = max(unique - 1, 1)
-            pct = max(0, (1 - breaks / max(transitions, 1)) * 100)
+            pct = max(0, (1 - total_breaks / max(total_transitions, 1)) * 100)
 
         level_results.append(LevelCompliance(
             level_name=level.name,
-            total_transitions=transitions,
-            clean_transitions=transitions - breaks,
-            break_count=breaks,
+            total_transitions=total_transitions,
+            clean_transitions=total_transitions - total_breaks,
+            break_count=total_breaks,
             unique_groups=unique,
             compliance_pct=round(pct, 1),
-            groups_in_order=seen_groups,
+            groups_in_order=all_seen,
         ))
 
     # Overall = weighted average (higher levels matter more)

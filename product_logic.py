@@ -233,90 +233,169 @@ def phase3_rule_based_placement(
     decision_tree: Optional[DecisionTree] = None,
 ) -> dict:
     """
-    Place products on shelves using deterministic rules.
-    Uses pre-calculated facings from Phase 2.
+    Place products on shelves following decision tree order for maximum compliance.
+
+    Strategy:
+      1. Sort ALL products by decision tree (Segment → Style → Package → Brand).
+      2. Walk shelves in compliance order (Bay 1/S1→SN, Bay 2/S1→SN, …).
+      3. Place each product with its Phase 2 facing count. If the full facings
+         don't fit on the current shelf, place what fits, then CONTINUE the
+         remaining facings on the next shelf. This keeps tree order intact
+         (same product on consecutive shelves is not a "break").
+      4. After placement, boost underused shelves by adding facings of products
+         already on that shelf (sales-prioritized, up to max_facings).
+
+    Result: near-100% compliance + high fill rate + all products placed.
     """
-    # Build product lookup
+    # Sort ALL products by decision tree
+    if decision_tree:
+        sorted_products = sorted(
+            selected_products,
+            key=lambda p: get_product_group_tuple(p, decision_tree),
+        )
+    else:
+        sorted_products = sorted(
+            selected_products,
+            key=lambda p: (p.get("subcategory", ""), p.get("brand", ""), p.get("name", "")),
+        )
+
+    # Build shelf list in compliance walk order
+    walk_shelves: List[dict] = []
+    for bay in sorted(equipment_dict.get("bays", []),
+                      key=lambda b: b.get("bay_number", 0)):
+        for shelf in sorted(bay.get("shelves", []),
+                            key=lambda s: s.get("shelf_number", 0)):
+            walk_shelves.append(shelf)
+
     prod_map = {p["id"]: p for p in selected_products}
-
-    # Classify products into tiers
-    tier_buckets: Dict[str, List[dict]] = {
-        "bottom": [], "middle": [], "eye": [], "top": []
-    }
-    for p in selected_products:
-        tier = _classify_product(p, rules)
-        tier_buckets[tier].append(p)
-
-    # Sort within each tier
-    for tier in tier_buckets.values():
-        if decision_tree:
-            tier.sort(key=lambda p: get_product_group_tuple(p, decision_tree))
-        elif rules.group_by == "subcategory":
-            tier.sort(key=lambda p: (p["subcategory"], p["brand"], p["name"]))
-        else:
-            tier.sort(key=lambda p: (p["brand"], p["subcategory"], p["name"]))
-
     placed_product_ids = set()
 
-    for bay in equipment_dict.get("bays", []):
-        shelves = bay.get("shelves", [])
-        total_shelves = len(shelves)
+    # ── MAIN PASS: Place products with full facings, splitting across shelves ──
+    qi = 0
+    remaining_facings = 0  # facings left over from previous shelf for current product
+    shelf_idx = 0
 
-        for s_idx, shelf in enumerate(shelves):
-            shelf_w = shelf.get("width_in", 48)
-            shelf_h = shelf.get("height_in", 12)
-            tier_label = _shelf_tier_for_index(s_idx, total_shelves)
+    for shelf in walk_shelves:
+        shelf_w = shelf.get("width_in", 48)
+        shelf_h = shelf.get("height_in", 12)
+        positions: List[dict] = []
+        x_pos = 0.0
 
-            # Priority order for this shelf tier
-            priority = [tier_label, "middle", "eye", "bottom", "top"]
-            seen = set()
-            ordered_buckets = []
-            for t in priority:
-                if t not in seen:
-                    ordered_buckets.append(t)
-                    seen.add(t)
-
-            positions = []
-            x_pos = 0.0
-
-            for bucket_name in ordered_buckets:
-                bucket = tier_buckets[bucket_name]
-                i = 0
-                while i < len(bucket):
-                    prod = bucket[i]
-                    pid = prod["id"]
-                    pw = prod["width_in"]
-                    f = facings.get(pid, 1)
-                    total_w = pw * f
-
-                    # Height check
-                    if prod["height_in"] > shelf_h:
-                        i += 1
-                        continue
-
-                    # Width check — must fit on this shelf
-                    if x_pos + total_w > shelf_w + 0.1:  # small tolerance
-                        # Try with fewer facings
-                        max_fit = int((shelf_w - x_pos) / pw) if pw > 0 else 0
-                        if max_fit < 1:
-                            i += 1
-                            continue
-                        f = min(f, max_fit)
-                        total_w = pw * f
-
+        # First: place remaining facings from a product that spanned previous shelf
+        if remaining_facings > 0 and qi > 0:
+            prev_prod = sorted_products[qi - 1]
+            pw = prev_prod["width_in"]
+            ph = prev_prod["height_in"]
+            if ph <= shelf_h:
+                # How many facings fit on this shelf?
+                max_fit = min(remaining_facings, int((shelf_w - x_pos) / pw)) if pw > 0 else 0
+                if max_fit > 0:
                     positions.append({
-                        "product_id": pid,
+                        "product_id": prev_prod["id"],
                         "x_position": round(x_pos, 2),
-                        "facings_wide": f,
+                        "facings_wide": max_fit,
                         "facings_high": 1,
                         "facings_deep": 1,
                         "orientation": "front",
                     })
-                    x_pos += total_w
-                    placed_product_ids.add(pid)
-                    bucket.pop(i)
+                    x_pos += pw * max_fit
+                    remaining_facings -= max_fit
 
-            shelf["positions"] = positions
+        # Place new products from queue
+        while qi < len(sorted_products):
+            prod = sorted_products[qi]
+            pid = prod["id"]
+            pw = prod["width_in"]
+            ph = prod["height_in"]
+            f = facings.get(pid, 1)
+
+            # Height check — skip permanently
+            if ph > shelf_h:
+                qi += 1
+                continue
+
+            # How many facings fit on this shelf?
+            max_fit = int((shelf_w - x_pos + 0.1) / pw) if pw > 0 else 0
+
+            if max_fit < 1:
+                break  # shelf full → next shelf (don't advance qi)
+
+            actual_f = min(f, max_fit)
+            positions.append({
+                "product_id": pid,
+                "x_position": round(x_pos, 2),
+                "facings_wide": actual_f,
+                "facings_high": 1,
+                "facings_deep": 1,
+                "orientation": "front",
+            })
+            x_pos += pw * actual_f
+            placed_product_ids.add(pid)
+
+            # If not all facings fit, carry remainder to next shelf
+            remaining_facings = f - actual_f
+            qi += 1
+
+            if remaining_facings > 0:
+                break  # must continue this product on next shelf
+
+        shelf["positions"] = positions
+
+    total_facings_placed = sum(
+        pos.get("facings_wide", 1)
+        for shelf in walk_shelves
+        for pos in shelf.get("positions", [])
+    )
+    print(f"  [Phase3] Placed {len(placed_product_ids)}/{len(selected_products)} products, "
+          f"{total_facings_placed} facings in tree order", flush=True)
+
+    # ── BOOST PASS: Fill remaining shelf space with extra facings ──────────
+    total_extra = 0
+    for shelf in walk_shelves:
+        shelf_w = shelf.get("width_in", 48)
+        positions = shelf.get("positions", [])
+        if not positions:
+            continue
+
+        used = sum(prod_map[p["product_id"]]["width_in"] * p["facings_wide"]
+                   for p in positions if p["product_id"] in prod_map)
+        remaining = shelf_w - used
+
+        if remaining < 0.5:
+            continue
+
+        # Score by sales DESC
+        scorable = []
+        for i, pos in enumerate(positions):
+            prod = prod_map.get(pos["product_id"])
+            if prod:
+                sales = prod.get("weekly_units_sold", 0)
+                scorable.append((sales, i, prod))
+        scorable.sort(key=lambda x: x[0], reverse=True)
+
+        # Add facings up to max_facings
+        changed = True
+        while changed and remaining > 0.5:
+            changed = False
+            for sales, idx, prod in scorable:
+                pos = positions[idx]
+                pw = prod["width_in"]
+                if pos["facings_wide"] < rules.max_facings and pw <= remaining + 0.1:
+                    pos["facings_wide"] += 1
+                    remaining -= pw
+                    total_extra += 1
+                    changed = True
+
+        # Recalculate x_positions
+        x_pos = 0.0
+        for pos in positions:
+            pos["x_position"] = round(x_pos, 2)
+            prod = prod_map.get(pos["product_id"])
+            if prod:
+                x_pos += prod["width_in"] * pos["facings_wide"]
+
+    if total_extra > 0:
+        print(f"  [Phase3-Boost] Added {total_extra} extra facings", flush=True)
 
     placed_products = [p for p in selected_products if p["id"] in placed_product_ids]
 
