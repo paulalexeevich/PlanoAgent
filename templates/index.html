@@ -561,6 +561,110 @@
         .source-tag.equipment { background: rgba(245,158,11,0.15); color: var(--accent-orange); }
         .source-tag.fallback { background: rgba(167,139,250,0.15); color: #a78bfa; }
         .source-tag.error { background: rgba(239,68,68,0.15); color: var(--accent-red); }
+        .source-tag.compare { background: rgba(245,158,11,0.15); color: var(--accent-orange); }
+        .source-tag.algo { background: rgba(52,211,153,0.15); color: var(--accent-green); }
+
+        /* FILL MODE SELECT */
+        .fill-mode-select {
+            padding: 6px 10px;
+            font-size: 13px;
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .fill-mode-select:focus { border-color: var(--accent); outline: none; }
+
+        /* TIMING TAG */
+        .timing-tag {
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            background: rgba(100,100,100,0.15);
+            color: var(--muted);
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        /* COMPARE MODAL */
+        .compare-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .compare-overlay.active { display: flex; }
+        .compare-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px 32px;
+            min-width: 500px;
+            max-width: 90vw;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .compare-card h3 {
+            margin: 0 0 16px;
+            font-size: 18px;
+            color: var(--text);
+        }
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .compare-table th,
+        .compare-table td {
+            padding: 8px 12px;
+            text-align: right;
+            border-bottom: 1px solid var(--border);
+        }
+        .compare-table th:first-child,
+        .compare-table td:first-child {
+            text-align: left;
+        }
+        .compare-table th {
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .compare-table .winner { color: var(--accent-green); font-weight: 700; }
+        .compare-table .loser { color: var(--muted); }
+        .compare-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .compare-actions button {
+            padding: 8px 20px;
+            font-size: 13px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .compare-actions .btn-pick-algo {
+            background: var(--accent-green);
+            color: #fff;
+        }
+        .compare-actions .btn-pick-ai {
+            background: var(--accent);
+            color: #fff;
+        }
+        .compare-actions .btn-close {
+            background: var(--border);
+            color: var(--text);
+        }
 
         /* EMPTY SHELF */
         .shelf-row.empty-shelf {
@@ -745,6 +849,11 @@
                 <span class="toggle-caret">&#9660;</span>
             </button>
             <div class="action-divider"></div>
+            <select id="fillMode" class="fill-mode-select">
+                <option value="algorithm">Algorithm</option>
+                <option value="ai">AI</option>
+                <option value="compare">Compare</option>
+            </select>
             <button class="btn btn-green" id="fillBtn" onclick="fillProducts()" disabled>
                 <span id="fillLabel">Fill Products</span>
                 <span id="fillSpinner" style="display:none" class="btn-spinner"></span>
@@ -752,6 +861,7 @@
             <div class="action-divider"></div>
             <button class="btn btn-secondary" onclick="resetDefault()">Reset Default</button>
             <span id="sourceTag" class="source-tag"></span>
+            <span id="timingTag" class="timing-tag"></span>
         </div>
         <!-- Equipment Config (hidden by default) -->
         <div class="equipment-config-panel" id="equipmentForm">
@@ -848,6 +958,24 @@
     <div class="error-toast" id="errorToast">
         <span class="close-toast" onclick="hideError()">&times;</span>
         <span id="errorMsg"></span>
+    </div>
+
+    <!-- COMPARE MODAL -->
+    <div class="compare-overlay" id="compareOverlay" onclick="if(event.target===this)closeCompare()">
+        <div class="compare-card">
+            <h3>Algorithm vs AI — Comparison</h3>
+            <table class="compare-table">
+                <thead>
+                    <tr><th>Metric</th><th>Algorithm</th><th>AI</th></tr>
+                </thead>
+                <tbody id="compareBody"></tbody>
+            </table>
+            <div class="compare-actions">
+                <button class="btn-pick-algo" onclick="pickCompareResult('algorithm')">Use Algorithm</button>
+                <button class="btn-pick-ai" onclick="pickCompareResult('ai')">Use AI</button>
+                <button class="btn-close" onclick="closeCompare()">Close</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -973,27 +1101,46 @@
         }
 
         // ── STEP 2: Fill products ─────────────────────────────────
+        let lastCompareData = null;  // Store compare response for pick
+
         async function fillProducts() {
             if (!equipmentGenerated) return;
 
+            const mode = document.getElementById('fillMode').value;
+            const loadingMsg = mode === 'ai' ? 'Gemini AI is filling products...'
+                : mode === 'compare' ? 'Running Algorithm + AI comparison...'
+                : 'Algorithm is filling products...';
+
             setFillLoading(true);
-            showLoading(true, 'Gemini AI is filling products...');
+            showLoading(true, loadingMsg);
             hideError();
+            document.getElementById('timingTag').textContent = '';
+
             try {
-                // Send current equipment data so server can recover from restarts
-                const payload = {};
+                const payload = { mode };
                 if (planogramData && planogramData.equipment) {
                     payload.equipment = planogramData.equipment;
                 }
+                const t0 = performance.now();
                 const res = await fetch('/api/fill-products', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();
+                const elapsed = Math.round(performance.now() - t0);
 
                 if (data.status === 'error') {
                     throw new Error(data.error || 'Fill products failed');
+                }
+
+                if (data.mode === 'compare' && data.comparison) {
+                    // Show comparison modal
+                    lastCompareData = data.comparison;
+                    showCompareModal(data.comparison);
+                    showLoading(false);
+                    setFillLoading(false);
+                    return;
                 }
 
                 planogramData = data.planogram;
@@ -1003,11 +1150,73 @@
                 buildProductsMap();
                 renderAll();
                 setSourceTag(data.source || 'gemini_ai');
+
+                // Show timing
+                const serverMs = data.timings ? data.timings.total_ms : null;
+                const timingText = serverMs
+                    ? `${(serverMs / 1000).toFixed(1)}s`
+                    : `${(elapsed / 1000).toFixed(1)}s`;
+                document.getElementById('timingTag').textContent = timingText;
+
             } catch (err) {
                 console.error('Fill products failed:', err);
                 showError('Fill products failed: ' + err.message);
             }
             showLoading(false);
+            setFillLoading(false);
+        }
+
+        function showCompareModal(comparison) {
+            const algo = comparison.algorithm;
+            const ai = comparison.ai;
+            const tbody = document.getElementById('compareBody');
+
+            const rows = [
+                ['Fill %', algo.fill_pct + '%', ai.fill_pct + '%', 'high'],
+                ['Products', algo.products, ai.products, 'high'],
+                ['Facings', algo.facings, ai.facings, 'high'],
+                ['Decision Tree', algo.compliance != null ? algo.compliance.toFixed(1) + '%' : 'N/A',
+                    ai.compliance != null ? ai.compliance.toFixed(1) + '%' : 'N/A', 'high'],
+                ['Total time', formatMs(algo.time_ms), formatMs(ai.time_ms), 'low'],
+                ['Phase 1+2', formatMs(algo.timings.phase12_ms), formatMs(ai.timings.phase12_ms), 'low'],
+                ['Placement', formatMs(algo.timings.rule_based_ms || 0), formatMs(ai.timings.ai_call_ms || 0), 'low'],
+                ['Post-processing', formatMs(algo.timings.postprocess_ms), formatMs(ai.timings.postprocess_ms), 'low'],
+            ];
+
+            tbody.innerHTML = rows.map(([label, aVal, iVal, mode]) => {
+                const aNum = parseFloat(aVal);
+                const iNum = parseFloat(iVal);
+                let aClass = '', iClass = '';
+                if (!isNaN(aNum) && !isNaN(iNum) && aNum !== iNum) {
+                    if (mode === 'high') {
+                        aClass = aNum > iNum ? 'winner' : 'loser';
+                        iClass = iNum > aNum ? 'winner' : 'loser';
+                    } else {
+                        aClass = aNum < iNum ? 'winner' : 'loser';
+                        iClass = iNum < aNum ? 'winner' : 'loser';
+                    }
+                }
+                return `<tr><td>${label}</td><td class="${aClass}">${aVal}</td><td class="${iClass}">${iVal}</td></tr>`;
+            }).join('');
+
+            document.getElementById('compareOverlay').classList.add('active');
+        }
+
+        function formatMs(ms) {
+            if (ms == null) return 'N/A';
+            if (ms < 1000) return ms + 'ms';
+            return (ms / 1000).toFixed(1) + 's';
+        }
+
+        async function pickCompareResult(choice) {
+            closeCompare();
+            // Re-run the chosen mode to get the actual planogram
+            document.getElementById('fillMode').value = choice;
+            await fillProducts();
+        }
+
+        function closeCompare() {
+            document.getElementById('compareOverlay').classList.remove('active');
             setFillLoading(false);
         }
 
@@ -1079,6 +1288,10 @@
                 case 'gemini_ai':
                     tag.textContent = 'Gemini AI';
                     tag.className = 'source-tag ai';
+                    break;
+                case 'algorithm':
+                    tag.textContent = 'Algorithm';
+                    tag.className = 'source-tag algo';
                     break;
                 case 'rule_based_fallback':
                     tag.textContent = 'Rule-based (fallback)';

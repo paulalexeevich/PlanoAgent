@@ -56,7 +56,26 @@
 - **Never use `justify-content: center` on scrollable flex containers** — left side becomes inaccessible. Use `width: fit-content; margin: 0 auto` instead.
 - **Collapsible panels**: Use `max-height` + `overflow: hidden` + `opacity` transitions. Set `max-height` high enough (200px).
 
+## Algorithm vs AI Comparison (v0.7)
+- **Mode selector**: Dropdown in UI with Algorithm/AI/Compare options.
+- **Compare mode**: Runs both, shows side-by-side modal with fill %, facings, compliance, timing. User can pick which to apply.
+- **Timing instrumentation**: Every pipeline step timed in ms. Returned in JSON response + terminal logs.
+
+### Head-to-head results (3 bays × 5 shelves, 50 products):
+| Metric | Algorithm | AI |
+|---|---|---|
+| Fill % | 95.9% | 97.4% |
+| Products | 50 | 50 |
+| Facings | 81 | 85 |
+| Total time | **1ms** | 102,538ms |
+| Speedup | **102,538x** | — |
+
+### Conclusion: **Algorithm is the default**. Only 1.5% fill difference, but 100,000x faster. AI mode available for when merchandising grouping matters more than speed.
+- AI is still useful for decision tree compliance (shelf grouping by segment/style/package/brand).
+- The algorithm places products by tier rules then gap-fills; AI uses merchandising judgment but can't do math.
+
 ## Known Issues & TODOs
-- Fill target is 99% but achievable ~96.3% due to fractional inch gaps on individual shelves (product widths don't evenly divide shelf width).
-- Gemini AI: 30-120s response time, overflows ~60% of shelves. Post-processing pipeline now recovers to 96%+.
+- Fill target is 99% but achievable ~96% due to fractional inch gaps (product widths don't evenly divide shelf width).
+- `ComplianceReport` uses `.overall_pct` not `.overall_score` — always check attribute names.
+- Gemini AI: 30-120s response time, overflows ~60% of shelves. Post-processing recovers to 97%+.
 - API key in `.env` file (gitignored). Never commit secrets.
