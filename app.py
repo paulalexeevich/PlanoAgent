@@ -37,16 +37,24 @@ current_planogram = None
 current_summary = None
 current_equipment = None      # Empty equipment dict (Step 1 result)
 current_rules = None          # ProductLogicRules (for Step 2)
+current_compliance = None     # Compliance report (for DT tracking)
+current_decision_tree = None  # Decision tree definition
 
 
 def init_default_planogram():
     """Initialize with default beer planogram."""
-    global current_planogram, current_summary, current_equipment
+    global current_planogram, current_summary, current_equipment, current_compliance, current_decision_tree
     current_planogram = generate_planogram()
     current_summary = generate_summary(current_planogram)
     # Also store the equipment dict so Fill Products works without Step 1
     from dataclasses import asdict
     current_equipment = asdict(current_planogram.equipment)
+    # Initialize decision tree and compliance
+    decision_tree = get_tree_for_category("Beer")
+    current_decision_tree = decision_tree
+    if decision_tree and current_planogram.products:
+        compliance = validate_compliance(current_planogram.to_dict(), decision_tree)
+        current_compliance = compliance
 
 
 def _load_products_json() -> list:
@@ -65,12 +73,14 @@ def index():
 @app.route("/api/planogram", methods=["GET"])
 def get_planogram():
     """Return current planogram data as JSON."""
-    global current_planogram, current_summary
+    global current_planogram, current_summary, current_compliance, current_decision_tree
     if current_planogram is None:
         init_default_planogram()
     return jsonify({
         "planogram": current_planogram.to_dict(),
-        "summary": current_summary
+        "summary": current_summary,
+        "decision_tree": current_decision_tree.to_dict() if current_decision_tree else None,
+        "compliance": current_compliance.to_dict() if current_compliance else None,
     })
 
 
@@ -452,9 +462,12 @@ def fill_products():
     current_summary = generate_summary(current_planogram)
 
     # Validate decision tree compliance
+    global current_compliance, current_decision_tree
     compliance = None
+    current_decision_tree = decision_tree
     if decision_tree:
         compliance = validate_compliance(planogram_data, decision_tree)
+        current_compliance = compliance
 
     return jsonify({
         "planogram": current_planogram.to_dict(),

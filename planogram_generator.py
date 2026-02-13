@@ -312,6 +312,60 @@ def generate_summary(planogram: Planogram) -> dict:
 
     avg_fill = sum(shelf_fill_rates) / len(shelf_fill_rates) if shelf_fill_rates else 0
 
+    # Per-SKU space analysis: aggregate revenue and space per unique product
+    sku_space = {}  # product_id -> {name, brand, subcategory, revenue, space_in, facings}
+    placed_ids = set()
+    for bay in planogram.equipment.bays:
+        for shelf in bay.shelves:
+            for pos in shelf.positions:
+                product = products_map.get(pos.product_id)
+                if product:
+                    placed_ids.add(pos.product_id)
+                    if pos.product_id not in sku_space:
+                        sku_space[pos.product_id] = {
+                            "product_id": pos.product_id,
+                            "name": product.name,
+                            "brand": product.brand,
+                            "subcategory": product.subcategory,
+                            "price": product.price,
+                            "revenue": 0,
+                            "space_in": 0,
+                            "facings": 0,
+                        }
+                    sku_space[pos.product_id]["revenue"] += product.price * pos.facings_wide
+                    sku_space[pos.product_id]["space_in"] += product.width_in * pos.facings_wide
+                    sku_space[pos.product_id]["facings"] += pos.facings_wide
+
+    # Calculate $/space and sort descending
+    sku_space_list = []
+    for sid, info in sku_space.items():
+        rev_per_space = round(info["revenue"] / info["space_in"], 2) if info["space_in"] > 0 else 0
+        sku_space_list.append({**info, "revenue_per_space": rev_per_space})
+    sku_space_list.sort(key=lambda x: x["revenue_per_space"], reverse=True)
+
+    # Total space used (inches) across all shelves
+    total_space_used_in = sum(info["space_in"] for info in sku_space.values())
+    # Total available space (inches)
+    total_space_available_in = sum(
+        shelf.width_in
+        for bay in planogram.equipment.bays
+        for shelf in bay.shelves
+    )
+    avg_revenue_per_space = round(revenue_potential / total_space_used_in, 2) if total_space_used_in > 0 else 0
+
+    # Assortment analysis
+    catalog_ids = set(p.id for p in planogram.products)
+    unplaced_products = []
+    for p in planogram.products:
+        if p.id not in placed_ids:
+            unplaced_products.append({
+                "product_id": p.id,
+                "name": p.name,
+                "brand": p.brand,
+                "subcategory": p.subcategory,
+            })
+    assortment_pct = round(len(placed_ids) / len(catalog_ids) * 100, 1) if catalog_ids else 0
+
     return {
         "planogram_name": planogram.name,
         "category": planogram.category,
@@ -339,8 +393,19 @@ def generate_summary(planogram: Planogram) -> dict:
         },
         "space_utilization": {
             "avg_shelf_fill_rate": round(avg_fill, 1),
-            "shelf_fill_rates": [round(f, 1) for f in shelf_fill_rates]
+            "shelf_fill_rates": [round(f, 1) for f in shelf_fill_rates],
+            "total_space_used_in": round(total_space_used_in, 1),
+            "total_space_available_in": round(total_space_available_in, 1),
         },
+        "assortment": {
+            "total_catalog": len(catalog_ids),
+            "total_placed": len(placed_ids),
+            "assortment_pct": assortment_pct,
+            "placed_ids": list(placed_ids),
+            "unplaced": unplaced_products,
+        },
+        "sku_space_analysis": sku_space_list,
+        "avg_revenue_per_space": avg_revenue_per_space,
         "category_breakdown": category_breakdown,
         "brand_breakdown": brand_breakdown,
         "bay_details": bay_summaries

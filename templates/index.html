@@ -316,6 +316,7 @@
             transition: max-height 0.3s ease;
         }
         .bottom-panel.collapsed { max-height: 40px; }
+        .bottom-panel.collapsed .bottom-panel-body { display: none; }
         .bottom-panel-toggle {
             display: flex;
             align-items: center;
@@ -339,115 +340,148 @@
         }
         .bottom-panel.collapsed .toggle-icon { transform: rotate(180deg); }
         .bottom-panel-body {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 0;
-            max-height: 220px;
+            padding: 12px 16px;
+            max-height: 400px;
             overflow-y: auto;
         }
-        .panel-section {
-            padding: 10px 16px;
-            border-right: 1px solid var(--border);
-            min-width: 0;
+
+        /* KPI CARDS ROW */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 0;
         }
-        .panel-section:last-child { border-right: none; }
-        .panel-section h4 {
+        .kpi-card {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px 18px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            user-select: none;
+        }
+        .kpi-card:hover {
+            border-color: var(--accent);
+            background: rgba(74, 158, 255, 0.04);
+        }
+        .kpi-card.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent);
+        }
+        .kpi-card .kpi-label {
             font-size: 10px;
             font-weight: 600;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
+        .kpi-card .kpi-value {
+            font-size: 28px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 4px;
+        }
+        .kpi-card .kpi-sub {
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
+        .kpi-card .kpi-expand-hint {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .kpi-card:hover .kpi-expand-hint { opacity: 0.6; }
+        .kpi-card.active .kpi-expand-hint { opacity: 1; transform: rotate(180deg); }
 
-        /* COMPACT METRICS */
-        .metrics-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-        .metric-chip {
+        /* KPI color classes */
+        .kpi-green .kpi-value { color: var(--accent-green); }
+        .kpi-orange .kpi-value { color: var(--accent-orange); }
+        .kpi-blue .kpi-value { color: var(--accent); }
+        .kpi-red .kpi-value { color: var(--accent-red); }
+        .kpi-yellow .kpi-value { color: #facc15; }
+
+        /* DETAIL PANEL (expandable below KPI row) */
+        .kpi-detail-panel {
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height 0.3s ease, padding 0.3s ease;
             background: var(--bg-dark);
-            border-radius: 6px;
-            padding: 6px 10px;
-            display: flex;
-            align-items: baseline;
-            gap: 6px;
+            border: 1px solid transparent;
+            border-radius: 10px;
+            margin-top: 0;
         }
-        .metric-chip .mv {
-            font-size: 15px;
-            font-weight: 700;
-            color: var(--text-primary);
+        .kpi-detail-panel.open {
+            max-height: 300px;
+            margin-top: 12px;
+            border-color: var(--border);
+            padding: 14px 18px;
+            overflow-y: auto;
         }
-        .metric-chip .ml {
-            font-size: 9px;
+        .kpi-detail-title {
+            font-size: 11px;
+            font-weight: 600;
             color: var(--text-secondary);
             text-transform: uppercase;
-        }
-        .metric-chip.green .mv { color: var(--accent-green); }
-        .metric-chip.blue .mv { color: var(--accent); }
-        .metric-chip.orange .mv { color: var(--accent-orange); }
-
-        /* COMPACT CATEGORY BARS */
-        .category-bar-container { margin-bottom: 5px; }
-        .category-bar-label {
-            display: flex;
-            justify-content: space-between;
-            font-size: 10px;
-            margin-bottom: 2px;
-        }
-        .category-bar-label .name { color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .category-bar-label .count { color: var(--text-secondary); white-space: nowrap; margin-left: 6px; }
-        .category-bar {
-            height: 4px;
-            background: var(--bg-dark);
-            border-radius: 2px;
-            overflow: hidden;
-        }
-        .category-bar-fill {
-            height: 100%;
-            border-radius: 2px;
-            transition: width 0.5s ease;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
         }
 
-        /* COMPACT BRAND LIST */
-        .brand-list { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; }
-        .brand-list li {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 3px 8px;
-            font-size: 10px;
-            background: var(--bg-dark);
-            border-radius: 4px;
+        /* DETAIL TABLE */
+        .kpi-detail-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
         }
-        .brand-list .brand-name { color: var(--text-primary); white-space: nowrap; }
-        .brand-list .brand-facings {
-            color: var(--accent);
-            font-weight: 700;
-            font-size: 10px;
-        }
-
-        /* COMPACT FILL RATE BARS */
-        .fill-rates-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            gap: 4px;
-        }
-        .fill-rate-item { }
-        .fill-rate-header {
-            display: flex;
-            justify-content: space-between;
+        .kpi-detail-table th {
+            text-align: left;
             font-size: 9px;
-            margin-bottom: 2px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 4px 8px 6px;
+            border-bottom: 1px solid var(--border);
         }
-        .fill-bar {
-            height: 3px;
-            background: var(--bg-dark);
+        .kpi-detail-table th.right { text-align: right; }
+        .kpi-detail-table td {
+            padding: 5px 8px;
+            border-bottom: 1px solid rgba(51,54,72,0.4);
+            color: var(--text-primary);
+        }
+        .kpi-detail-table td.right { text-align: right; }
+        .kpi-detail-table td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; }
+        .kpi-detail-table tr:last-child td { border-bottom: none; }
+        .kpi-detail-table .rank-col {
+            width: 30px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+        .kpi-detail-table .status-placed {
+            color: var(--accent-green);
+            font-weight: 600;
+        }
+        .kpi-detail-table .status-missing {
+            color: var(--accent-red);
+            font-weight: 600;
+        }
+
+        /* FILL BAR (reused in detail views) */
+        .fill-bar-mini {
+            height: 4px;
+            background: var(--bg-card);
             border-radius: 2px;
             overflow: hidden;
+            min-width: 60px;
         }
-        .fill-bar-inner {
+        .fill-bar-mini-inner {
             height: 100%;
             border-radius: 2px;
             transition: width 0.5s ease;
@@ -455,6 +489,73 @@
         .fill-good { background: var(--accent-green); }
         .fill-warn { background: var(--accent-orange); }
         .fill-low { background: var(--accent-red); }
+
+        /* COMPLIANCE LEVEL BARS in detail */
+        .compliance-detail-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(51,54,72,0.4);
+        }
+        .compliance-detail-row:last-child { border-bottom: none; }
+        .compliance-detail-name {
+            width: 80px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .compliance-detail-bar {
+            flex: 1;
+            height: 6px;
+            background: var(--bg-card);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .compliance-detail-bar-inner {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        .compliance-detail-pct {
+            width: 45px;
+            text-align: right;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .compliance-detail-breaks {
+            width: 80px;
+            text-align: right;
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
+
+        /* Assortment upload area */
+        .assortment-upload-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .assortment-upload-btn {
+            padding: 4px 12px;
+            font-size: 10px;
+            border: 1px dashed var(--border);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.15s;
+        }
+        .assortment-upload-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .assortment-upload-info {
+            font-size: 10px;
+            color: var(--text-secondary);
+        }
 
         /* LOADING */
         .loading {
@@ -922,33 +1023,46 @@
             </div>
         </div>
 
-        <!-- Compact Bottom Summary Panel -->
+        <!-- Summary Dashboard -->
         <div class="bottom-panel" id="bottomPanel">
             <div class="bottom-panel-toggle" onclick="togglePanel()">
                 <h3>Summary Dashboard</h3>
                 <span class="toggle-icon">&#9650;</span>
             </div>
             <div class="bottom-panel-body">
-                <div class="panel-section">
-                    <h4>Overview &amp; Financials</h4>
-                    <div class="metrics-row" id="metricsRow"></div>
-                </div>
-                <div class="panel-section">
-                    <h4>Category Mix</h4>
-                    <div id="categoryBars"></div>
-                </div>
-                <div class="panel-section">
-                    <h4>Space Utilization</h4>
-                    <div class="fill-rates-grid" id="fillRates"></div>
-                </div>
-                <div class="panel-section">
-                    <h4>Decision Tree &amp; Compliance</h4>
-                    <div id="dtPanel">
-                        <div style="font-size:11px;color:var(--text-secondary);">Generate products to see compliance</div>
+                <!-- 4 Big KPI Cards -->
+                <div class="kpi-row">
+                    <div class="kpi-card" id="kpiAssortment" onclick="toggleKpiDetail('assortment')">
+                        <span class="kpi-expand-hint">&#9660;</span>
+                        <div class="kpi-label">Assortment</div>
+                        <div class="kpi-value" id="kpiAssortmentValue">--</div>
+                        <div class="kpi-sub" id="kpiAssortmentSub">Upload SKU list or use catalog</div>
+                    </div>
+                    <div class="kpi-card" id="kpiRevSpace" onclick="toggleKpiDetail('revspace')">
+                        <span class="kpi-expand-hint">&#9660;</span>
+                        <div class="kpi-label">Avg $/Space</div>
+                        <div class="kpi-value" id="kpiRevSpaceValue">--</div>
+                        <div class="kpi-sub" id="kpiRevSpaceSub">Revenue per inch of shelf</div>
+                    </div>
+                    <div class="kpi-card" id="kpiSpaceUtil" onclick="toggleKpiDetail('spaceutil')">
+                        <span class="kpi-expand-hint">&#9660;</span>
+                        <div class="kpi-label">Space Utilization</div>
+                        <div class="kpi-value" id="kpiSpaceUtilValue">--</div>
+                        <div class="kpi-sub" id="kpiSpaceUtilSub">Avg shelf fill rate</div>
+                    </div>
+                    <div class="kpi-card" id="kpiCompliance" onclick="toggleKpiDetail('compliance')">
+                        <span class="kpi-expand-hint">&#9660;</span>
+                        <div class="kpi-label">DT Compliance</div>
+                        <div class="kpi-value" id="kpiComplianceValue">--</div>
+                        <div class="kpi-sub" id="kpiComplianceSub">Decision tree grouping</div>
                     </div>
                 </div>
+                <!-- Expandable Detail Panel -->
+                <div class="kpi-detail-panel" id="kpiDetailPanel"></div>
             </div>
         </div>
+        <!-- Hidden file input for assortment upload -->
+        <input type="file" id="assortmentFileInput" accept=".csv,.txt,.json" style="display:none" onchange="handleAssortmentUpload(event)">
     </div>
 
     <!-- TOOLTIP -->
@@ -1045,6 +1159,8 @@
                 const data = await res.json();
                 planogramData = data.planogram;
                 summaryData = data.summary;
+                decisionTreeData = data.decision_tree || null;
+                complianceData = data.compliance || null;
                 buildProductsMap();
                 renderAll();
                 setSourceTag('rule_based');
@@ -1520,143 +1636,376 @@
         }
 
         // ============================================================
-        // SUMMARY BOTTOM PANEL
+        // SUMMARY BOTTOM PANEL — KPI CARDS
         // ============================================================
+        let activeKpi = null;          // which detail panel is open
+        let customAssortmentList = null; // user-uploaded SKU list
+
         function togglePanel() {
             document.getElementById('bottomPanel').classList.toggle('collapsed');
         }
 
+        // --- Color coding helper ---
+        function kpiColorClass(pct) {
+            if (pct >= 80) return 'kpi-green';
+            if (pct >= 50) return 'kpi-orange';
+            return 'kpi-red';
+        }
+        function kpiScoreColor(pct) {
+            if (pct >= 80) return 'var(--accent-green)';
+            if (pct >= 50) return 'var(--accent-orange)';
+            return 'var(--accent-red)';
+        }
+
         function renderSummary() {
             if (!summaryData) return;
-
-            const metricsRow = document.getElementById('metricsRow');
-            metricsRow.innerHTML = `
-                <div class="metric-chip blue"><span class="mv">${summaryData.equipment.total_bays}</span><span class="ml">Bays</span></div>
-                <div class="metric-chip blue"><span class="mv">${summaryData.equipment.total_shelves}</span><span class="ml">Shelves</span></div>
-                <div class="metric-chip"><span class="mv">${summaryData.products.total_placed}</span><span class="ml">Placed</span></div>
-                <div class="metric-chip"><span class="mv">${summaryData.products.total_facings}</span><span class="ml">Facings</span></div>
-                <div class="metric-chip green"><span class="mv">${summaryData.space_utilization.avg_shelf_fill_rate}%</span><span class="ml">Fill</span></div>
-                <div class="metric-chip"><span class="mv">${mFmt(summaryData.equipment.total_width_in)}</span><span class="ml">Width</span></div>
-                <div class="metric-chip green"><span class="mv">$${summaryData.financials.total_revenue_potential.toLocaleString()}</span><span class="ml">Revenue</span></div>
-                <div class="metric-chip orange"><span class="mv">$${summaryData.financials.total_margin.toLocaleString()}</span><span class="ml">Margin</span></div>
-                <div class="metric-chip"><span class="mv">${summaryData.financials.margin_pct}%</span><span class="ml">Margin%</span></div>
-                <div class="metric-chip"><span class="mv">${summaryData.products.total_in_catalog}</span><span class="ml">Catalog</span></div>
-            `;
-
-            renderCategoryBars();
-            renderFillRates();
+            renderKpiCards();
+            // Re-render detail if open
+            if (activeKpi) renderKpiDetailContent(activeKpi);
         }
 
-        function renderCategoryBars() {
-            const container = document.getElementById('categoryBars');
-            container.innerHTML = '';
-            const cats = summaryData.category_breakdown;
-            if (!cats || Object.keys(cats).length === 0) {
-                container.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">No products placed yet</div>';
-                return;
+        function renderKpiCards() {
+            const s = summaryData;
+            if (!s) return;
+
+            // 1. Assortment %
+            const assort = s.assortment || {};
+            let assortPct, assortPlaced, assortTotal;
+
+            if (customAssortmentList && customAssortmentList.length > 0) {
+                // Use custom list
+                const placedIds = new Set(assort.placed_ids || []);
+                assortPlaced = customAssortmentList.filter(sku => placedIds.has(sku)).length;
+                assortTotal = customAssortmentList.length;
+                assortPct = assortTotal > 0 ? Math.round(assortPlaced / assortTotal * 100 * 10) / 10 : 0;
+            } else {
+                assortPct = assort.assortment_pct || 0;
+                assortPlaced = assort.total_placed || 0;
+                assortTotal = assort.total_catalog || 0;
             }
-            const maxFacings = Math.max(...Object.values(cats).map(c => c.facings));
-            const colors = ['#4a9eff', '#34d399', '#f59e0b', '#ef4444', '#a78bfa', '#ec4899', '#14b8a6', '#f97316'];
 
-            Object.entries(cats).sort((a, b) => b[1].facings - a[1].facings).forEach(([name, data], i) => {
-                const pct = (data.facings / maxFacings * 100).toFixed(0);
-                container.innerHTML += `
-                    <div class="category-bar-container">
-                        <div class="category-bar-label">
-                            <span class="name">${name}</span>
-                            <span class="count">${data.facings} facings</span>
-                        </div>
-                        <div class="category-bar">
-                            <div class="category-bar-fill" style="width:${pct}%; background:${colors[i % colors.length]}"></div>
-                        </div>
-                    </div>
-                `;
-            });
+            const assortCard = document.getElementById('kpiAssortment');
+            assortCard.className = `kpi-card ${kpiColorClass(assortPct)}${activeKpi === 'assortment' ? ' active' : ''}`;
+            document.getElementById('kpiAssortmentValue').textContent = assortPct + '%';
+            document.getElementById('kpiAssortmentSub').textContent = `${assortPlaced} of ${assortTotal} SKUs placed`;
+
+            // 2. Avg $/Space
+            const avgRevSpace = s.avg_revenue_per_space || 0;
+            const revCard = document.getElementById('kpiRevSpace');
+            // Color: blue for revenue metric (always positive context)
+            revCard.className = `kpi-card kpi-blue${activeKpi === 'revspace' ? ' active' : ''}`;
+            document.getElementById('kpiRevSpaceValue').textContent = '$' + avgRevSpace.toFixed(2);
+            const totalRev = s.financials ? s.financials.total_revenue_potential : 0;
+            document.getElementById('kpiRevSpaceSub').textContent = `$${totalRev.toLocaleString()} total revenue`;
+
+            // 3. Space Utilization %
+            const fillPct = s.space_utilization ? s.space_utilization.avg_shelf_fill_rate : 0;
+            const spaceCard = document.getElementById('kpiSpaceUtil');
+            spaceCard.className = `kpi-card ${kpiColorClass(fillPct)}${activeKpi === 'spaceutil' ? ' active' : ''}`;
+            document.getElementById('kpiSpaceUtilValue').textContent = fillPct + '%';
+            const usedIn = s.space_utilization ? s.space_utilization.total_space_used_in : 0;
+            const availIn = s.space_utilization ? s.space_utilization.total_space_available_in : 0;
+            document.getElementById('kpiSpaceUtilSub').textContent = `${usedIn}" of ${availIn}" used`;
+
+            // 4. DT Compliance %
+            const compPct = complianceData ? complianceData.overall_pct : 0;
+            const compCard = document.getElementById('kpiCompliance');
+            if (!complianceData) {
+                compCard.className = `kpi-card${activeKpi === 'compliance' ? ' active' : ''}`;
+                document.getElementById('kpiComplianceValue').textContent = '--';
+                document.getElementById('kpiComplianceSub').textContent = 'Fill products to see compliance';
+            } else {
+                compCard.className = `kpi-card ${kpiColorClass(compPct)}${activeKpi === 'compliance' ? ' active' : ''}`;
+                document.getElementById('kpiComplianceValue').textContent = compPct + '%';
+                const totalBreaks = complianceData.levels.reduce((s, l) => s + l.break_count, 0);
+                document.getElementById('kpiComplianceSub').textContent = totalBreaks === 0 ? 'Perfect grouping' : `${totalBreaks} break(s) detected`;
+            }
         }
 
-        function renderFillRates() {
-            const container = document.getElementById('fillRates');
-            container.innerHTML = '';
-            const rates = summaryData.space_utilization.shelf_fill_rates;
+        // --- Toggle KPI Detail Panel ---
+        function toggleKpiDetail(kpiId) {
+            const panel = document.getElementById('kpiDetailPanel');
+            if (activeKpi === kpiId) {
+                // Close
+                activeKpi = null;
+                panel.classList.remove('open');
+                panel.innerHTML = '';
+                // Remove active from all cards
+                document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('active'));
+            } else {
+                activeKpi = kpiId;
+                panel.classList.add('open');
+                renderKpiDetailContent(kpiId);
+                // Mark active card
+                document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('active'));
+                document.getElementById({
+                    'assortment': 'kpiAssortment',
+                    'revspace': 'kpiRevSpace',
+                    'spaceutil': 'kpiSpaceUtil',
+                    'compliance': 'kpiCompliance'
+                }[kpiId]).classList.add('active');
+            }
+        }
 
-            if (planogramData && planogramData.equipment) {
-                planogramData.equipment.bays.forEach((bay, bi) => {
-                    bay.shelves.forEach((shelf, si) => {
-                        const idx = bi * bay.shelves.length + si;
-                        if (idx >= rates.length) return;
-                        const rate = rates[idx];
-                        const colorClass = rate >= 80 ? 'fill-good' : rate >= 50 ? 'fill-warn' : 'fill-low';
-                        container.innerHTML += `
-                            <div class="fill-rate-item">
-                                <div class="fill-rate-header">
-                                    <span>Bay ${bi + 1} / Shelf ${si + 1}</span>
-                                    <span>${rate}%</span>
-                                </div>
-                                <div class="fill-bar">
-                                    <div class="fill-bar-inner ${colorClass}" style="width:${rate}%"></div>
-                                </div>
-                            </div>
-                        `;
+        function renderKpiDetailContent(kpiId) {
+            const panel = document.getElementById('kpiDetailPanel');
+            if (!summaryData) { panel.innerHTML = ''; return; }
+
+            switch(kpiId) {
+                case 'assortment': panel.innerHTML = renderAssortmentDetail(); break;
+                case 'revspace': panel.innerHTML = renderRevSpaceDetail(); break;
+                case 'spaceutil': panel.innerHTML = renderSpaceUtilDetail(); break;
+                case 'compliance': panel.innerHTML = renderComplianceDetail(); break;
+                default: panel.innerHTML = '';
+            }
+        }
+
+        // --- ASSORTMENT DETAIL ---
+        function renderAssortmentDetail() {
+            const assort = summaryData.assortment || {};
+            const placedIds = new Set(assort.placed_ids || []);
+
+            let html = '<div class="kpi-detail-title">Assortment Tracking</div>';
+
+            // Upload row
+            html += `<div class="assortment-upload-row">
+                <button class="assortment-upload-btn" onclick="document.getElementById('assortmentFileInput').click()">
+                    Upload SKU List
+                </button>
+                <span class="assortment-upload-info" id="assortmentUploadInfo">
+                    ${customAssortmentList ? customAssortmentList.length + ' custom SKUs loaded' : 'Using full catalog (' + (assort.total_catalog || 0) + ' SKUs)'}
+                </span>
+                ${customAssortmentList ? '<button class="assortment-upload-btn" onclick="clearAssortmentList()" style="color:var(--accent-red);border-color:var(--accent-red);">Clear</button>' : ''}
+            </div>`;
+
+            // Build table: all products with placed/missing status
+            let items = [];
+            if (customAssortmentList && customAssortmentList.length > 0) {
+                // Use custom list — match against placed products
+                const allProducts = planogramData ? planogramData.products || [] : [];
+                const prodMap = {};
+                allProducts.forEach(p => { prodMap[p.id] = p; });
+                customAssortmentList.forEach(sku => {
+                    const p = prodMap[sku];
+                    items.push({
+                        id: sku,
+                        name: p ? p.name : sku,
+                        brand: p ? p.brand : '—',
+                        subcategory: p ? p.subcategory : '—',
+                        placed: placedIds.has(sku)
+                    });
+                });
+            } else {
+                // Use catalog
+                const allProducts = planogramData ? planogramData.products || [] : [];
+                allProducts.forEach(p => {
+                    items.push({
+                        id: p.id,
+                        name: p.name,
+                        brand: p.brand,
+                        subcategory: p.subcategory,
+                        placed: placedIds.has(p.id)
                     });
                 });
             }
+
+            // Sort: missing first, then placed
+            items.sort((a, b) => (a.placed === b.placed) ? 0 : a.placed ? 1 : -1);
+
+            html += `<table class="kpi-detail-table">
+                <thead><tr>
+                    <th>Status</th>
+                    <th>Product</th>
+                    <th>Brand</th>
+                    <th>Category</th>
+                </tr></thead><tbody>`;
+
+            items.forEach(item => {
+                const statusClass = item.placed ? 'status-placed' : 'status-missing';
+                const statusText = item.placed ? 'Placed' : 'Missing';
+                html += `<tr>
+                    <td class="${statusClass}">${statusText}</td>
+                    <td>${item.name}</td>
+                    <td>${item.brand}</td>
+                    <td>${item.subcategory}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            return html;
         }
 
-        // ============================================================
-        // DECISION TREE & COMPLIANCE
-        // ============================================================
-        function renderDecisionTree() {
-            const container = document.getElementById('dtPanel');
-            if (!container) return;
-
-            // If no tree or no products, show placeholder
-            if (!decisionTreeData || !planogramData || !planogramData.products || planogramData.products.length === 0) {
-                container.innerHTML = '<div style="font-size:11px;color:var(--text-secondary);">Fill products to see decision tree compliance</div>';
-                return;
+        // --- REVENUE PER SPACE DETAIL ---
+        function renderRevSpaceDetail() {
+            const skuList = summaryData.sku_space_analysis || [];
+            if (skuList.length === 0) {
+                return '<div class="kpi-detail-title">Revenue per Space</div><div style="font-size:11px;color:var(--text-secondary);">No products placed yet</div>';
             }
 
-            let html = '';
+            let html = '<div class="kpi-detail-title">Revenue per Space — Ranked by $/inch</div>';
+            html += `<table class="kpi-detail-table">
+                <thead><tr>
+                    <th class="rank-col">#</th>
+                    <th>Product</th>
+                    <th>Brand</th>
+                    <th class="right">Facings</th>
+                    <th class="right">Space</th>
+                    <th class="right">Revenue</th>
+                    <th class="right">$/inch</th>
+                </tr></thead><tbody>`;
 
-            // Tree levels visual: L1 → L2 → L3 → L4
-            html += '<div class="dt-tree-visual">';
-            decisionTreeData.levels.forEach((lvl, i) => {
-                if (i > 0) html += '<span class="dt-arrow">&#8594;</span>';
-                html += `<span class="dt-level"><span class="dt-num">L${i+1}</span> <span class="dt-name">${lvl.name}</span></span>`;
+            skuList.forEach((sku, i) => {
+                const revColor = sku.revenue_per_space >= (summaryData.avg_revenue_per_space || 0) ? 'var(--accent-green)' : 'var(--accent-orange)';
+                html += `<tr>
+                    <td class="rank-col">${i + 1}</td>
+                    <td>${sku.name}</td>
+                    <td style="color:var(--text-secondary)">${sku.brand}</td>
+                    <td class="right mono">${sku.facings}</td>
+                    <td class="right mono">${sku.space_in.toFixed(1)}"</td>
+                    <td class="right mono">$${sku.revenue.toFixed(2)}</td>
+                    <td class="right mono" style="color:${revColor};font-weight:700">$${sku.revenue_per_space.toFixed(2)}</td>
+                </tr>`;
             });
-            html += '</div>';
 
-            // Compliance score
-            if (complianceData) {
-                const overall = complianceData.overall_pct;
-                const scoreClass = overall >= 80 ? 'score-good' : overall >= 50 ? 'score-ok' : 'score-bad';
-                html += `<div class="compliance-score">
-                    <span class="score-value ${scoreClass}">${overall}%</span>
-                    <span class="score-label">Overall Compliance</span>
-                </div>`;
+            html += '</tbody></table>';
+            return html;
+        }
 
-                // Per-level bars
-                html += '<div class="compliance-levels">';
-                complianceData.levels.forEach(lvl => {
-                    const pct = lvl.compliance_pct;
-                    const barClass = pct >= 80 ? 'fill-good' : pct >= 50 ? 'fill-warn' : 'fill-low';
-                    html += `<div class="cl-row">
-                        <span class="cl-name">${lvl.level_name}</span>
-                        <div class="cl-bar"><div class="cl-bar-inner ${barClass}" style="width:${pct}%"></div></div>
-                        <span class="cl-pct">${pct}%</span>
-                    </div>`;
+        // --- SPACE UTILIZATION DETAIL ---
+        function renderSpaceUtilDetail() {
+            const rates = summaryData.space_utilization ? summaryData.space_utilization.shelf_fill_rates : [];
+            if (!planogramData || !planogramData.equipment) {
+                return '<div class="kpi-detail-title">Space Utilization by Shelf</div><div style="font-size:11px;color:var(--text-secondary);">No equipment loaded</div>';
+            }
+
+            let html = '<div class="kpi-detail-title">Space Utilization by Shelf</div>';
+            html += `<table class="kpi-detail-table">
+                <thead><tr>
+                    <th>Location</th>
+                    <th>Fill Rate</th>
+                    <th style="width:50%" class="right"></th>
+                </tr></thead><tbody>`;
+
+            planogramData.equipment.bays.forEach((bay, bi) => {
+                bay.shelves.forEach((shelf, si) => {
+                    const idx = bi * bay.shelves.length + si;
+                    if (idx >= rates.length) return;
+                    const rate = rates[idx];
+                    const colorClass = rate >= 80 ? 'fill-good' : rate >= 50 ? 'fill-warn' : 'fill-low';
+                    const pctColor = kpiScoreColor(rate);
+                    html += `<tr>
+                        <td>Bay ${bi + 1} / Shelf ${si + 1}</td>
+                        <td class="mono" style="color:${pctColor};font-weight:700">${rate}%</td>
+                        <td class="right">
+                            <div class="fill-bar-mini">
+                                <div class="fill-bar-mini-inner ${colorClass}" style="width:${rate}%"></div>
+                            </div>
+                        </td>
+                    </tr>`;
+                });
+            });
+
+            html += '</tbody></table>';
+            return html;
+        }
+
+        // --- COMPLIANCE DETAIL ---
+        function renderComplianceDetail() {
+            if (!complianceData) {
+                return '<div class="kpi-detail-title">Decision Tree Compliance</div><div style="font-size:11px;color:var(--text-secondary);">Fill products to see compliance per layer</div>';
+            }
+
+            let html = '<div class="kpi-detail-title">Decision Tree Compliance by Layer</div>';
+
+            // Tree levels visual
+            if (decisionTreeData) {
+                html += '<div class="dt-tree-visual" style="margin-bottom:12px">';
+                decisionTreeData.levels.forEach((lvl, i) => {
+                    if (i > 0) html += '<span class="dt-arrow">&#8594;</span>';
+                    html += `<span class="dt-level"><span class="dt-num">L${i+1}</span> <span class="dt-name">${lvl.name}</span></span>`;
                 });
                 html += '</div>';
-
-                // Breaks info
-                const totalBreaks = complianceData.levels.reduce((s, l) => s + l.break_count, 0);
-                if (totalBreaks > 0) {
-                    html += `<div style="font-size:9px;color:var(--accent-orange);margin-top:4px;">${totalBreaks} grouping break(s) detected</div>`;
-                } else {
-                    html += `<div style="font-size:9px;color:var(--accent-green);margin-top:4px;">Perfect grouping — no breaks</div>`;
-                }
             }
 
-            container.innerHTML = html;
+            // Per-level detail rows
+            complianceData.levels.forEach(lvl => {
+                const pct = lvl.compliance_pct;
+                const colorClass = pct >= 80 ? 'fill-good' : pct >= 50 ? 'fill-warn' : 'fill-low';
+                const pctColor = kpiScoreColor(pct);
+                html += `<div class="compliance-detail-row">
+                    <span class="compliance-detail-name">${lvl.level_name}</span>
+                    <div class="compliance-detail-bar">
+                        <div class="compliance-detail-bar-inner ${colorClass}" style="width:${pct}%"></div>
+                    </div>
+                    <span class="compliance-detail-pct" style="color:${pctColor}">${pct}%</span>
+                    <span class="compliance-detail-breaks">${lvl.break_count} break${lvl.break_count !== 1 ? 's' : ''}</span>
+                </div>`;
+            });
+
+            // Summary
+            const totalBreaks = complianceData.levels.reduce((s, l) => s + l.break_count, 0);
+            if (totalBreaks > 0) {
+                html += `<div style="font-size:10px;color:var(--accent-orange);margin-top:8px;">${totalBreaks} total grouping break(s) — products interrupt contiguous segments</div>`;
+            } else {
+                html += `<div style="font-size:10px;color:var(--accent-green);margin-top:8px;">Perfect grouping — no breaks detected at any level</div>`;
+            }
+
+            return html;
+        }
+
+        // --- Assortment File Upload ---
+        function handleAssortmentUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result.trim();
+                let skuList = [];
+
+                if (file.name.endsWith('.json')) {
+                    try {
+                        const parsed = JSON.parse(text);
+                        if (Array.isArray(parsed)) {
+                            skuList = parsed.map(s => String(s).trim()).filter(Boolean);
+                        } else {
+                            showError('JSON must be an array of SKU IDs');
+                            return;
+                        }
+                    } catch {
+                        showError('Invalid JSON file');
+                        return;
+                    }
+                } else {
+                    // CSV or TXT — one SKU per line or comma-separated
+                    skuList = text.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+                }
+
+                if (skuList.length === 0) {
+                    showError('No SKUs found in file');
+                    return;
+                }
+
+                customAssortmentList = skuList;
+                renderSummary();
+                // If assortment detail is open, refresh
+                if (activeKpi === 'assortment') renderKpiDetailContent('assortment');
+            };
+            reader.readAsText(file);
+            // Reset input so same file can be re-uploaded
+            event.target.value = '';
+        }
+
+        function clearAssortmentList() {
+            customAssortmentList = null;
+            renderSummary();
+            if (activeKpi === 'assortment') renderKpiDetailContent('assortment');
+        }
+
+        // Kept for backward compatibility — renderDecisionTree just updates KPI card
+        function renderDecisionTree() {
+            renderKpiCards();
+            if (activeKpi === 'compliance') renderKpiDetailContent('compliance');
         }
 
         // Build a map from product_id → segment (Level 1 group) for overlay
