@@ -73,7 +73,7 @@ def _load_saved_state() -> bool:
             payload = json.load(f)
 
         current_planogram = Planogram.from_dict(payload["planogram"])
-        current_summary = payload.get("summary")
+        current_summary = generate_summary(current_planogram)
 
         from dataclasses import asdict
         current_equipment = asdict(current_planogram.equipment)

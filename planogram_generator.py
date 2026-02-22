@@ -340,11 +340,13 @@ def generate_summary(planogram: Planogram) -> dict:
             })
         bay_summaries.append(bay_info)
 
-    # Category breakdown
+    # Category breakdown (skip phantoms to avoid double-counting cross-bay products)
     category_breakdown = {}
     for bay in planogram.equipment.bays:
         for shelf in bay.shelves:
             for pos in shelf.positions:
+                if getattr(pos, '_phantom', False):
+                    continue
                 product = products_map.get(pos.product_id)
                 if product:
                     cat = product.subcategory
@@ -354,11 +356,13 @@ def generate_summary(planogram: Planogram) -> dict:
                     category_breakdown[cat]["facings"] += pos.facings_wide
                     category_breakdown[cat]["revenue"] += product.price * pos.facings_wide
 
-    # Brand breakdown
+    # Brand breakdown (skip phantoms to avoid double-counting cross-bay products)
     brand_breakdown = {}
     for bay in planogram.equipment.bays:
         for shelf in bay.shelves:
             for pos in shelf.positions:
+                if getattr(pos, '_phantom', False):
+                    continue
                 product = products_map.get(pos.product_id)
                 if product:
                     brand = product.brand
@@ -370,11 +374,14 @@ def generate_summary(planogram: Planogram) -> dict:
     avg_fill = sum(shelf_fill_rates) / len(shelf_fill_rates) if shelf_fill_rates else 0
 
     # Per-SKU space analysis: aggregate revenue and space per unique product
+    # Skip phantoms to avoid double-counting cross-bay products
     sku_space = {}  # product_id -> {name, brand, subcategory, revenue, space_in, facings}
     placed_ids = set()
     for bay in planogram.equipment.bays:
         for shelf in bay.shelves:
             for pos in shelf.positions:
+                if getattr(pos, '_phantom', False):
+                    continue
                 product = products_map.get(pos.product_id)
                 if product:
                     placed_ids.add(pos.product_id)

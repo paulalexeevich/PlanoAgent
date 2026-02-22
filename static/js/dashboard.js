@@ -220,11 +220,12 @@ function renderSpaceUtilDetail() {
             <th style="width:50%" class="right"></th>
         </tr></thead><tbody>`;
 
+    let rateIdx = 0;
     planogramData.equipment.bays.forEach((bay, bi) => {
         bay.shelves.forEach((shelf, si) => {
-            const idx = bi * bay.shelves.length + si;
-            if (idx >= rates.length) return;
-            const rate = rates[idx];
+            if (rateIdx >= rates.length) { rateIdx++; return; }
+            const rate = rates[rateIdx];
+            rateIdx++;
             const colorClass = rate >= 80 ? 's-fill-good' : rate >= 50 ? 's-fill-warn' : 's-fill-low';
             const pctColor = kpiScoreColor(rate);
             html += `<tr>
@@ -232,7 +233,7 @@ function renderSpaceUtilDetail() {
                 <td class="mono" style="color:${pctColor};font-weight:700">${rate}%</td>
                 <td class="right">
                     <div class="s-fill-bar">
-                        <div class="s-fill-bar-inner ${colorClass}" style="width:${rate}%"></div>
+                        <div class="s-fill-bar-inner ${colorClass}" style="width:${Math.min(rate, 100)}%"></div>
                     </div>
                 </td>
             </tr>`;
