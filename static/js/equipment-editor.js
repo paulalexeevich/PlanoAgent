@@ -309,28 +309,33 @@ function toggleBayGlue(bayIdx) {
     renderEditorBays();
 }
 
+function _redistributeClearances(bay, newCount, heightIn) {
+    const base = 6, thickness = 1;
+    const totalAvailable = heightIn - base - (newCount * thickness);
+    if (totalAvailable <= 0) {
+        bay.shelf_clearances = Array(newCount).fill(Math.max(2, Math.round(heightIn / newCount)));
+    } else {
+        const even = parseFloat((totalAvailable / newCount).toFixed(1));
+        bay.shelf_clearances = Array(newCount).fill(even);
+    }
+    bay.num_shelves = newCount;
+}
+
 function editorAddShelf(bayIdx) {
     const bay = editorState.bays[bayIdx];
+    const newCount = Math.min(12, (bay.num_shelves || 5) + 1);
+    if (newCount === bay.num_shelves) return;
     const heightIn = parseFloat(document.getElementById('edEqHeight').value) || 72;
-    if (bay.shelf_clearances) {
-        const avg = parseFloat((bay.shelf_clearances.reduce((a, b) => a + b, 0) / bay.shelf_clearances.length).toFixed(1));
-        bay.shelf_clearances.push(avg);
-        bay.num_shelves = bay.shelf_clearances.length;
-    } else {
-        bay.num_shelves = Math.min(12, (bay.num_shelves || 5) + 1);
-    }
+    _redistributeClearances(bay, newCount, heightIn);
     renderEditorBays();
 }
 
 function editorRemoveShelf(bayIdx) {
     const bay = editorState.bays[bayIdx];
-    if ((bay.num_shelves || 5) <= 1) return;
-    if (bay.shelf_clearances) {
-        bay.shelf_clearances.pop();
-        bay.num_shelves = bay.shelf_clearances.length;
-    } else {
-        bay.num_shelves = Math.max(1, (bay.num_shelves || 5) - 1);
-    }
+    const newCount = Math.max(1, (bay.num_shelves || 5) - 1);
+    if (newCount === bay.num_shelves) return;
+    const heightIn = parseFloat(document.getElementById('edEqHeight').value) || 72;
+    _redistributeClearances(bay, newCount, heightIn);
     renderEditorBays();
 }
 

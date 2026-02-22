@@ -49,7 +49,20 @@ def create_default_equipment(
     """
 
     def _positions_from_clearances(clearances, b_height, base=6, thickness=1):
-        """Convert per-shelf clearance heights → y-positions from floor."""
+        """Convert per-shelf clearance heights → y-positions from floor.
+
+        If the clearances exceed the available bay height, they are scaled
+        proportionally so that all requested shelves fit.
+        """
+        n = len(clearances)
+        total_needed = base + sum(float(c) + thickness for c in clearances)
+        if total_needed > b_height and n > 0:
+            available = b_height - base - n * thickness
+            raw_sum = sum(float(c) for c in clearances)
+            if raw_sum > 0:
+                ratio = available / raw_sum
+                clearances = [c * ratio for c in clearances]
+
         positions = []
         y = float(base)
         for c in clearances:
