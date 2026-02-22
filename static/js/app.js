@@ -25,10 +25,12 @@ function toggleConfig() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    loadSettings();
     fetchPlanogram();
     document.getElementById('scaleSlider').addEventListener('input', (e) => {
         scale = parseFloat(e.target.value);
         document.getElementById('scaleValue').textContent = scale + 'px/' + dUnit();
+        saveSettings();
         if (planogramData) renderPlanogram();
     });
     document.getElementById('eqBays').addEventListener('input', () => {

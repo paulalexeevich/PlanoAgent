@@ -14,8 +14,8 @@ function showTooltip(event, product, position) {
         <div class="row"><span class="label">Package</span><span class="value">${product.pack_size}x ${volStr} ${product.package_type}</span></div>
         <div class="row"><span class="label">ABV</span><span class="value">${product.abv}%</span></div>
         <div class="row"><span class="label">Size (${dUnit()})</span><span class="value">${sizeStr}</span></div>
-        <div class="row"><span class="label">Price</span><span class="value">$${product.price.toFixed(2)}</span></div>
-        <div class="row"><span class="label">Cost</span><span class="value">$${product.cost.toFixed(2)}</span></div>
+        <div class="row"><span class="label">Price</span><span class="value">${cFmt(product.price)}</span></div>
+        <div class="row"><span class="label">Cost</span><span class="value">${cFmt(product.cost)}</span></div>
         <div class="row"><span class="label">Margin</span><span class="value">${margin}%</span></div>
         <div class="row"><span class="label">Facings</span><span class="value">${position.facings_wide}W x ${position.facings_high}H x ${position.facings_deep}D</span></div>
         <div class="row"><span class="label">UPC</span><span class="value">${product.upc}</span></div>

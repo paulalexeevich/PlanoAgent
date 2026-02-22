@@ -127,6 +127,14 @@
 - **Largest modules**: `equipment-editor.js` (440 lines) + `equipment-editor.css` (435 lines) = 875 total. `dashboard.js` (335 lines) + `dashboard.css` (251 lines) = 586 total.
 - **Flask**: `static_folder="static"` was already configured in `app.py`. Static files served at `/static/css/*.css` and `/static/js/*.js`.
 
+## Settings Page & Currency (v0.31)
+- **Settings overlay** (`settings.js` + CSS in `modals.css`): Centered modal with unit toggle (in/cm) and currency selector.
+- **Standard scale**: Both dashboard and equipment editor default to **5 px/in** (was 6 and 3 respectively).
+- **Currency system**: `CURRENCIES` object defines 12 currencies with symbol, placement (before/after), and decimals. `cFmt(value)` formats any number. `cSymbol()` returns just the symbol.
+- **Persistence**: All settings (unit, currency, scale, editor scale) saved to `localStorage` as `planogram_settings`. Loaded on `DOMContentLoaded`.
+- **Unit toggle moved** from header and equipment editor toolbar into Settings page. Hidden `#unitIn`/`#unitCm`/`#edUnitIn`/`#edUnitCm` elements kept in DOM for `setUnit()` compatibility.
+- **Header gear icon** (&#9881;) opens settings overlay. Clicks outside card or X button close it.
+
 ## Known Issues & TODOs
 - Fill target is 99% but achievable ~96% due to fractional inch gaps (product widths don't evenly divide shelf width).
 - `ComplianceReport` uses `.overall_pct` not `.overall_score` — always check attribute names.

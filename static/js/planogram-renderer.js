@@ -71,7 +71,7 @@ function renderPlanogram() {
                     if (blockHeight > 25) {
                         const priceEl = document.createElement('div');
                         priceEl.className = 'product-price';
-                        priceEl.textContent = '$' + product.price.toFixed(2);
+                        priceEl.textContent = cFmt(product.price);
                         block.appendChild(priceEl);
                     }
                 }

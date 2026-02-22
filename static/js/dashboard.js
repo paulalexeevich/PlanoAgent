@@ -39,9 +39,10 @@ function renderKpiCards() {
     const avgRevSpace = s.avg_revenue_per_space || 0;
     const revCard = document.getElementById('kpiRevSpace');
     revCard.className = `s-card clickable s-blue${activeKpi === 'revspace' ? ' active' : ''}`;
-    document.getElementById('kpiRevSpaceValue').textContent = '$' + avgRevSpace.toFixed(2);
+    document.getElementById('kpiRevSpaceLabel').textContent = 'Avg ' + cSymbol() + '/Space';
+    document.getElementById('kpiRevSpaceValue').textContent = cFmt(avgRevSpace);
     const totalRev = s.financials ? s.financials.total_revenue_potential : 0;
-    document.getElementById('kpiRevSpaceSub').textContent = `$${totalRev.toLocaleString()} total revenue`;
+    document.getElementById('kpiRevSpaceSub').textContent = cFmt(totalRev) + ' total revenue';
 
     const fillPct = s.space_utilization ? s.space_utilization.avg_shelf_fill_rate : 0;
     const spaceCard = document.getElementById('kpiSpaceUtil');
@@ -49,7 +50,7 @@ function renderKpiCards() {
     document.getElementById('kpiSpaceUtilValue').textContent = fillPct + '%';
     const usedIn = s.space_utilization ? s.space_utilization.total_space_used_in : 0;
     const availIn = s.space_utilization ? s.space_utilization.total_space_available_in : 0;
-    document.getElementById('kpiSpaceUtilSub').textContent = `${usedIn}" of ${availIn}" used`;
+    document.getElementById('kpiSpaceUtilSub').textContent = dFmt(usedIn) + ' of ' + dFmt(availIn) + ' used';
 
     const compPct = complianceData ? complianceData.overall_pct : 0;
     const compCard = document.getElementById('kpiCompliance');
@@ -174,7 +175,9 @@ function renderRevSpaceDetail() {
         return '<div class="s-section-title">Revenue per Space</div><div style="font-size:11px;color:var(--text-secondary);">No products placed yet</div>';
     }
 
-    let html = '<div class="s-section-title">Revenue per Space — Ranked by $/inch</div>';
+    const sym = cSymbol();
+    const spaceUnit = dUnit();
+    let html = '<div class="s-section-title">Revenue per Space — Ranked by ' + sym + '/' + spaceUnit + '</div>';
     html += `<table class="s-table">
         <thead><tr>
             <th class="rank-col">#</th>
@@ -183,7 +186,7 @@ function renderRevSpaceDetail() {
             <th class="right">Facings</th>
             <th class="right">Space</th>
             <th class="right">Revenue</th>
-            <th class="right">$/inch</th>
+            <th class="right">${sym}/${spaceUnit}</th>
         </tr></thead><tbody>`;
 
     skuList.forEach((sku, i) => {
@@ -193,9 +196,9 @@ function renderRevSpaceDetail() {
             <td>${sku.name}</td>
             <td style="color:var(--text-secondary)">${sku.brand}</td>
             <td class="right mono">${sku.facings}</td>
-            <td class="right mono">${sku.space_in.toFixed(1)}"</td>
-            <td class="right mono">$${sku.revenue.toFixed(2)}</td>
-            <td class="right mono" style="color:${revColor};font-weight:700">$${sku.revenue_per_space.toFixed(2)}</td>
+            <td class="right mono">${dFmt(sku.space_in)}</td>
+            <td class="right mono">${cFmt(sku.revenue)}</td>
+            <td class="right mono" style="color:${revColor};font-weight:700">${cFmt(sku.revenue_per_space)}</td>
         </tr>`;
     });
 

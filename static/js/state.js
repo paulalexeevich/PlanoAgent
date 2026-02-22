@@ -3,7 +3,8 @@
 let planogramData = null;
 let summaryData = null;
 let productsMap = {};
-let scale = 6; // pixels per inch
+let scale = 5; // pixels per inch
+let currency = 'USD'; // active currency code
 let useMetric = false; // false = inches, true = cm
 let equipmentGenerated = false; // true after Step 1
 let decisionTreeData = null;   // decision tree definition

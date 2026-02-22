@@ -29,6 +29,7 @@ function setUnit(unit) {
         updateEquipConfigUnits(wasMetric);
         updateEditorToolbarUnits(wasMetric);
     }
+    if (typeof saveSettings === 'function') saveSettings();
     if (planogramData) renderAll();
 }
 

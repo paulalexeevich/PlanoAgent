@@ -1,6 +1,6 @@
 /* EQUIPMENT EDITOR — Direct manipulation editor overlay (uses shared BayRenderer) */
 
-let EDITOR_SCALE = 3;
+let EDITOR_SCALE = 5;
 let editorState = null;
 let _edDrag = null;
 
@@ -23,6 +23,7 @@ function initEditorScaleSlider() {
     slider.addEventListener('input', (e) => {
         EDITOR_SCALE = parseFloat(e.target.value);
         syncEditorScaleUI();
+        if (typeof saveSettings === 'function') saveSettings();
         renderEditorBays();
     });
 }
