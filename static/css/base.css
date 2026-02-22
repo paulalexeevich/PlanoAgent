@@ -1,0 +1,171 @@
+/* BASE — Reset, Variables, Typography, Layout, Buttons, Forms */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --bg-dark: #0f1117;
+    --bg-card: #1a1d27;
+    --bg-shelf: #2a2d3a;
+    --border: #333648;
+    --text-primary: #e8eaed;
+    --text-secondary: #9aa0a6;
+    --accent: #4a9eff;
+    --accent-green: #34d399;
+    --accent-orange: #f59e0b;
+    --accent-red: #ef4444;
+    --shelf-metal: #5a5e70;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* HEADER */
+.header {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.header h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--accent);
+}
+.header h1 span { color: var(--text-secondary); font-weight: 400; }
+.header-actions { display: flex; gap: 12px; align-items: center; }
+
+/* LAYOUT */
+.app-layout {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 60px);
+}
+
+/* INPUT PANEL — 2-step form */
+.input-panel {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px 12px;
+}
+.equipment-config-panel {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.2s ease, margin 0.3s ease;
+    margin-top: 0;
+}
+.equipment-config-panel.open {
+    max-height: 700px;
+    opacity: 1;
+    margin-top: 10px;
+}
+.form-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+.config-actions {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.config-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.config-toggle:hover { border-color: var(--accent); color: var(--text-primary); }
+.config-toggle.active { border-color: var(--accent); color: var(--accent); background: rgba(74,158,255,0.08); }
+.config-toggle .toggle-caret {
+    font-size: 8px;
+    transition: transform 0.3s;
+}
+.config-toggle.active .toggle-caret { transform: rotate(180deg); }
+.form-group { display: flex; flex-direction: column; gap: 3px; }
+.form-group label {
+    font-size: 10px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+}
+.form-group select,
+.form-group input[type="number"] {
+    padding: 7px 10px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+    min-width: 80px;
+}
+.form-group select { min-width: 120px; }
+.form-group select:focus,
+.form-group input[type="number"]:focus { border-color: var(--accent); }
+.action-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+}
+.step-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    line-height: 1;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.step-label.s1 { background: rgba(74,158,255,0.15); color: var(--accent); }
+.step-label.s2 { background: rgba(52,211,153,0.15); color: var(--accent-green); }
+.action-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+    margin: 0 2px;
+    flex-shrink: 0;
+}
+.btn-green { background: var(--accent-green); color: #0f1117; font-weight: 600; }
+.btn-green:hover { background: #2bc48a; }
+.btn-green:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { background: #3a8eef; }
+.btn-secondary { background: var(--bg-shelf); color: var(--text-primary); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--border); }
