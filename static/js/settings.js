@@ -35,11 +35,19 @@ function setCurrency(code) {
     if (planogramData) renderAll();
 }
 
+function setFillMode(mode) {
+    fillMode = mode;
+    const sel = document.getElementById('fillMode');
+    if (sel) sel.value = mode;
+    saveSettings();
+}
+
 function openSettings() {
     const overlay = document.getElementById('settingsOverlay');
     document.getElementById('settingsUnitIn').classList.toggle('active', !useMetric);
     document.getElementById('settingsUnitCm').classList.toggle('active', useMetric);
     document.getElementById('settingsCurrency').value = currency;
+    document.getElementById('fillMode').value = fillMode || 'algorithm';
     overlay.classList.add('open');
 }
 
@@ -59,6 +67,7 @@ function saveSettings() {
         localStorage.setItem('planogram_settings', JSON.stringify({
             useMetric,
             currency,
+            fillMode,
             scale,
             editorScale: EDITOR_SCALE,
         }));
@@ -77,6 +86,11 @@ function loadSettings() {
         }
         if (s.currency && CURRENCIES[s.currency]) {
             currency = s.currency;
+        }
+        if (s.fillMode) {
+            fillMode = s.fillMode;
+            const sel = document.getElementById('fillMode');
+            if (sel) sel.value = fillMode;
         }
         if (typeof s.scale === 'number') {
             scale = s.scale;

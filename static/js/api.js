@@ -64,7 +64,7 @@ async function generateEquipment() {
 async function fillProducts() {
     if (!equipmentGenerated) return;
 
-    const mode = document.getElementById('fillMode').value;
+    const mode = fillMode || 'algorithm';
     const loadingMsg = mode === 'ai' ? 'Gemini AI is filling products...'
         : mode === 'compare' ? 'Running Algorithm + AI comparison...'
         : 'Algorithm is filling products...';
@@ -72,21 +72,18 @@ async function fillProducts() {
     setFillLoading(true);
     showLoading(true, loadingMsg);
     hideError();
-    document.getElementById('timingTag').textContent = '';
 
     try {
         const payload = { mode };
         if (planogramData && planogramData.equipment) {
             payload.equipment = planogramData.equipment;
         }
-        const t0 = performance.now();
         const res = await fetch('/api/fill-products', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         const data = await res.json();
-        const elapsed = Math.round(performance.now() - t0);
 
         if (data.status === 'error') {
             throw new Error(data.error || 'Fill products failed');
@@ -106,12 +103,6 @@ async function fillProducts() {
         complianceData = data.compliance || null;
         buildProductsMap();
         renderAll();
-
-        const serverMs = data.timings ? data.timings.total_ms : null;
-        const timingText = serverMs
-            ? `${(serverMs / 1000).toFixed(1)}s`
-            : `${(elapsed / 1000).toFixed(1)}s`;
-        document.getElementById('timingTag').textContent = timingText;
 
     } catch (err) {
         console.error('Fill products failed:', err);
@@ -138,7 +129,6 @@ async function removeProducts() {
         renderAll();
         equipmentGenerated = true;
         enableFillBtn(true);
-        document.getElementById('timingTag').textContent = '';
     } catch (err) {
         console.error('Remove products failed:', err);
         showError('Remove products failed: ' + err.message);

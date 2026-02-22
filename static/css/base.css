@@ -28,17 +28,20 @@ body {
 .header {
     background: var(--bg-card);
     border-bottom: 1px solid var(--border);
-    padding: 16px 24px;
+    padding: 12px 24px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 16px;
 }
 .header h1 {
     font-size: 20px;
     font-weight: 600;
     color: var(--accent);
+    white-space: nowrap;
 }
 .header h1 span { color: var(--text-secondary); font-weight: 400; }
+.header-controls { display: flex; gap: 8px; align-items: center; }
 .header-actions { display: flex; gap: 12px; align-items: center; }
 
 /* LAYOUT */
@@ -48,11 +51,15 @@ body {
     height: calc(100vh - 60px);
 }
 
-/* INPUT PANEL — 2-step form */
+/* INPUT PANEL — equipment config form */
 .input-panel {
     background: var(--bg-card);
+    padding: 0 24px;
+    overflow: hidden;
+}
+.input-panel:has(.equipment-config-panel.open) {
     border-bottom: 1px solid var(--border);
-    padding: 10px 24px 12px;
+    padding-bottom: 12px;
 }
 .equipment-config-panel {
     overflow: hidden;

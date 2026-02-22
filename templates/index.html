@@ -18,6 +18,17 @@
     <!-- HEADER -->
     <div class="header">
         <h1>Planogram Agent <span>/ Beer Category</span></h1>
+        <div class="header-controls">
+            <button class="config-toggle" id="configToggle" onclick="toggleConfig()">
+                <span>Equipment Config</span>
+                <span class="toggle-caret">&#9660;</span>
+            </button>
+            <button class="btn btn-green" id="fillBtn" onclick="fillProducts()" disabled>
+                <span id="fillLabel">Fill Products</span>
+                <span id="fillSpinner" style="display:none" class="btn-spinner"></span>
+            </button>
+            <button class="btn btn-secondary" onclick="removeProducts()">Remove Products</button>
+        </div>
         <div class="header-actions">
             <div class="scale-control">
                 <span>Scale:</span>
@@ -29,28 +40,8 @@
         </div>
     </div>
 
-    <!-- TWO-STEP INPUT PANEL -->
+    <!-- EQUIPMENT CONFIG PANEL -->
     <div class="input-panel">
-        <!-- Action Buttons -->
-        <div class="action-row">
-            <button class="config-toggle" id="configToggle" onclick="toggleConfig()">
-                <span>Equipment Config</span>
-                <span class="toggle-caret">&#9660;</span>
-            </button>
-            <div class="action-divider"></div>
-            <select id="fillMode" class="fill-mode-select">
-                <option value="algorithm">Algorithm</option>
-                <option value="ai">AI</option>
-                <option value="compare">Compare</option>
-            </select>
-            <button class="btn btn-green" id="fillBtn" onclick="fillProducts()" disabled>
-                <span id="fillLabel">Fill Products</span>
-                <span id="fillSpinner" style="display:none" class="btn-spinner"></span>
-            </button>
-            <div class="action-divider"></div>
-            <button class="btn btn-secondary" onclick="removeProducts()">Remove Products</button>
-            <span id="timingTag" class="timing-tag"></span>
-        </div>
         <!-- Equipment Config (hidden by default) -->
         <div class="equipment-config-panel" id="equipmentForm">
             <!-- Mode switch -->
@@ -299,6 +290,17 @@
                             <button id="settingsUnitIn" class="active" onclick="settingsSetUnit('in')">Inches</button>
                             <button id="settingsUnitCm" onclick="settingsSetUnit('cm')">Centimeters</button>
                         </div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">Fill Mode</div>
+                    <div class="settings-row">
+                        <span class="settings-label">Product fill engine</span>
+                        <select id="fillMode" class="settings-select" onchange="setFillMode(this.value)">
+                            <option value="algorithm">Algorithm</option>
+                            <option value="ai">AI</option>
+                            <option value="compare">Compare</option>
+                        </select>
                     </div>
                 </div>
                 <div class="settings-section">

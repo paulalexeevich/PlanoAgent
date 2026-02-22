@@ -92,31 +92,6 @@
 }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-/* FILL MODE SELECT */
-.fill-mode-select {
-    padding: 6px 10px;
-    font-size: 13px;
-    background: var(--surface);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    cursor: pointer;
-    flex-shrink: 0;
-}
-.fill-mode-select:focus { border-color: var(--accent); outline: none; }
-
-/* TIMING TAG */
-.timing-tag {
-    font-size: 11px;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-weight: 500;
-    letter-spacing: 0.3px;
-    background: rgba(100,100,100,0.15);
-    color: var(--muted);
-    white-space: nowrap;
-    flex-shrink: 0;
-}
 
 /* Config toggle uses shared .s-toggle from components.css */
 .equipment-config-panel .s-toggle {
