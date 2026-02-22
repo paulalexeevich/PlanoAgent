@@ -430,13 +430,28 @@ def _build_bay_groups(bays: list) -> list:
 
 def _build_virtual_shelves(bay_groups: list) -> list:
     """
-    For each bay-group, merge shelves at matching (y_position, height_in) into
-    virtual wide shelves.  Non-glued groups keep original per-bay shelves.
+    For each bay-group, merge shelves into virtual wide shelves so products
+    flow continuously across glued bays.
+
+    **Matching strategy (hybrid):**
+
+    1. *Index-based* (preferred): When all bays in a group have the **same
+       number of shelves**, match by ``shelf_number``.  This correctly handles
+       bays whose shelves sit at different y-positions (different clearances)
+       — which is extremely common in real fixtures.
+
+    2. *Position-based* (fallback): When bay shelf counts differ, fall back
+       to matching by ``(y_position ±_YPOS_TOLERANCE, height_in ±_HEIGHT_TOLERANCE)``.
+       Any still-unmatched shelves become standalone virtual shelves.
+
+    The virtual shelf ``height`` is the **minimum** clearance across all
+    merged physical shelves so that product height checks remain valid
+    everywhere.
 
     Returns a list of virtual shelf dicts:
         {
-            "width":  total merged width,
-            "height": clearance height (common to all merged shelves),
+            "width":   total merged width,
+            "height":  min clearance across merged shelves,
             "sources": [(bay_dict, shelf_dict), ...] in left-to-right order,
         }
     sorted bottom-to-top, group-by-group (compliance walk order).
@@ -454,30 +469,61 @@ def _build_virtual_shelves(bay_groups: list) -> list:
                     "sources": [(bay, shelf)],
                 })
         else:
-            # Collect all shelves, keyed by (y_position ≈ , height_in ≈)
-            rows: dict = OrderedDict()
-            for bay in group:
-                for shelf in sorted(bay.get("shelves", []),
-                                    key=lambda s: s.get("shelf_number", 0)):
-                    y = shelf.get("y_position", 0)
-                    h = shelf.get("height_in", 12)
-                    matched = False
-                    for key in rows:
-                        ky, kh = key
-                        if abs(y - ky) <= _YPOS_TOLERANCE and abs(h - kh) <= _HEIGHT_TOLERANCE:
-                            rows[key].append((bay, shelf))
-                            matched = True
-                            break
-                    if not matched:
-                        rows[(y, h)] = [(bay, shelf)]
+            shelf_counts = [len(b.get("shelves", [])) for b in group]
+            all_same_count = len(set(shelf_counts)) == 1
 
-            for (y, h), sources in sorted(rows.items(), key=lambda kv: kv[0][0]):
-                total_w = sum(s.get("width_in", 48) for _, s in sources)
-                virtual.append({
-                    "width":   total_w,
-                    "height":  h,
-                    "sources": sources,
-                })
+            if all_same_count:
+                # ── Index-based matching ──
+                n_shelves = shelf_counts[0]
+                bay_sorted_shelves = []
+                for bay in group:
+                    bay_sorted_shelves.append(
+                        sorted(bay.get("shelves", []),
+                               key=lambda s: s.get("shelf_number", 0))
+                    )
+
+                for si in range(n_shelves):
+                    sources = []
+                    min_h = float("inf")
+                    for bi, bay in enumerate(group):
+                        shelf = bay_sorted_shelves[bi][si]
+                        sources.append((bay, shelf))
+                        h = shelf.get("height_in", 12)
+                        if h < min_h:
+                            min_h = h
+
+                    total_w = sum(s.get("width_in", 48) for _, s in sources)
+                    virtual.append({
+                        "width":   total_w,
+                        "height":  min_h,
+                        "sources": sources,
+                    })
+            else:
+                # ── Position-based matching (different shelf counts) ──
+                rows: dict = OrderedDict()
+                for bay in group:
+                    for shelf in sorted(bay.get("shelves", []),
+                                        key=lambda s: s.get("shelf_number", 0)):
+                        y = shelf.get("y_position", 0)
+                        h = shelf.get("height_in", 12)
+                        matched = False
+                        for key in rows:
+                            ky, kh = key
+                            if abs(y - ky) <= _YPOS_TOLERANCE and abs(h - kh) <= _HEIGHT_TOLERANCE:
+                                rows[key].append((bay, shelf))
+                                matched = True
+                                break
+                        if not matched:
+                            rows[(y, h)] = [(bay, shelf)]
+
+                for (y, h), sources in sorted(rows.items(), key=lambda kv: kv[0][0]):
+                    total_w = sum(s.get("width_in", 48) for _, s in sources)
+                    min_h = min(s.get("height_in", 12) for _, s in sources)
+                    virtual.append({
+                        "width":   total_w,
+                        "height":  min_h,
+                        "sources": sources,
+                    })
 
     return virtual
 
