@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchPlanogram();
     document.getElementById('scaleSlider').addEventListener('input', (e) => {
         scale = parseFloat(e.target.value);
-        document.getElementById('scaleValue').textContent = scale + 'px/in';
+        document.getElementById('scaleValue').textContent = scale + 'px/' + dUnit();
         if (planogramData) renderPlanogram();
     });
     document.getElementById('eqBays').addEventListener('input', () => {
@@ -42,4 +42,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     initEditorDragHandlers();
+    initEditorScaleSlider();
 });

@@ -18,8 +18,38 @@ function setUnit(unit) {
     useMetric = (unit === 'cm');
     document.getElementById('unitIn').classList.toggle('active', !useMetric);
     document.getElementById('unitCm').classList.toggle('active', useMetric);
-    if (wasMetric !== useMetric) updateEquipConfigUnits(wasMetric);
+    const edIn = document.getElementById('edUnitIn');
+    const edCm = document.getElementById('edUnitCm');
+    if (edIn) edIn.classList.toggle('active', !useMetric);
+    if (edCm) edCm.classList.toggle('active', useMetric);
+    updateScaleLabels();
+    if (typeof syncEditorUnitLabels === 'function') syncEditorUnitLabels();
+    if (typeof syncEditorScaleUI === 'function') syncEditorScaleUI();
+    if (wasMetric !== useMetric) {
+        updateEquipConfigUnits(wasMetric);
+        updateEditorToolbarUnits(wasMetric);
+    }
     if (planogramData) renderAll();
+}
+
+function updateScaleLabels() {
+    const u = 'px/' + dUnit();
+    document.getElementById('scaleValue').textContent = scale + u;
+    const edLabel = document.getElementById('edScaleValue');
+    if (edLabel && typeof EDITOR_SCALE !== 'undefined') edLabel.textContent = EDITOR_SCALE + u;
+}
+
+function updateEditorToolbarUnits(wasMetric) {
+    const factor = useMetric ? IN_TO_CM : (1 / IN_TO_CM);
+    convertInputValue('edEqHeight', factor);
+    convertInputValue('edEqDepth', factor);
+    if (useMetric) {
+        setInputConstraints('edEqHeight', 60, 305, 1);
+        setInputConstraints('edEqDepth', 15, 122, 1);
+    } else {
+        setInputConstraints('edEqHeight', 24, 120, 1);
+        setInputConstraints('edEqDepth', 6, 48, 1);
+    }
 }
 
 function updateEquipConfigUnits(wasMetric) {

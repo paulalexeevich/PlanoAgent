@@ -5,9 +5,26 @@ let editorState = null;
 let _edDrag = null;
 
 function editorZoom(dir) {
-    EDITOR_SCALE = Math.max(1, Math.min(8, EDITOR_SCALE + dir));
-    document.getElementById('edZoomLabel').textContent = EDITOR_SCALE + ' px/in';
+    EDITOR_SCALE = Math.max(1, Math.min(8, EDITOR_SCALE + dir * 0.5));
+    syncEditorScaleUI();
     renderEditorBays();
+}
+
+function syncEditorScaleUI() {
+    const slider = document.getElementById('edScaleSlider');
+    const label = document.getElementById('edScaleValue');
+    if (slider) slider.value = EDITOR_SCALE;
+    if (label) label.textContent = EDITOR_SCALE + 'px/' + dUnit();
+}
+
+function initEditorScaleSlider() {
+    const slider = document.getElementById('edScaleSlider');
+    if (!slider) return;
+    slider.addEventListener('input', (e) => {
+        EDITOR_SCALE = parseFloat(e.target.value);
+        syncEditorScaleUI();
+        renderEditorBays();
+    });
 }
 
 function _defaultEditorState() {
@@ -114,7 +131,7 @@ function _edStartHeight(e, bayIdx, shelfIdx) {
     e.preventDefault();
     const bay = editorState.bays[bayIdx];
     if (!bay.shelf_clearances) {
-        const h = parseFloat(document.getElementById('edEqHeight').value) || 72;
+        const h = _edHeightIn();
         const even = Math.round(h / bay.num_shelves);
         bay.shelf_clearances = Array(bay.num_shelves).fill(even);
     }
@@ -136,7 +153,7 @@ function _edLiveWidth(bayIdx) {
     const bay = editorState.bays[bayIdx];
     const w   = bay.width_in;
     const wpx = w * EDITOR_SCALE;
-    const heightIn = parseFloat(document.getElementById('edEqHeight').value) || 72;
+    const heightIn = _edHeightIn();
     const wrapper = document.querySelector(`.eq-bay-wrapper[data-idx="${bayIdx}"]`);
     if (!wrapper) return;
 
@@ -180,13 +197,33 @@ function _edLiveShelfH(bayIdx) {
 function openEquipmentEditor() {
     initEditorState();
     document.getElementById('edEqType').value = editorState.equipment_type;
-    document.getElementById('edEqHeight').value = editorState.height_in;
-    document.getElementById('edEqDepth').value = editorState.depth_in;
+    document.getElementById('edEqHeight').value = useMetric ? d(editorState.height_in) : editorState.height_in;
+    document.getElementById('edEqDepth').value = useMetric ? d(editorState.depth_in) : editorState.depth_in;
     document.getElementById('edBayCount').textContent = editorState.bays.length;
     document.getElementById('edRemoveBayBtn').disabled = editorState.bays.length <= 1;
     toggleAllBaysPopover(false);
+    syncEditorUnitToggle();
+    syncEditorScaleUI();
+    syncEditorUnitLabels();
     renderEditorBays();
     document.getElementById('eqEditorOverlay').classList.add('open');
+}
+
+function syncEditorUnitToggle() {
+    document.getElementById('edUnitIn').classList.toggle('active', !useMetric);
+    document.getElementById('edUnitCm').classList.toggle('active', useMetric);
+}
+
+function syncEditorUnitLabels() {
+    const u = dUnit();
+    document.querySelectorAll('.ed-unit-label').forEach(el => { el.textContent = u; });
+    const abpLabel = document.getElementById('abpWidthLabel');
+    if (abpLabel) abpLabel.textContent = `Width (${u})`;
+}
+
+function _edHeightIn() {
+    const raw = parseFloat(document.getElementById('edEqHeight').value) || 72;
+    return useMetric ? raw / IN_TO_CM : raw;
 }
 
 function closeEquipmentEditor() {
@@ -197,7 +234,7 @@ function closeEquipmentEditor() {
 function renderEditorBays() {
     const container = document.getElementById('editorBaysContainer');
     container.innerHTML = '';
-    const heightIn = parseFloat(document.getElementById('edEqHeight').value) || editorState.height_in || 72;
+    const heightIn = _edHeightIn();
 
     editorState.bays.forEach((bay, idx) => {
         const numShelves = bay.num_shelves || 5;
@@ -325,8 +362,7 @@ function editorAddShelf(bayIdx) {
     const bay = editorState.bays[bayIdx];
     const newCount = Math.min(12, (bay.num_shelves || 5) + 1);
     if (newCount === bay.num_shelves) return;
-    const heightIn = parseFloat(document.getElementById('edEqHeight').value) || 72;
-    _redistributeClearances(bay, newCount, heightIn);
+    _redistributeClearances(bay, newCount, _edHeightIn());
     renderEditorBays();
 }
 
@@ -334,7 +370,7 @@ function editorRemoveShelf(bayIdx) {
     const bay = editorState.bays[bayIdx];
     const newCount = Math.max(1, (bay.num_shelves || 5) - 1);
     if (newCount === bay.num_shelves) return;
-    const heightIn = parseFloat(document.getElementById('edEqHeight').value) || 72;
+    const heightIn = _edHeightIn();
     _redistributeClearances(bay, newCount, heightIn);
     renderEditorBays();
 }
@@ -388,8 +424,8 @@ function applyAllBaysConfig() {
 
 async function applyEquipmentEditor() {
     editorState.equipment_type = document.getElementById('edEqType').value;
-    editorState.height_in = parseFloat(document.getElementById('edEqHeight').value) || 72;
-    editorState.depth_in = parseFloat(document.getElementById('edEqDepth').value) || 24;
+    editorState.height_in = toInches(document.getElementById('edEqHeight').value) || 72;
+    editorState.depth_in = toInches(document.getElementById('edEqDepth').value) || 24;
 
     const config = {
         equipment_type: editorState.equipment_type,
