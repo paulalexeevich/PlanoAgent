@@ -96,6 +96,17 @@
 - **Git author email must match Vercel team**: CLI checks commit author. Workaround: deploy from a temp directory without `.git/` folder using `rsync --exclude .git` + copy `.vercel/` config. This bypasses the author check.
 - **Deploy command**: `rsync` to `/tmp/plano-deploy`, copy `.vercel/`, then `npx vercel --prod --yes`.
 
+## Visualization Layer System (v0.10)
+- **Layer selector**: Pill buttons above planogram — "Products" always visible; DT level buttons (Segment/Style/Package/Brand) injected dynamically from `decisionTreeData.levels` when compliance data is available.
+- **Products mode**: Product `color_hex`, brand name, price label, segment overlay bands (using `_addGroupBand` + `buildSegmentMap()`).
+- **DT layer modes** (`dt-0` … `dt-N`): Product blocks colored by group value at that level; label shows group name; segment bands hidden.
+- **`dtPositionMap`**: Built from `complianceData.position_groups` — maps `product_id → {LevelName: groupValue}`. Rebuilt every `renderAll()` call.
+- **Color palettes**: Pre-defined for Segment (4 colors) and Package (4 colors). Auto-generated for Style, Brand (15-color wheel, sorted group names → deterministic). `DT_KNOWN_PALETTES` + `DT_AUTO_COLORS` constants.
+- **Legend**: `renderLayerLegend(levelName, palette)` fills `#dtLegend` with color swatches. Empty in Products mode.
+- **`setLayer(layer)`**: Sets `currentLayer`, syncs button `.active` classes, calls `renderPlanogram()` only (fast, no API call).
+- **`updateLayerSelector()`**: Removes old `.dt-btn` elements and re-inserts from tree definition; validates `currentLayer` still exists after data changes.
+- **Screenshot timing**: Browser screenshots may lag by one frame after click — always take a second screenshot to confirm the current state.
+
 ## Known Issues & TODOs
 - Fill target is 99% but achievable ~96% due to fractional inch gaps (product widths don't evenly divide shelf width).
 - `ComplianceReport` uses `.overall_pct` not `.overall_score` — always check attribute names.
