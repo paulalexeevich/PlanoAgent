@@ -1118,15 +1118,15 @@
                     <input type="number" id="eqShelves" value="5" min="1" max="10" style="width:60px">
                 </div>
                 <div class="form-group">
-                    <label>Bay Width (in)</label>
+                    <label id="labelEqWidth">Bay Width (in)</label>
                     <input type="number" id="eqWidth" value="48" min="12" max="120" step="1" style="width:70px">
                 </div>
                 <div class="form-group">
-                    <label>Bay Height (in)</label>
+                    <label id="labelEqHeight">Bay Height (in)</label>
                     <input type="number" id="eqHeight" value="72" min="24" max="120" step="1" style="width:70px">
                 </div>
                 <div class="form-group">
-                    <label>Bay Depth (in)</label>
+                    <label id="labelEqDepth">Bay Depth (in)</label>
                     <input type="number" id="eqDepth" value="24" min="6" max="48" step="1" style="width:70px">
                 </div>
             </div>
@@ -1141,16 +1141,16 @@
                         <thead>
                             <tr>
                                 <th>Bay</th>
-                                <th>Width (in)</th>
+                                <th id="thBayWidth">Width (in)</th>
                                 <th>Shelves</th>
-                                <th>Shelf Heights (in, comma-sep)</th>
+                                <th id="thShelfHeights">Shelf Heights (in, comma-sep)</th>
                             </tr>
                         </thead>
                         <tbody id="bayConfigTableBody"></tbody>
                     </table>
                 </div>
-                <div class="bay-config-hint">
-                    Shelf Heights = usable clearance per shelf slot (e.g. <code style="font-size:9px;color:var(--accent)">12,14,16,14,12</code>). Leave blank for even distribution.
+                <div class="bay-config-hint" id="bayConfigHint">
+                    Shelf Heights = usable clearance per shelf slot (e.g. <code style="font-size:9px;color:var(--accent)" id="bayConfigHintExample">12,14,16,14,12</code>). Leave blank for even distribution.
                 </div>
             </div>
 
@@ -1326,10 +1326,75 @@
             return (inches * IN_TO_M).toFixed(2) + ' m';
         }
         function setUnit(unit) {
+            const wasMetric = useMetric;
             useMetric = (unit === 'cm');
             document.getElementById('unitIn').classList.toggle('active', !useMetric);
             document.getElementById('unitCm').classList.toggle('active', useMetric);
+            if (wasMetric !== useMetric) updateEquipConfigUnits(wasMetric);
             if (planogramData) renderAll();
+        }
+
+        function updateEquipConfigUnits(wasMetric) {
+            const toIn = 1 / IN_TO_CM;
+            const toCm = IN_TO_CM;
+            const factor = useMetric ? toCm : toIn;
+            const u = useMetric ? 'cm' : 'in';
+
+            // Update labels
+            document.getElementById('labelEqWidth').textContent = `Bay Width (${u})`;
+            document.getElementById('labelEqHeight').textContent = `Bay Height (${u})`;
+            document.getElementById('labelEqDepth').textContent = `Bay Depth (${u})`;
+            document.getElementById('thBayWidth').textContent = `Width (${u})`;
+            document.getElementById('thShelfHeights').textContent = `Shelf Heights (${u}, comma-sep)`;
+
+            // Update min/max/step for dimensional inputs
+            if (useMetric) {
+                setInputConstraints('eqWidth',  30, 305, 1);
+                setInputConstraints('eqHeight', 60, 305, 1);
+                setInputConstraints('eqDepth',  15, 122, 1);
+            } else {
+                setInputConstraints('eqWidth',  12, 120, 1);
+                setInputConstraints('eqHeight', 24, 120, 1);
+                setInputConstraints('eqDepth',   6,  48, 1);
+            }
+
+            // Convert main input values
+            convertInputValue('eqWidth', factor);
+            convertInputValue('eqHeight', factor);
+            convertInputValue('eqDepth', factor);
+
+            // Update per-bay config table if visible
+            document.querySelectorAll('#bayConfigTableBody .bay-config-row').forEach(row => {
+                const wInput = row.querySelector('.bay-width-input');
+                const hInput = row.querySelector('.bay-heights-input');
+                if (wInput && wInput.value) {
+                    wInput.value = +(parseFloat(wInput.value) * factor).toFixed(1);
+                    if (useMetric) { wInput.min = 30; wInput.max = 305; }
+                    else           { wInput.min = 12; wInput.max = 120; }
+                }
+                if (hInput && hInput.value.trim()) {
+                    hInput.value = hInput.value.split(',')
+                        .map(v => { const n = parseFloat(v.trim()); return isNaN(n) ? '' : +(n * factor).toFixed(1); })
+                        .filter(v => v !== '')
+                        .join(',');
+                }
+            });
+
+            // Update hint example
+            const examples = useMetric ? '30,36,41,36,30' : '12,14,16,14,12';
+            document.getElementById('bayConfigHintExample').textContent = examples;
+        }
+
+        function setInputConstraints(id, min, max, step) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.min = min; el.max = max; el.step = step;
+        }
+
+        function convertInputValue(id, factor) {
+            const el = document.getElementById(id);
+            if (!el || !el.value) return;
+            el.value = +(parseFloat(el.value) * factor).toFixed(1);
         }
 
         // ============================================================
@@ -1405,11 +1470,13 @@
                 const s = old ? old.querySelector('.bay-shelves-input').value : defShelves;
                 const h = old ? old.querySelector('.bay-heights-input').value : '';
 
+                const wMin = useMetric ? 30 : 12;
+                const wMax = useMetric ? 305 : 120;
                 const tr = document.createElement('tr');
                 tr.className = 'bay-config-row';
                 tr.innerHTML = `
                     <td class="bay-num">B${i + 1}</td>
-                    <td><input type="number" class="bay-width-input" value="${w}" min="12" max="120" step="1"></td>
+                    <td><input type="number" class="bay-width-input" value="${w}" min="${wMin}" max="${wMax}" step="1"></td>
                     <td><input type="number" class="bay-shelves-input" value="${s}" min="1" max="12"></td>
                     <td><input type="text" class="bay-heights-input" value="${h}" placeholder="auto" title="Clearance height per shelf, e.g. 12,14,16,14,12"></td>
                 `;
@@ -1429,11 +1496,16 @@
             if (rows.length === 0) return null;
 
             return Array.from(rows).map(row => {
-                const width = parseFloat(row.querySelector('.bay-width-input').value);
+                const widthRaw = parseFloat(row.querySelector('.bay-width-input').value);
                 const shelves = parseInt(row.querySelector('.bay-shelves-input').value);
                 const heightsStr = row.querySelector('.bay-heights-input').value.trim();
+                const width = isNaN(widthRaw) ? NaN : (useMetric ? +(widthRaw / IN_TO_CM).toFixed(2) : widthRaw);
                 const clearances = heightsStr
-                    ? heightsStr.split(',').map(h => parseFloat(h.trim())).filter(h => !isNaN(h) && h > 0)
+                    ? heightsStr.split(',').map(h => {
+                        const n = parseFloat(h.trim());
+                        if (isNaN(n) || n <= 0) return null;
+                        return useMetric ? +(n / IN_TO_CM).toFixed(2) : n;
+                    }).filter(h => h !== null)
                     : null;
                 return {
                     width_in: isNaN(width) ? null : width,
@@ -1443,15 +1515,22 @@
             });
         }
 
+        // Convert a displayed dimension value back to inches for the API
+        function toInches(val) {
+            const n = parseFloat(val);
+            if (isNaN(n)) return val;
+            return useMetric ? +(n / IN_TO_CM).toFixed(2) : n;
+        }
+
         // ── STEP 1: Generate empty equipment ──────────────────────
         async function generateEquipment() {
             const config = {
                 equipment_type: document.getElementById('eqType').value,
                 num_bays: document.getElementById('eqBays').value,
                 num_shelves: document.getElementById('eqShelves').value,
-                bay_width: document.getElementById('eqWidth').value,
-                bay_height: document.getElementById('eqHeight').value,
-                bay_depth: document.getElementById('eqDepth').value,
+                bay_width: toInches(document.getElementById('eqWidth').value),
+                bay_height: toInches(document.getElementById('eqHeight').value),
+                bay_depth: toInches(document.getElementById('eqDepth').value),
                 bays_config: collectBaysConfig(),
             };
 
