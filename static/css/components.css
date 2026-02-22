@@ -1,0 +1,376 @@
+/* SHARED COMPONENTS — Reusable across Dashboard, Equipment Config, and Editor */
+
+/* ============================================================
+   CARD GRID
+   ============================================================ */
+.s-card-grid { display: grid; gap: 12px; }
+.s-card-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.s-card-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.s-card-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+
+/* ============================================================
+   CARD — Info / stat card
+   ============================================================ */
+.s-card {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    transition: all 0.2s ease;
+    position: relative;
+    user-select: none;
+}
+.s-card.clickable { cursor: pointer; }
+.s-card.clickable:hover {
+    border-color: var(--accent);
+    background: rgba(74, 158, 255, 0.04);
+}
+.s-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+.s-card-expand {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.s-card.clickable:hover .s-card-expand { opacity: 0.6; }
+.s-card.active .s-card-expand { opacity: 1; transform: rotate(180deg); }
+
+.s-card-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+.s-card-value {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 4px;
+}
+.s-card-sub {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+/* Compact variant */
+.s-card.compact { padding: 12px 14px; }
+.s-card.compact .s-card-value {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+/* Card color modifiers */
+.s-green .s-card-value { color: var(--accent-green); }
+.s-orange .s-card-value { color: var(--accent-orange); }
+.s-blue .s-card-value { color: var(--accent); }
+.s-red .s-card-value { color: var(--accent-red); }
+.s-yellow .s-card-value { color: #facc15; }
+
+/* ============================================================
+   PANEL — Collapsible panel
+   ============================================================ */
+.s-panel {
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+.s-panel.collapsed { max-height: 40px; }
+.s-panel.collapsed .s-panel-body { display: none; }
+.s-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid var(--border);
+}
+.s-panel-header h3 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.s-panel-icon {
+    font-size: 14px;
+    color: var(--text-secondary);
+    transition: transform 0.3s;
+}
+.s-panel.collapsed .s-panel-icon { transform: rotate(180deg); }
+.s-panel-body {
+    padding: 12px 16px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+/* ============================================================
+   DETAIL — Expandable detail section
+   ============================================================ */
+.s-detail {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    background: var(--bg-dark);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    margin-top: 0;
+}
+.s-detail.open {
+    max-height: 300px;
+    margin-top: 12px;
+    border-color: var(--border);
+    padding: 14px 18px;
+    overflow-y: auto;
+}
+
+/* ============================================================
+   SECTION TITLE
+   ============================================================ */
+.s-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+}
+
+/* ============================================================
+   TABLE — Data table
+   ============================================================ */
+.s-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+.s-table th {
+    text-align: left;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 8px 6px;
+    border-bottom: 1px solid var(--border);
+}
+.s-table th.right { text-align: right; }
+.s-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid rgba(51,54,72,0.4);
+    color: var(--text-primary);
+}
+.s-table td.right { text-align: right; }
+.s-table td.mono {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 10px;
+}
+.s-table tr:last-child td { border-bottom: none; }
+.s-table .rank-col {
+    width: 30px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+.s-table .s-status-good {
+    color: var(--accent-green);
+    font-weight: 600;
+}
+.s-table .s-status-bad {
+    color: var(--accent-red);
+    font-weight: 600;
+}
+
+/* ============================================================
+   FILL BAR — Progress / fill indicators
+   ============================================================ */
+.s-fill-bar {
+    height: 4px;
+    background: var(--bg-card);
+    border-radius: 2px;
+    overflow: hidden;
+    min-width: 60px;
+}
+.s-fill-bar-inner {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+.s-fill-good { background: var(--accent-green); }
+.s-fill-warn { background: var(--accent-orange); }
+.s-fill-low { background: var(--accent-red); }
+
+.s-fill-bar.lg { height: 6px; border-radius: 3px; }
+.s-fill-bar.lg .s-fill-bar-inner { border-radius: 3px; }
+
+/* ============================================================
+   TOGGLE — Segmented control
+   ============================================================ */
+.s-toggle {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    font-size: 11px;
+}
+.s-toggle button {
+    padding: 5px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    transition: all 0.15s;
+}
+.s-toggle button.active {
+    background: var(--accent);
+    color: white;
+}
+.s-toggle button:not(.active):hover {
+    background: var(--bg-shelf);
+    color: var(--text-primary);
+}
+.s-toggle-divider {
+    width: 1px;
+    background: var(--border);
+}
+
+/* ============================================================
+   TOOLBAR — Horizontal control bar
+   ============================================================ */
+.s-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.s-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.s-toolbar-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+}
+.s-toolbar-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+    margin: 0 4px;
+}
+.s-toolbar-input {
+    padding: 5px 8px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    width: 68px;
+}
+.s-toolbar-input:focus { border-color: var(--accent); }
+.s-toolbar-select {
+    padding: 5px 8px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    min-width: 110px;
+}
+.s-toolbar-select:focus { border-color: var(--accent); }
+.s-toolbar-unit {
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+/* ============================================================
+   METRIC ROW — Labeled bar + percentage (compliance, etc.)
+   ============================================================ */
+.s-metric-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(51,54,72,0.4);
+}
+.s-metric-row:last-child { border-bottom: none; }
+.s-metric-name {
+    width: 80px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.s-metric-bar {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-card);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.s-metric-bar-inner {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+.s-metric-pct {
+    width: 45px;
+    text-align: right;
+    font-size: 12px;
+    font-weight: 700;
+}
+.s-metric-detail {
+    width: 80px;
+    text-align: right;
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+/* ============================================================
+   UPLOAD ROW
+   ============================================================ */
+.s-upload-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.s-upload-btn {
+    padding: 4px 12px;
+    font-size: 10px;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.15s;
+}
+.s-upload-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.s-upload-info {
+    font-size: 10px;
+    color: var(--text-secondary);
+}

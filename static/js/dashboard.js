@@ -17,7 +17,6 @@ function renderKpiCards() {
     const s = summaryData;
     if (!s) return;
 
-    // 1. Assortment %
     const assort = s.assortment || {};
     let assortPct, assortPlaced, assortTotal;
 
@@ -33,36 +32,33 @@ function renderKpiCards() {
     }
 
     const assortCard = document.getElementById('kpiAssortment');
-    assortCard.className = `kpi-card ${kpiColorClass(assortPct)}${activeKpi === 'assortment' ? ' active' : ''}`;
+    assortCard.className = `s-card clickable ${kpiColorClass(assortPct)}${activeKpi === 'assortment' ? ' active' : ''}`;
     document.getElementById('kpiAssortmentValue').textContent = assortPct + '%';
     document.getElementById('kpiAssortmentSub').textContent = `${assortPlaced} of ${assortTotal} SKUs placed`;
 
-    // 2. Avg $/Space
     const avgRevSpace = s.avg_revenue_per_space || 0;
     const revCard = document.getElementById('kpiRevSpace');
-    revCard.className = `kpi-card kpi-blue${activeKpi === 'revspace' ? ' active' : ''}`;
+    revCard.className = `s-card clickable s-blue${activeKpi === 'revspace' ? ' active' : ''}`;
     document.getElementById('kpiRevSpaceValue').textContent = '$' + avgRevSpace.toFixed(2);
     const totalRev = s.financials ? s.financials.total_revenue_potential : 0;
     document.getElementById('kpiRevSpaceSub').textContent = `$${totalRev.toLocaleString()} total revenue`;
 
-    // 3. Space Utilization %
     const fillPct = s.space_utilization ? s.space_utilization.avg_shelf_fill_rate : 0;
     const spaceCard = document.getElementById('kpiSpaceUtil');
-    spaceCard.className = `kpi-card ${kpiColorClass(fillPct)}${activeKpi === 'spaceutil' ? ' active' : ''}`;
+    spaceCard.className = `s-card clickable ${kpiColorClass(fillPct)}${activeKpi === 'spaceutil' ? ' active' : ''}`;
     document.getElementById('kpiSpaceUtilValue').textContent = fillPct + '%';
     const usedIn = s.space_utilization ? s.space_utilization.total_space_used_in : 0;
     const availIn = s.space_utilization ? s.space_utilization.total_space_available_in : 0;
     document.getElementById('kpiSpaceUtilSub').textContent = `${usedIn}" of ${availIn}" used`;
 
-    // 4. DT Compliance %
     const compPct = complianceData ? complianceData.overall_pct : 0;
     const compCard = document.getElementById('kpiCompliance');
     if (!complianceData) {
-        compCard.className = `kpi-card${activeKpi === 'compliance' ? ' active' : ''}`;
+        compCard.className = `s-card clickable${activeKpi === 'compliance' ? ' active' : ''}`;
         document.getElementById('kpiComplianceValue').textContent = '--';
         document.getElementById('kpiComplianceSub').textContent = 'Fill products to see compliance';
     } else {
-        compCard.className = `kpi-card ${kpiColorClass(compPct)}${activeKpi === 'compliance' ? ' active' : ''}`;
+        compCard.className = `s-card clickable ${kpiColorClass(compPct)}${activeKpi === 'compliance' ? ' active' : ''}`;
         document.getElementById('kpiComplianceValue').textContent = compPct + '%';
         const totalBreaks = complianceData.levels.reduce((s, l) => s + l.break_count, 0);
         document.getElementById('kpiComplianceSub').textContent = totalBreaks === 0 ? 'Perfect grouping' : `${totalBreaks} break(s) detected`;
@@ -75,12 +71,12 @@ function toggleKpiDetail(kpiId) {
         activeKpi = null;
         panel.classList.remove('open');
         panel.innerHTML = '';
-        document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('#bottomPanel .s-card').forEach(c => c.classList.remove('active'));
     } else {
         activeKpi = kpiId;
         panel.classList.add('open');
         renderKpiDetailContent(kpiId);
-        document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('#bottomPanel .s-card').forEach(c => c.classList.remove('active'));
         document.getElementById({
             'assortment': 'kpiAssortment',
             'revspace': 'kpiRevSpace',
@@ -107,16 +103,16 @@ function renderAssortmentDetail() {
     const assort = summaryData.assortment || {};
     const placedIds = new Set(assort.placed_ids || []);
 
-    let html = '<div class="kpi-detail-title">Assortment Tracking</div>';
+    let html = '<div class="s-section-title">Assortment Tracking</div>';
 
-    html += `<div class="assortment-upload-row">
-        <button class="assortment-upload-btn" onclick="document.getElementById('assortmentFileInput').click()">
+    html += `<div class="s-upload-row">
+        <button class="s-upload-btn" onclick="document.getElementById('assortmentFileInput').click()">
             Upload SKU List
         </button>
-        <span class="assortment-upload-info" id="assortmentUploadInfo">
+        <span class="s-upload-info" id="assortmentUploadInfo">
             ${customAssortmentList ? customAssortmentList.length + ' custom SKUs loaded' : 'Using full catalog (' + (assort.total_catalog || 0) + ' SKUs)'}
         </span>
-        ${customAssortmentList ? '<button class="assortment-upload-btn" onclick="clearAssortmentList()" style="color:var(--accent-red);border-color:var(--accent-red);">Clear</button>' : ''}
+        ${customAssortmentList ? '<button class="s-upload-btn" onclick="clearAssortmentList()" style="color:var(--accent-red);border-color:var(--accent-red);">Clear</button>' : ''}
     </div>`;
 
     let items = [];
@@ -149,7 +145,7 @@ function renderAssortmentDetail() {
 
     items.sort((a, b) => (a.placed === b.placed) ? 0 : a.placed ? 1 : -1);
 
-    html += `<table class="kpi-detail-table">
+    html += `<table class="s-table">
         <thead><tr>
             <th>Status</th>
             <th>Product</th>
@@ -158,7 +154,7 @@ function renderAssortmentDetail() {
         </tr></thead><tbody>`;
 
     items.forEach(item => {
-        const statusClass = item.placed ? 'status-placed' : 'status-missing';
+        const statusClass = item.placed ? 's-status-good' : 's-status-bad';
         const statusText = item.placed ? 'Placed' : 'Missing';
         html += `<tr>
             <td class="${statusClass}">${statusText}</td>
@@ -175,11 +171,11 @@ function renderAssortmentDetail() {
 function renderRevSpaceDetail() {
     const skuList = summaryData.sku_space_analysis || [];
     if (skuList.length === 0) {
-        return '<div class="kpi-detail-title">Revenue per Space</div><div style="font-size:11px;color:var(--text-secondary);">No products placed yet</div>';
+        return '<div class="s-section-title">Revenue per Space</div><div style="font-size:11px;color:var(--text-secondary);">No products placed yet</div>';
     }
 
-    let html = '<div class="kpi-detail-title">Revenue per Space — Ranked by $/inch</div>';
-    html += `<table class="kpi-detail-table">
+    let html = '<div class="s-section-title">Revenue per Space — Ranked by $/inch</div>';
+    html += `<table class="s-table">
         <thead><tr>
             <th class="rank-col">#</th>
             <th>Product</th>
@@ -210,11 +206,11 @@ function renderRevSpaceDetail() {
 function renderSpaceUtilDetail() {
     const rates = summaryData.space_utilization ? summaryData.space_utilization.shelf_fill_rates : [];
     if (!planogramData || !planogramData.equipment) {
-        return '<div class="kpi-detail-title">Space Utilization by Shelf</div><div style="font-size:11px;color:var(--text-secondary);">No equipment loaded</div>';
+        return '<div class="s-section-title">Space Utilization by Shelf</div><div style="font-size:11px;color:var(--text-secondary);">No equipment loaded</div>';
     }
 
-    let html = '<div class="kpi-detail-title">Space Utilization by Shelf</div>';
-    html += `<table class="kpi-detail-table">
+    let html = '<div class="s-section-title">Space Utilization by Shelf</div>';
+    html += `<table class="s-table">
         <thead><tr>
             <th>Location</th>
             <th>Fill Rate</th>
@@ -226,14 +222,14 @@ function renderSpaceUtilDetail() {
             const idx = bi * bay.shelves.length + si;
             if (idx >= rates.length) return;
             const rate = rates[idx];
-            const colorClass = rate >= 80 ? 'fill-good' : rate >= 50 ? 'fill-warn' : 'fill-low';
+            const colorClass = rate >= 80 ? 's-fill-good' : rate >= 50 ? 's-fill-warn' : 's-fill-low';
             const pctColor = kpiScoreColor(rate);
             html += `<tr>
                 <td>Bay ${bi + 1} / Shelf ${si + 1}</td>
                 <td class="mono" style="color:${pctColor};font-weight:700">${rate}%</td>
                 <td class="right">
-                    <div class="fill-bar-mini">
-                        <div class="fill-bar-mini-inner ${colorClass}" style="width:${rate}%"></div>
+                    <div class="s-fill-bar">
+                        <div class="s-fill-bar-inner ${colorClass}" style="width:${rate}%"></div>
                     </div>
                 </td>
             </tr>`;
@@ -246,10 +242,10 @@ function renderSpaceUtilDetail() {
 
 function renderComplianceDetail() {
     if (!complianceData) {
-        return '<div class="kpi-detail-title">Decision Tree Compliance</div><div style="font-size:11px;color:var(--text-secondary);">Fill products to see compliance per layer</div>';
+        return '<div class="s-section-title">Decision Tree Compliance</div><div style="font-size:11px;color:var(--text-secondary);">Fill products to see compliance per layer</div>';
     }
 
-    let html = '<div class="kpi-detail-title">Decision Tree Compliance by Layer</div>';
+    let html = '<div class="s-section-title">Decision Tree Compliance by Layer</div>';
 
     if (decisionTreeData) {
         html += '<div class="dt-tree-visual" style="margin-bottom:12px">';
@@ -262,15 +258,15 @@ function renderComplianceDetail() {
 
     complianceData.levels.forEach(lvl => {
         const pct = lvl.compliance_pct;
-        const colorClass = pct >= 80 ? 'fill-good' : pct >= 50 ? 'fill-warn' : 'fill-low';
+        const colorClass = pct >= 80 ? 's-fill-good' : pct >= 50 ? 's-fill-warn' : 's-fill-low';
         const pctColor = kpiScoreColor(pct);
-        html += `<div class="compliance-detail-row">
-            <span class="compliance-detail-name">${lvl.level_name}</span>
-            <div class="compliance-detail-bar">
-                <div class="compliance-detail-bar-inner ${colorClass}" style="width:${pct}%"></div>
+        html += `<div class="s-metric-row">
+            <span class="s-metric-name">${lvl.level_name}</span>
+            <div class="s-metric-bar">
+                <div class="s-metric-bar-inner ${colorClass}" style="width:${pct}%"></div>
             </div>
-            <span class="compliance-detail-pct" style="color:${pctColor}">${pct}%</span>
-            <span class="compliance-detail-breaks">${lvl.break_count} break${lvl.break_count !== 1 ? 's' : ''}</span>
+            <span class="s-metric-pct" style="color:${pctColor}">${pct}%</span>
+            <span class="s-metric-detail">${lvl.break_count} break${lvl.break_count !== 1 ? 's' : ''}</span>
         </div>`;
     });
 

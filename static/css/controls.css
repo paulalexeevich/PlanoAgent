@@ -134,38 +134,9 @@
     flex-shrink: 0;
 }
 
-/* CONFIG MODE SWITCH */
-.config-mode-switch {
-    display: inline-flex;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-    font-size: 11px;
+/* Config toggle uses shared .s-toggle from components.css */
+.equipment-config-panel .s-toggle {
     margin-bottom: 10px;
-}
-.config-mode-switch button {
-    padding: 5px 14px;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    transition: all 0.15s;
-}
-.config-mode-switch button.active {
-    background: var(--accent);
-    color: white;
-}
-.config-mode-switch button:not(.active):hover {
-    background: var(--bg-shelf);
-    color: var(--text-primary);
-}
-.config-mode-divider {
-    width: 1px;
-    background: var(--border);
 }
 
 /* PER-BAY CONFIG TABLE */

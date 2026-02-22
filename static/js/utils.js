@@ -164,9 +164,9 @@ function formatMs(ms) {
 }
 
 function kpiColorClass(pct) {
-    if (pct >= 80) return 'kpi-green';
-    if (pct >= 50) return 'kpi-orange';
-    return 'kpi-red';
+    if (pct >= 80) return 's-green';
+    if (pct >= 50) return 's-orange';
+    return 's-red';
 }
 
 function kpiScoreColor(pct) {

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Planogram Agent — Beer Category</title>
     <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/components.css">
     <link rel="stylesheet" href="/static/css/controls.css">
     <link rel="stylesheet" href="/static/css/planogram.css">
     <link rel="stylesheet" href="/static/css/dashboard.css">
@@ -56,9 +57,9 @@
         <!-- Equipment Config (hidden by default) -->
         <div class="equipment-config-panel" id="equipmentForm">
             <!-- Mode switch -->
-            <div class="config-mode-switch">
+            <div class="s-toggle">
                 <button id="modeSimpleBtn" class="active" onclick="setBayMode('simple')">Simple</button>
-                <div class="config-mode-divider"></div>
+                <div class="s-toggle-divider"></div>
                 <button id="modePerBayBtn" onclick="setBayMode('perbay')">Per-Bay</button>
             </div>
 
@@ -102,7 +103,7 @@
             <div class="bay-config-section" id="bayConfigSection">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
                     <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);">Per-Bay Configuration</span>
-                    <button class="assortment-upload-btn" onclick="resetBayConfigDefaults()" style="font-size:9px;padding:2px 8px;">Reset to Defaults</button>
+                    <button class="s-upload-btn" onclick="resetBayConfigDefaults()" style="font-size:9px;padding:2px 8px;">Reset to Defaults</button>
                 </div>
                 <div style="overflow-x:auto;">
                     <table class="bay-config-table" id="bayConfigTable">
@@ -156,41 +157,39 @@
         </div>
 
         <!-- Summary Dashboard -->
-        <div class="bottom-panel" id="bottomPanel">
-            <div class="bottom-panel-toggle" onclick="togglePanel()">
+        <div class="s-panel" id="bottomPanel">
+            <div class="s-panel-header" onclick="togglePanel()">
                 <h3>Summary Dashboard</h3>
-                <span class="toggle-icon">&#9650;</span>
+                <span class="s-panel-icon">&#9650;</span>
             </div>
-            <div class="bottom-panel-body">
-                <!-- 4 Big KPI Cards -->
-                <div class="kpi-row">
-                    <div class="kpi-card" id="kpiAssortment" onclick="toggleKpiDetail('assortment')">
-                        <span class="kpi-expand-hint">&#9660;</span>
-                        <div class="kpi-label">Assortment</div>
-                        <div class="kpi-value" id="kpiAssortmentValue">--</div>
-                        <div class="kpi-sub" id="kpiAssortmentSub">Upload SKU list or use catalog</div>
+            <div class="s-panel-body">
+                <div class="s-card-grid cols-4">
+                    <div class="s-card clickable" id="kpiAssortment" onclick="toggleKpiDetail('assortment')">
+                        <span class="s-card-expand">&#9660;</span>
+                        <div class="s-card-label">Assortment</div>
+                        <div class="s-card-value" id="kpiAssortmentValue">--</div>
+                        <div class="s-card-sub" id="kpiAssortmentSub">Upload SKU list or use catalog</div>
                     </div>
-                    <div class="kpi-card" id="kpiRevSpace" onclick="toggleKpiDetail('revspace')">
-                        <span class="kpi-expand-hint">&#9660;</span>
-                        <div class="kpi-label">Avg $/Space</div>
-                        <div class="kpi-value" id="kpiRevSpaceValue">--</div>
-                        <div class="kpi-sub" id="kpiRevSpaceSub">Revenue per inch of shelf</div>
+                    <div class="s-card clickable" id="kpiRevSpace" onclick="toggleKpiDetail('revspace')">
+                        <span class="s-card-expand">&#9660;</span>
+                        <div class="s-card-label">Avg $/Space</div>
+                        <div class="s-card-value" id="kpiRevSpaceValue">--</div>
+                        <div class="s-card-sub" id="kpiRevSpaceSub">Revenue per inch of shelf</div>
                     </div>
-                    <div class="kpi-card" id="kpiSpaceUtil" onclick="toggleKpiDetail('spaceutil')">
-                        <span class="kpi-expand-hint">&#9660;</span>
-                        <div class="kpi-label">Space Utilization</div>
-                        <div class="kpi-value" id="kpiSpaceUtilValue">--</div>
-                        <div class="kpi-sub" id="kpiSpaceUtilSub">Avg shelf fill rate</div>
+                    <div class="s-card clickable" id="kpiSpaceUtil" onclick="toggleKpiDetail('spaceutil')">
+                        <span class="s-card-expand">&#9660;</span>
+                        <div class="s-card-label">Space Utilization</div>
+                        <div class="s-card-value" id="kpiSpaceUtilValue">--</div>
+                        <div class="s-card-sub" id="kpiSpaceUtilSub">Avg shelf fill rate</div>
                     </div>
-                    <div class="kpi-card" id="kpiCompliance" onclick="toggleKpiDetail('compliance')">
-                        <span class="kpi-expand-hint">&#9660;</span>
-                        <div class="kpi-label">DT Compliance</div>
-                        <div class="kpi-value" id="kpiComplianceValue">--</div>
-                        <div class="kpi-sub" id="kpiComplianceSub">Decision tree grouping</div>
+                    <div class="s-card clickable" id="kpiCompliance" onclick="toggleKpiDetail('compliance')">
+                        <span class="s-card-expand">&#9660;</span>
+                        <div class="s-card-label">DT Compliance</div>
+                        <div class="s-card-value" id="kpiComplianceValue">--</div>
+                        <div class="s-card-sub" id="kpiComplianceSub">Decision tree grouping</div>
                     </div>
                 </div>
-                <!-- Expandable Detail Panel -->
-                <div class="kpi-detail-panel" id="kpiDetailPanel"></div>
+                <div class="s-detail" id="kpiDetailPanel"></div>
             </div>
         </div>
         <!-- Hidden file input for assortment upload -->
@@ -212,10 +211,10 @@
         </div>
 
         <!-- Toolbar -->
-        <div class="eq-editor-toolbar">
-            <div class="eq-toolbar-group">
-                <span class="eq-toolbar-label">Type</span>
-                <select class="eq-toolbar-select" id="edEqType">
+        <div class="s-toolbar eq-editor-toolbar">
+            <div class="s-toolbar-group">
+                <span class="s-toolbar-label">Type</span>
+                <select class="s-toolbar-select" id="edEqType" onchange="updateEditorStats()">
                     <option value="gondola">Gondola</option>
                     <option value="cooler">Cooler</option>
                     <option value="endcap">Endcap</option>
@@ -223,28 +222,27 @@
                     <option value="island">Island</option>
                 </select>
             </div>
-            <div class="eq-toolbar-divider"></div>
-            <div class="eq-toolbar-group">
-                <span class="eq-toolbar-label">Height</span>
-                <input type="number" class="eq-toolbar-input" id="edEqHeight" value="72" min="24" max="120" step="1" oninput="renderEditorBays()">
-                <span class="eq-toolbar-unit">in</span>
+            <div class="s-toolbar-divider"></div>
+            <div class="s-toolbar-group">
+                <span class="s-toolbar-label">Height</span>
+                <input type="number" class="s-toolbar-input" id="edEqHeight" value="72" min="24" max="120" step="1" oninput="renderEditorBays()">
+                <span class="s-toolbar-unit">in</span>
             </div>
-            <div class="eq-toolbar-group">
-                <span class="eq-toolbar-label">Depth</span>
-                <input type="number" class="eq-toolbar-input" id="edEqDepth" value="24" min="6" max="48" step="1">
-                <span class="eq-toolbar-unit">in</span>
+            <div class="s-toolbar-group">
+                <span class="s-toolbar-label">Depth</span>
+                <input type="number" class="s-toolbar-input" id="edEqDepth" value="24" min="6" max="48" step="1" oninput="updateEditorStats()">
+                <span class="s-toolbar-unit">in</span>
             </div>
-            <div class="eq-toolbar-divider"></div>
-            <div class="eq-toolbar-group">
-                <span class="eq-toolbar-label">Bays</span>
+            <div class="s-toolbar-divider"></div>
+            <div class="s-toolbar-group">
+                <span class="s-toolbar-label">Bays</span>
                 <button class="btn-icon" id="edRemoveBayBtn" onclick="editorRemoveBay()" disabled>−</button>
                 <span id="edBayCount" style="font-size:14px;font-weight:600;min-width:20px;text-align:center">3</span>
                 <button class="btn-icon" id="edAddBayBtn" onclick="editorAddBay()">+</button>
             </div>
-            <div class="eq-toolbar-divider"></div>
-            <!-- Zoom controls -->
-            <div class="eq-toolbar-divider"></div>
-            <div class="eq-toolbar-group" style="gap:4px;">
+            <div class="s-toolbar-divider"></div>
+            <div class="s-toolbar-divider"></div>
+            <div class="s-toolbar-group" style="gap:4px;">
                 <button class="bsc-btn" onclick="editorZoom(-1)" title="Zoom out">−</button>
                 <span id="edZoomLabel" style="font-size:10px;min-width:38px;text-align:center;color:var(--text-secondary);font-weight:600;">3 px/in</span>
                 <button class="bsc-btn" onclick="editorZoom(1)" title="Zoom in">+</button>
@@ -271,6 +269,28 @@
                         <button class="btn btn-primary" onclick="applyAllBaysConfig()">Apply to All</button>
                         <button class="btn btn-secondary" onclick="toggleAllBaysPopover(false)">Cancel</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Equipment Stats (shared card component) -->
+        <div class="eq-editor-stats" id="editorStatsRow">
+            <div class="s-card-grid cols-4">
+                <div class="s-card compact">
+                    <div class="s-card-label">Bays</div>
+                    <div class="s-card-value" id="edStatBays">3</div>
+                </div>
+                <div class="s-card compact">
+                    <div class="s-card-label">Total Shelves</div>
+                    <div class="s-card-value" id="edStatShelves">15</div>
+                </div>
+                <div class="s-card compact">
+                    <div class="s-card-label">Total Width</div>
+                    <div class="s-card-value" id="edStatWidth">144"</div>
+                </div>
+                <div class="s-card compact">
+                    <div class="s-card-label">Height × Depth</div>
+                    <div class="s-card-value" id="edStatDims">72" × 24"</div>
                 </div>
             </div>
         </div>
