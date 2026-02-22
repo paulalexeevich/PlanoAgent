@@ -125,17 +125,18 @@ async function fillProducts() {
 }
 
 async function resetDefault() {
-    showLoading(true);
+    showLoading(true, 'Restoring defaults...');
     hideError();
     try {
-        const res = await fetch('/api/generate', {
+        const res = await fetch('/api/reset-default', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
         });
         const data = await res.json();
         planogramData = data.planogram;
         summaryData = data.summary;
+        decisionTreeData = data.decision_tree || null;
+        complianceData = data.compliance || null;
         buildProductsMap();
         renderAll();
         setSourceTag('rule_based');
@@ -143,6 +144,7 @@ async function resetDefault() {
         enableFillBtn(true);
     } catch (err) {
         console.error('Reset failed:', err);
+        showError('Reset to defaults failed: ' + err.message);
     }
     showLoading(false);
 }

@@ -18,6 +18,17 @@ from planogram_schema import (
 )
 
 
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+DEFAULT_EQUIPMENT_FILE = os.path.join(DATA_DIR, "default_equipment.json")
+CURRENT_PLANOGRAM_FILE = os.path.join(DATA_DIR, "current_planogram.json")
+
+
+def load_default_equipment_config() -> dict:
+    """Load default equipment config from data/default_equipment.json."""
+    with open(DEFAULT_EQUIPMENT_FILE, 'r') as f:
+        return json.load(f)
+
+
 def load_products(filepath: str) -> list:
     """Load products from JSON file."""
     with open(filepath, 'r') as f:
@@ -249,14 +260,7 @@ def generate_planogram(
     if equipment_config:
         equipment = create_default_equipment(**equipment_config)
     else:
-        equipment = create_default_equipment(
-            equipment_type="gondola",
-            num_bays=3,
-            num_shelves=5,
-            bay_width=48.0,
-            bay_height=72.0,
-            bay_depth=24.0
-        )
+        equipment = create_default_equipment(**load_default_equipment_config())
 
     # Assign products to shelves
     equipment = assign_products_to_shelves(equipment, products)

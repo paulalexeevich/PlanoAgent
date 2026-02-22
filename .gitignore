@@ -10,3 +10,4 @@ venv/
 .venv/
 .vercel/
 .playwright-mcp/
+data/current_planogram.json

@@ -16,7 +16,8 @@ load_dotenv()
 
 from planogram_generator import (
     generate_planogram, generate_summary, process_user_input,
-    load_products, create_default_equipment
+    load_products, create_default_equipment,
+    load_default_equipment_config, CURRENT_PLANOGRAM_FILE,
 )
 from planogram_schema import Planogram, Equipment
 from gemini_agent import generate_planogram_with_ai, fill_products_with_ai
@@ -41,20 +42,67 @@ current_compliance = None     # Compliance report (for DT tracking)
 current_decision_tree = None  # Decision tree definition
 
 
+def _save_state():
+    """Persist current planogram + summary + decision tree + compliance to disk."""
+    if current_planogram is None:
+        return
+    payload = {
+        "planogram": current_planogram.to_dict(),
+        "summary": current_summary,
+        "decision_tree": current_decision_tree.to_dict() if current_decision_tree else None,
+        "compliance": current_compliance.to_dict() if current_compliance else None,
+    }
+    try:
+        with open(CURRENT_PLANOGRAM_FILE, 'w') as f:
+            json.dump(payload, f, indent=2, default=str)
+    except Exception as e:
+        print(f"[save] Failed to write {CURRENT_PLANOGRAM_FILE}: {e}", flush=True)
+
+
+def _load_saved_state() -> bool:
+    """Try to load state from data/current_planogram.json. Returns True on success."""
+    global current_planogram, current_summary, current_equipment
+    global current_compliance, current_decision_tree
+
+    if not os.path.exists(CURRENT_PLANOGRAM_FILE):
+        return False
+
+    try:
+        with open(CURRENT_PLANOGRAM_FILE, 'r') as f:
+            payload = json.load(f)
+
+        current_planogram = Planogram.from_dict(payload["planogram"])
+        current_summary = payload.get("summary")
+
+        from dataclasses import asdict
+        current_equipment = asdict(current_planogram.equipment)
+
+        decision_tree = get_tree_for_category("Beer")
+        current_decision_tree = decision_tree
+        if decision_tree and current_planogram.products:
+            current_compliance = validate_compliance(
+                current_planogram.to_dict(), decision_tree
+            )
+        print(f"[init] Loaded saved state from {CURRENT_PLANOGRAM_FILE}", flush=True)
+        return True
+    except Exception as e:
+        print(f"[init] Could not load saved state: {e}", flush=True)
+        return False
+
+
 def init_default_planogram():
-    """Initialize with default beer planogram."""
+    """Initialize with default beer planogram (from file defaults)."""
     global current_planogram, current_summary, current_equipment, current_compliance, current_decision_tree
     current_planogram = generate_planogram()
     current_summary = generate_summary(current_planogram)
-    # Also store the equipment dict so Fill Products works without Step 1
     from dataclasses import asdict
     current_equipment = asdict(current_planogram.equipment)
-    # Initialize decision tree and compliance
     decision_tree = get_tree_for_category("Beer")
     current_decision_tree = decision_tree
     if decision_tree and current_planogram.products:
         compliance = validate_compliance(current_planogram.to_dict(), decision_tree)
         current_compliance = compliance
+    _save_state()
 
 
 def _load_products_json() -> list:
@@ -75,7 +123,8 @@ def get_planogram():
     """Return current planogram data as JSON."""
     global current_planogram, current_summary, current_compliance, current_decision_tree
     if current_planogram is None:
-        init_default_planogram()
+        if not _load_saved_state():
+            init_default_planogram()
     return jsonify({
         "planogram": current_planogram.to_dict(),
         "summary": current_summary,
@@ -106,12 +155,33 @@ def generate():
         store_type=data.get("store_type", "Standard Grocery")
     )
     current_summary = generate_summary(current_planogram)
+    _save_state()
 
     return jsonify({
         "planogram": current_planogram.to_dict(),
         "summary": current_summary,
         "status": "success",
         "source": "rule_based"
+    })
+
+
+@app.route("/api/reset-default", methods=["POST"])
+def reset_default():
+    """Reset planogram to defaults from data/default_equipment.json.
+
+    Deletes any saved state and regenerates from the default config.
+    """
+    if os.path.exists(CURRENT_PLANOGRAM_FILE):
+        os.remove(CURRENT_PLANOGRAM_FILE)
+    init_default_planogram()
+
+    return jsonify({
+        "planogram": current_planogram.to_dict(),
+        "summary": current_summary,
+        "decision_tree": current_decision_tree.to_dict() if current_decision_tree else None,
+        "compliance": current_compliance.to_dict() if current_compliance else None,
+        "status": "success",
+        "source": "rule_based",
     })
 
 
@@ -128,17 +198,16 @@ def generate_equipment():
     global current_equipment, current_planogram, current_summary
 
     data = request.json or {}
+    defaults = load_default_equipment_config()
 
-    # Build equipment config from form fields
     config = {
-        "equipment_type": data.get("equipment_type", "gondola"),
-        "num_bays":       int(data.get("num_bays", 3)),
-        "num_shelves":    int(data.get("num_shelves", 5)),
-        "bay_width":      float(data.get("bay_width", 48.0)),
-        "bay_height":     float(data.get("bay_height", 72.0)),
-        "bay_depth":      float(data.get("bay_depth", 24.0)),
-        # Per-bay overrides: [{width_in, num_shelves, shelf_clearances}, ...]
-        "bays_config":    data.get("bays_config", None),
+        "equipment_type": data.get("equipment_type", defaults["equipment_type"]),
+        "num_bays":       int(data.get("num_bays", defaults["num_bays"])),
+        "num_shelves":    int(data.get("num_shelves", defaults["num_shelves"])),
+        "bay_width":      float(data.get("bay_width", defaults["bay_width"])),
+        "bay_height":     float(data.get("bay_height", defaults["bay_height"])),
+        "bay_depth":      float(data.get("bay_depth", defaults["bay_depth"])),
+        "bays_config":    data.get("bays_config", defaults.get("bays_config")),
     }
 
     # Create equipment object
@@ -165,6 +234,7 @@ def generate_equipment():
         },
     )
     current_summary = generate_summary(current_planogram)
+    _save_state()
 
     return jsonify({
         "planogram": current_planogram.to_dict(),
@@ -471,6 +541,8 @@ def fill_products():
         compliance = validate_compliance(planogram_data, decision_tree)
         current_compliance = compliance
 
+    _save_state()
+
     return jsonify({
         "planogram": current_planogram.to_dict(),
         "summary": current_summary,
@@ -517,6 +589,7 @@ def generate_ai():
         # Parse into Planogram object for summary generation
         current_planogram = Planogram.from_dict(planogram_data)
         current_summary = generate_summary(current_planogram)
+        _save_state()
 
         return jsonify({
             "planogram": current_planogram.to_dict(),
@@ -550,9 +623,9 @@ def get_products():
     return jsonify(_load_products_json())
 
 
-# Initialize default planogram at module import time
-# (needed for Vercel serverless where __main__ is not called)
-init_default_planogram()
+# Load persisted state on startup; fall back to generating from defaults
+if not _load_saved_state():
+    init_default_planogram()
 
 if __name__ == "__main__":
     print("\n  Planogram Agent running at http://localhost:5001\n")
