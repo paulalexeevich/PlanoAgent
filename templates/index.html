@@ -1281,7 +1281,7 @@
         .eq-bay-wrapper {
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: flex-start; /* left-aligned so right-border drag keeps left edge fixed */
             gap: 0;
             flex-shrink: 0;
         }
@@ -3151,8 +3151,19 @@
             const heightIn = parseFloat(document.getElementById('edEqHeight').value) || 72;
             const wrapper = document.querySelector(`.eq-bay-wrapper[data-idx="${bayIdx}"]`);
             if (!wrapper) return;
-            // Set wrapper width explicitly so the flex layout doesn't touch sibling bays
+
             wrapper.style.width = wpx + 'px';
+
+            if (_edDrag && _edDrag.side === 'left' && _edDrag.bayIdx === bayIdx) {
+                // Left-border drag: keep the right edge fixed by offsetting the wrapper
+                // margin-left = startPx - newPx keeps (margin + width) == startPx,
+                // so siblings to the right never shift.
+                const offsetPx = _edDrag.startValue * EDITOR_SCALE - wpx;
+                wrapper.style.marginLeft = offsetPx + 'px';
+            } else {
+                wrapper.style.marginLeft = '';
+            }
+
             const bayEl = wrapper.querySelector('.eq-editor-bay');
             if (bayEl) {
                 bayEl.style.width = wpx + 'px';
@@ -3206,11 +3217,12 @@
             editorState.bays.forEach((bay, idx) => {
                 const numShelves = bay.num_shelves || 5;
 
-                // Wrapper — explicit width so sibling bays never shift during drag
+                // Wrapper — explicit width; margin-left cleared so no leftover from left-drag
                 const wrapper = document.createElement('div');
                 wrapper.className = 'eq-bay-wrapper';
                 wrapper.dataset.idx = idx;
                 wrapper.style.width = (bay.width_in * EDITOR_SCALE) + 'px';
+                wrapper.style.marginLeft = '';
 
                 // Bay card (position:relative so edge handle can be absolute)
                 const bayEl = document.createElement('div');
