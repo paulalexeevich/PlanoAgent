@@ -120,7 +120,8 @@ def create_default_equipment(
             width_in=b_width,
             height_in=bay_height,
             depth_in=bay_depth,
-            shelves=shelves
+            shelves=shelves,
+            glued_right=bool(bay_cfg.get("glued_right", False))
         ))
 
     return Equipment(

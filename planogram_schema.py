@@ -115,6 +115,7 @@ class Bay:
     height_in: float      # Total bay height in inches
     depth_in: float       # Bay depth in inches
     shelves: list = field(default_factory=list)  # List[Shelf]
+    glued_right: bool = False  # True = visually connected to the next bay (no gap)
 
 
 @dataclass

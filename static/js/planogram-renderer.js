@@ -44,7 +44,7 @@ function renderPlanogram() {
 
         const header = document.createElement('div');
         header.className = 'bay-header';
-        header.textContent = `Bay ${bay.bay_number} — ${dFmt(bay.width_in)} x ${dFmt(bay.height_in)}`;
+        header.textContent = `Bay ${bay.bay_number}`;
         bayEl.appendChild(header);
 
         const body = document.createElement('div');
@@ -67,7 +67,7 @@ function renderPlanogram() {
 
             const label = document.createElement('span');
             label.className = 'shelf-label';
-            label.textContent = `S${shelf.shelf_number}`;
+            label.textContent = `S${shelf.shelf_number} — ${dFmt(shelf.height_in)}`;
             shelfEl.appendChild(label);
 
             if (!hasProducts) {
@@ -151,6 +151,12 @@ function renderPlanogram() {
         });
 
         bayEl.appendChild(body);
+
+        const footer = document.createElement('div');
+        footer.className = 'bay-footer';
+        footer.textContent = dFmt(bay.width_in);
+        bayEl.appendChild(footer);
+
         container.appendChild(bayEl);
     });
 }
