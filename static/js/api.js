@@ -11,7 +11,6 @@ async function fetchPlanogram() {
         complianceData = data.compliance || null;
         buildProductsMap();
         renderAll();
-        setSourceTag('rule_based');
         if (planogramData.products && planogramData.products.length > 0) {
             equipmentGenerated = true;
             enableFillBtn(true);
@@ -52,7 +51,6 @@ async function generateEquipment() {
         summaryData = data.summary;
         buildProductsMap();
         renderAll();
-        setSourceTag('equipment_only');
         equipmentGenerated = true;
         enableFillBtn(true);
     } catch (err) {
@@ -108,7 +106,6 @@ async function fillProducts() {
         complianceData = data.compliance || null;
         buildProductsMap();
         renderAll();
-        setSourceTag(data.source || 'gemini_ai');
 
         const serverMs = data.timings ? data.timings.total_ms : null;
         const timingText = serverMs
@@ -124,11 +121,11 @@ async function fillProducts() {
     setFillLoading(false);
 }
 
-async function resetDefault() {
-    showLoading(true, 'Restoring defaults...');
+async function removeProducts() {
+    showLoading(true, 'Removing products...');
     hideError();
     try {
-        const res = await fetch('/api/reset-default', {
+        const res = await fetch('/api/remove-products', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
         });
@@ -136,15 +133,15 @@ async function resetDefault() {
         planogramData = data.planogram;
         summaryData = data.summary;
         decisionTreeData = data.decision_tree || null;
-        complianceData = data.compliance || null;
+        complianceData = null;
         buildProductsMap();
         renderAll();
-        setSourceTag('rule_based');
         equipmentGenerated = true;
         enableFillBtn(true);
+        document.getElementById('timingTag').textContent = '';
     } catch (err) {
-        console.error('Reset failed:', err);
-        showError('Reset to defaults failed: ' + err.message);
+        console.error('Remove products failed:', err);
+        showError('Remove products failed: ' + err.message);
     }
     showLoading(false);
 }

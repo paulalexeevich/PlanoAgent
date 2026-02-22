@@ -42,7 +42,7 @@
 
 ## UI/UX Notes
 - Two-step UI: equipment form (dropdowns + numbers) + "Generate Equipment" / "Fill Products" buttons.
-- Source tags: "Empty Equipment" (orange), "Gemini AI" (blue), "Rule-based (fallback)" (purple), "Rule-based" (green).
+- "Remove Products" button empties all shelves (keeps equipment structure). Replaced old "Reset Default" button and source tag system.
 - **Planogram rendering**: Products use **absolute positioning** (`left: x_position * scale`), NOT flexbox. Bay must have `flex-shrink: 0` + `box-sizing: content-box`.
 - Scale slider, unit toggle (in/cm). At high zoom, page scrolls horizontally.
 - Bottom collapsible summary: metrics, category mix, fill rates, decision tree compliance.

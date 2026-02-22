@@ -165,23 +165,32 @@ def generate():
     })
 
 
-@app.route("/api/reset-default", methods=["POST"])
-def reset_default():
-    """Reset planogram to defaults from data/default_equipment.json.
+@app.route("/api/remove-products", methods=["POST"])
+def remove_products():
+    """Remove all products from shelves, keeping the equipment structure."""
+    global current_planogram, current_summary, current_compliance
 
-    Deletes any saved state and regenerates from the default config.
-    """
-    if os.path.exists(CURRENT_PLANOGRAM_FILE):
-        os.remove(CURRENT_PLANOGRAM_FILE)
-    init_default_planogram()
+    if current_planogram is None:
+        if not _load_saved_state():
+            init_default_planogram()
+
+    eq = current_planogram.equipment
+    if eq:
+        for bay in eq.bays:
+            for shelf in bay.shelves:
+                shelf.positions = []
+    current_planogram.products = []
+    current_compliance = None
+    current_summary = generate_summary(current_planogram)
+    _save_state()
 
     return jsonify({
         "planogram": current_planogram.to_dict(),
         "summary": current_summary,
         "decision_tree": current_decision_tree.to_dict() if current_decision_tree else None,
-        "compliance": current_compliance.to_dict() if current_compliance else None,
+        "compliance": None,
         "status": "success",
-        "source": "rule_based",
+        "source": "equipment_only",
     })
 
 

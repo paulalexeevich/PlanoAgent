@@ -92,22 +92,6 @@
 }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-/* SOURCE TAG */
-.source-tag {
-    font-size: 11px;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-}
-.source-tag.ai { background: rgba(74,158,255,0.15); color: var(--accent); }
-.source-tag.rules { background: rgba(52,211,153,0.15); color: var(--accent-green); }
-.source-tag.equipment { background: rgba(245,158,11,0.15); color: var(--accent-orange); }
-.source-tag.fallback { background: rgba(167,139,250,0.15); color: #a78bfa; }
-.source-tag.error { background: rgba(239,68,68,0.15); color: var(--accent-red); }
-.source-tag.compare { background: rgba(245,158,11,0.15); color: var(--accent-orange); }
-.source-tag.algo { background: rgba(52,211,153,0.15); color: var(--accent-green); }
-
 /* FILL MODE SELECT */
 .fill-mode-select {
     padding: 6px 10px;

@@ -151,30 +151,6 @@ function enableFillBtn(enabled) {
     document.getElementById('fillBtn').disabled = !enabled;
 }
 
-function setSourceTag(source) {
-    const tag = document.getElementById('sourceTag');
-    switch (source) {
-        case 'gemini_ai':
-            tag.textContent = 'Gemini AI';
-            tag.className = 'source-tag ai';
-            break;
-        case 'algorithm':
-            tag.textContent = 'Algorithm';
-            tag.className = 'source-tag algo';
-            break;
-        case 'rule_based_fallback':
-            tag.textContent = 'Rule-based (fallback)';
-            tag.className = 'source-tag fallback';
-            break;
-        case 'equipment_only':
-            tag.textContent = 'Empty Equipment';
-            tag.className = 'source-tag equipment';
-            break;
-        default:
-            tag.textContent = 'Rule-based';
-            tag.className = 'source-tag rules';
-    }
-}
 
 function showError(msg) {
     const toast = document.getElementById('errorToast');
