@@ -308,6 +308,8 @@ def generate_summary(planogram: Planogram) -> dict:
             shelf_facings = 0
             shelf_revenue = 0
             for pos in shelf.positions:
+                if getattr(pos, '_phantom', False):
+                    continue
                 product = products_map.get(pos.product_id)
                 if product:
                     units = pos.total_units()

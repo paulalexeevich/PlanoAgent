@@ -294,13 +294,16 @@ def _postprocess_pipeline(filled_equipment, selected_products, facings, prod_map
 
 
 def _audit_equipment(filled_equipment, prod_map):
-    """Count products, facings, and used width from equipment dict."""
+    """Count products, facings, and used width from equipment dict.
+    Skips phantom positions (cross-bay duplicates) to avoid double-counting."""
     placed_ids = set()
     total_facings = 0
     used_width = 0.0
     for bay in filled_equipment.get("bays", []):
         for shelf in bay.get("shelves", []):
             for pos in shelf.get("positions", []):
+                if pos.get("_phantom"):
+                    continue
                 pid = pos.get("product_id", "")
                 placed_ids.add(pid)
                 f_w = pos.get("facings_wide", 1)

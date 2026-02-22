@@ -41,21 +41,22 @@ const BayRenderer = {
         } = config;
 
         container.innerHTML = '';
-        if (!bays || bays.length === 0) return;
+        const layout = [];  // returned metadata per bay
+        if (!bays || bays.length === 0) return layout;
 
         bays.forEach((bay, idx) => {
             const prevBay  = idx > 0 ? bays[idx - 1] : null;
             const gluedToPrev = prevBay && prevBay.glued_right;
             const isLast   = idx === bays.length - 1;
 
+            const gap = idx === 0 ? 0 : (gluedToPrev ? gluedGap : bayGap);
+
             const wrapper = document.createElement('div');
             wrapper.className = ('br-bay-wrapper' + (wrapperClass ? ' ' + wrapperClass : ''));
             wrapper.dataset.idx = idx;
 
             wrapper.style.width = (bay.width_in * scale) + 'px';
-            wrapper.style.marginLeft = idx === 0
-                ? '0'
-                : (gluedToPrev ? gluedGap : bayGap) + 'px';
+            wrapper.style.marginLeft = gap + 'px';
 
             let cls = 'br-bay';
             if (gluedToPrev)    cls += ' br-bay-glued-left';
@@ -81,6 +82,7 @@ const BayRenderer = {
             body.style.width  = (bay.width_in  * scale) + 'px';
 
             const sorted = [...bay.shelves].sort((a, b) => a.y_position - b.y_position);
+            const shelfMeta = [];
             sorted.forEach((shelf, si) => {
                 const shelfEl = document.createElement('div');
                 shelfEl.className = 'br-shelf';
@@ -94,6 +96,12 @@ const BayRenderer = {
 
                 if (onShelf) onShelf(shelfEl, shelf, si, bay, idx);
                 body.appendChild(shelfEl);
+
+                shelfMeta.push({
+                    shelf_number: shelf.shelf_number,
+                    bottomPx: shelf.y_position * scale,
+                    heightPx: shelf.height_in * scale,
+                });
             });
 
             if (onBody) onBody(body, bay, idx);
@@ -109,8 +117,18 @@ const BayRenderer = {
             wrapper.appendChild(bayEl);
             container.appendChild(wrapper);
 
+            layout.push({
+                idx,
+                bodyEl:  body,
+                widthPx: bay.width_in * scale,
+                bodyHPx: bay.height_in * scale,
+                shelves: shelfMeta,
+            });
+
             if (onAfterBay) onAfterBay(container, bay, idx, isLast);
         });
+
+        return layout;
     },
 
     normalizeDashboard(equipment) {

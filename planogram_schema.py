@@ -76,6 +76,7 @@ class Position:
     facings_high: int = 1
     facings_deep: int = 1
     orientation: str = "front"
+    _phantom: bool = False  # True for cross-bay rendering duplicates (skip in audit)
 
     def total_units(self) -> int:
         return self.facings_wide * self.facings_high * self.facings_deep
@@ -93,9 +94,11 @@ class Shelf:
     shelf_type: str = "standard"  # standard, wire, slanted
 
     def used_width(self, products_map: dict) -> float:
-        """Calculate total used width across all positions."""
+        """Calculate total used width across all positions (skips phantoms)."""
         total = 0
         for pos in self.positions:
+            if getattr(pos, '_phantom', False):
+                continue
             product = products_map.get(pos.product_id)
             if product:
                 total += product.width_in * pos.facings_wide
@@ -159,7 +162,7 @@ class Planogram:
         if self.equipment:
             for bay in self.equipment.bays:
                 for shelf in bay.shelves:
-                    count += len(shelf.positions)
+                    count += sum(1 for p in shelf.positions if not getattr(p, '_phantom', False))
         return count
 
     def total_facings(self) -> int:
@@ -168,7 +171,8 @@ class Planogram:
             for bay in self.equipment.bays:
                 for shelf in bay.shelves:
                     for pos in shelf.positions:
-                        total += pos.facings_wide
+                        if not getattr(pos, '_phantom', False):
+                            total += pos.facings_wide
         return total
 
     def to_dict(self) -> dict:

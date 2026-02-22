@@ -488,9 +488,13 @@ def _split_positions_to_shelves(
     prod_map: dict,
 ) -> None:
     """
-    Distribute positions placed on virtual (merged) shelves back to their
-    physical source shelves.  Tracks remaining width on each shelf to prevent
-    overflow when products near bay boundaries can't be split evenly.
+    Distribute virtual shelf positions to physical shelves using virtual
+    coordinates.  Products keep their FULL facings and real dimensions.
+    Products that cross a bay boundary appear on BOTH adjacent shelves —
+    overflow:hidden in the renderer clips each side naturally.
+
+    Phantom positions (on the non-primary shelf) are marked with
+    ``_phantom: True`` so auditing/summary skip them.
     """
     for vs, positions in zip(virtual_shelves, virtual_positions):
         sources = vs["sources"]
@@ -500,48 +504,46 @@ def _split_positions_to_shelves(
             shelf["positions"] = positions
             continue
 
-        # Per-shelf state: remaining width, accumulated positions, current x
-        shelf_state: list = []
-        for bay, shelf in sources:
+        # Build segment boundaries: [(seg_start, seg_end, shelf), ...]
+        segments: list = []
+        running = 0.0
+        for _bay, shelf in sources:
             w = shelf.get("width_in", 48)
-            shelf_state.append({
-                "shelf": shelf,
-                "width": w,
-                "remaining": w,
-                "x": 0.0,
-                "positions": [],
-            })
+            segments.append((running, running + w, shelf))
+            running += w
 
-        si = 0  # current shelf index
+        shelf_pos: dict = {id(shelf): [] for _, _, shelf in segments}
 
         for pos in positions:
             pid = pos["product_id"]
             pw = prod_map[pid]["width_in"]
-            left = pos["facings_wide"]
+            vx = pos["x_position"]
+            total_w = pw * pos["facings_wide"]
+            pos_end = vx + total_w
 
-            while left > 0 and si < len(shelf_state):
-                ss = shelf_state[si]
-                fit = int(ss["remaining"] / pw) if pw > 0 else 0
-                actual = min(fit, left)
+            primary_assigned = False
+            for seg_start, seg_end, shelf in segments:
+                if pos_end <= seg_start or vx >= seg_end:
+                    continue  # no overlap
 
-                if actual > 0:
-                    ss["positions"].append({
-                        "product_id": pid,
-                        "x_position": round(ss["x"], 2),
-                        "facings_wide": actual,
-                        "facings_high": pos.get("facings_high", 1),
-                        "facings_deep": pos.get("facings_deep", 1),
-                        "orientation":  pos.get("orientation", "front"),
-                    })
-                    ss["x"] += pw * actual
-                    ss["remaining"] -= pw * actual
-                    left -= actual
+                local_x = vx - seg_start
+                entry = {
+                    "product_id": pid,
+                    "x_position": round(local_x, 2),
+                    "facings_wide": pos["facings_wide"],
+                    "facings_high": pos.get("facings_high", 1),
+                    "facings_deep": pos.get("facings_deep", 1),
+                    "orientation":  pos.get("orientation", "front"),
+                }
+                if primary_assigned:
+                    entry["_phantom"] = True
                 else:
-                    # No room on this shelf — advance to next
-                    si += 1
+                    primary_assigned = True
 
-        for ss in shelf_state:
-            ss["shelf"]["positions"] = ss["positions"]
+                shelf_pos[id(shelf)].append(entry)
+
+        for _, _, shelf in segments:
+            shelf["positions"] = shelf_pos[id(shelf)]
 
 
 def phase3_cross_bay_placement(
@@ -644,6 +646,49 @@ def phase3_cross_bay_placement(
 
         all_virtual_positions.append(positions)
 
+    # ── BOOST PASS on virtual shelves (before split) ──
+    total_extra = 0
+    for vs, positions in zip(virtual_shelves, all_virtual_positions):
+        shelf_w = vs["width"]
+        if not positions:
+            continue
+
+        used = sum(prod_map[p["product_id"]]["width_in"] * p["facings_wide"]
+                   for p in positions if p["product_id"] in prod_map)
+        remaining = shelf_w - used
+        if remaining < 0.5:
+            continue
+
+        scorable = []
+        for i, pos in enumerate(positions):
+            prod = prod_map.get(pos["product_id"])
+            if prod:
+                scorable.append((prod.get("weekly_units_sold", 0), i, prod))
+        scorable.sort(key=lambda x: x[0], reverse=True)
+
+        changed = True
+        while changed and remaining > 0.5:
+            changed = False
+            for sales, idx, prod in scorable:
+                pos = positions[idx]
+                pw = prod["width_in"]
+                if pos["facings_wide"] < rules.max_facings and pw <= remaining:
+                    pos["facings_wide"] += 1
+                    remaining -= pw
+                    total_extra += 1
+                    changed = True
+
+        # Recalculate x positions after boost
+        x_pos = 0.0
+        for pos in positions:
+            pos["x_position"] = round(x_pos, 2)
+            prod = prod_map.get(pos["product_id"])
+            if prod:
+                x_pos += prod["width_in"] * pos["facings_wide"]
+
+    if total_extra > 0:
+        print(f"  [Phase3-CrossBay-Boost] Added {total_extra} extra facings", flush=True)
+
     # ── Split virtual positions back to physical shelves ──
     _split_positions_to_shelves(all_virtual_positions, virtual_shelves, prod_map)
 
@@ -652,53 +697,10 @@ def phase3_cross_bay_placement(
         for bay in bays
         for shelf in bay.get("shelves", [])
         for pos in shelf.get("positions", [])
+        if not pos.get("_phantom")
     )
     print(f"  [Phase3-CrossBay] Placed {len(placed_product_ids)}/{len(selected_products)} products, "
           f"{total_facings_placed} facings (cross-bay merged)", flush=True)
-
-    # ── BOOST PASS: fill remaining space on each *physical* shelf ──
-    total_extra = 0
-    for bay in bays:
-        for shelf in bay.get("shelves", []):
-            shelf_w = shelf.get("width_in", 48)
-            positions = shelf.get("positions", [])
-            if not positions:
-                continue
-
-            used = sum(prod_map[p["product_id"]]["width_in"] * p["facings_wide"]
-                       for p in positions if p["product_id"] in prod_map)
-            remaining = shelf_w - used
-            if remaining < 0.5:
-                continue
-
-            scorable = []
-            for i, pos in enumerate(positions):
-                prod = prod_map.get(pos["product_id"])
-                if prod:
-                    scorable.append((prod.get("weekly_units_sold", 0), i, prod))
-            scorable.sort(key=lambda x: x[0], reverse=True)
-
-            changed = True
-            while changed and remaining > 0.5:
-                changed = False
-                for sales, idx, prod in scorable:
-                    pos = positions[idx]
-                    pw = prod["width_in"]
-                    if pos["facings_wide"] < rules.max_facings and pw <= remaining:
-                        pos["facings_wide"] += 1
-                        remaining -= pw
-                        total_extra += 1
-                        changed = True
-
-            x_pos = 0.0
-            for pos in positions:
-                pos["x_position"] = round(x_pos, 2)
-                prod = prod_map.get(pos["product_id"])
-                if prod:
-                    x_pos += prod["width_in"] * pos["facings_wide"]
-
-    if total_extra > 0:
-        print(f"  [Phase3-CrossBay-Boost] Added {total_extra} extra facings", flush=True)
 
     placed_products = [p for p in selected_products if p["id"] in placed_product_ids]
     return {
@@ -749,6 +751,26 @@ def validate_and_fix_shelves(equipment_dict: dict, products_map: dict) -> dict:
 
             if not positions:
                 continue
+
+            # Skip shelves that contain cross-bay positions (phantom or
+            # primary that extends beyond the shelf edge).  Their
+            # x_positions are virtual coordinates managed by the
+            # cross-bay split.
+            has_crossbay = any(
+                p.get("_phantom") or p.get("x_position", 0) < 0
+                for p in positions
+            )
+            if has_crossbay:
+                continue
+            # Also check if any position extends beyond the shelf (primary
+            # that crosses into the next bay).
+            last = positions[-1] if positions else None
+            if last:
+                lp = products_map.get(last.get("product_id", ""))
+                if lp:
+                    end = last.get("x_position", 0) + lp.get("width_in", 0) * last.get("facings_wide", 1)
+                    if end > shelf_w + 1.0:
+                        continue
 
             # Calculate current total width
             total_used = 0.0

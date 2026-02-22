@@ -15,6 +15,37 @@
     gap: 0;
     width: fit-content;
     margin: 0 auto 24px auto;
+    position: relative;  /* anchor for product-layer */
+}
+
+/* PRODUCT LAYER — absolute overlay, products NOT clipped by bay borders */
+.product-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 3;
+}
+.product-layer .product-block {
+    pointer-events: auto;
+}
+
+/* BAY BORDER OVERLAY — thin lines on TOP of products (equipment always visible) */
+.bay-border-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+}
+.bay-border-line {
+    position: absolute;
+    background: var(--border);
+    opacity: 0.7;
 }
 
 /* Dashboard-specific shelf refinements */
@@ -41,7 +72,7 @@
     display: block;
 }
 
-/* PRODUCT BLOCKS */
+/* PRODUCT BLOCKS — positioned absolutely in the product-layer */
 .product-block {
     display: flex;
     flex-direction: column;
@@ -53,7 +84,6 @@
     cursor: pointer;
     transition: opacity 0.15s, box-shadow 0.15s;
     position: absolute;
-    bottom: 0;
     overflow: hidden;
 }
 .product-block:hover {
@@ -84,15 +114,6 @@
 /* Repeat facings: subtle left divider to separate from neighbor */
 .product-block.facing-repeat {
     border-left: 1px solid rgba(255,255,255,0.15);
-}
-/* Cross-bay bridge: product continues into the next/previous glued bay */
-.product-block.cross-bay-right {
-    border-right: 2px solid rgba(255,255,255,0.7);
-    z-index: 2;
-}
-.product-block.cross-bay-left {
-    border-left: 2px solid rgba(255,255,255,0.7);
-    z-index: 2;
 }
 
 /* TOOLTIP */

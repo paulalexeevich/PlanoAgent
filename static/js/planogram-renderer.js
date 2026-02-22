@@ -1,33 +1,10 @@
-/* PLANOGRAM RENDERER — Dashboard visualization (uses shared BayRenderer) */
-
-function _buildCrossBayMap(equipment) {
-    /**
-     * Detect products that straddle adjacent glued bays on the same shelf row.
-     * Returns a Set of keys "bayIdx:shelfNum:edge" where edge is "right" or "left".
-     * Used to add CSS classes so cross-bay products render seamlessly.
-     */
-    const marks = new Set();
-    const bays = equipment.bays || [];
-    for (let i = 0; i < bays.length - 1; i++) {
-        if (!bays[i].glued_right) continue;
-        const bayA = bays[i], bayB = bays[i + 1];
-        for (const shA of (bayA.shelves || [])) {
-            for (const shB of (bayB.shelves || [])) {
-                if (shA.shelf_number !== shB.shelf_number) continue;
-                const posA = shA.positions || [];
-                const posB = shB.positions || [];
-                if (!posA.length || !posB.length) continue;
-                const lastA  = posA[posA.length - 1];
-                const firstB = posB[0];
-                if (lastA.product_id === firstB.product_id) {
-                    marks.add(i + ':' + shA.shelf_number + ':right');
-                    marks.add((i + 1) + ':' + shB.shelf_number + ':left');
-                }
-            }
-        }
-    }
-    return marks;
-}
+/* PLANOGRAM RENDERER — Dashboard visualization (uses shared BayRenderer)
+ *
+ * Two-layer architecture:
+ *   1. Equipment layer — bay borders, shelves, labels (BayRenderer)
+ *   2. Product layer   — product blocks as absolute overlay, NOT clipped
+ *      by bay boundaries.  Cross-bay products visually span the border.
+ */
 
 function renderPlanogram() {
     const container = document.getElementById('planogramContainer');
@@ -45,12 +22,12 @@ function renderPlanogram() {
 
     renderLayerLegend(dtLevelName, dtPalette);
 
-    const bays   = BayRenderer.normalizeDashboard(planogramData.equipment);
-    const crossBay = _buildCrossBayMap(planogramData.equipment);
+    const bays = BayRenderer.normalizeDashboard(planogramData.equipment);
 
     container.classList.toggle('show-dimensions', showDimensions);
 
-    BayRenderer.render({
+    // ── LAYER 1: Equipment (bays, shelves, borders — no products) ──
+    const layout = BayRenderer.render({
         container,
         scale,
         bayGap:   4,
@@ -59,54 +36,80 @@ function renderPlanogram() {
 
         onShelf(shelfEl, shelf, si, bay, bayIdx) {
             const hasProducts = shelf.positions && shelf.positions.length > 0;
-            if (!hasProducts) {
+            const hasReal = hasProducts && shelf.positions.some(p => !p._phantom);
+            if (!hasReal) {
                 shelfEl.classList.add('empty-shelf');
                 const emptyLabel = document.createElement('span');
                 emptyLabel.className = 'empty-shelf-label';
                 emptyLabel.textContent = 'Empty';
                 shelfEl.appendChild(emptyLabel);
-                return;
             }
+        },
+    });
 
-            const shelfHeight = shelf.height_in * scale;
-            const posCount = shelf.positions.length;
+    if (!layout || !layout.length) return;
 
-            const shelfWidthPx = bay.width_in * scale;
+    // ── LAYER 2: Products (absolute overlay spanning full planogram) ──
+    const productLayer = document.createElement('div');
+    productLayer.className = 'product-layer';
+    container.appendChild(productLayer);
 
-            shelf.positions.forEach((pos, posIdx) => {
+    // Calculate bay body offsets from known geometry
+    // (getBoundingClientRect unreliable during same-frame render)
+    const bayGapPx   = 4;
+    const gluedGapPx = 0;
+    const borderW    = 2;   // .br-bay border-width
+    let cumulativeLeft = 0;
+
+    bays.forEach((bay, bayIdx) => {
+        const meta = layout[bayIdx];
+        if (!meta) return;
+
+        const prevBay     = bayIdx > 0 ? bays[bayIdx - 1] : null;
+        const gluedToPrev = prevBay && prevBay.glued_right;
+
+        if (bayIdx > 0) {
+            cumulativeLeft += gluedToPrev ? gluedGapPx : bayGapPx;
+        }
+
+        const leftBorder = gluedToPrev ? 0 : borderW;
+        const bodyLeftPx = cumulativeLeft + leftBorder;
+        const headerH    = meta.bodyEl.previousElementSibling
+            ? meta.bodyEl.previousElementSibling.offsetHeight : 33;
+        const bodyTopPx  = headerH + borderW;
+
+        bay.shelves.forEach((shelf) => {
+            const sMeta = meta.shelves.find(s => s.shelf_number === shelf.shelf_number);
+            if (!sMeta) return;
+
+            const positions = shelf.positions || [];
+            if (!positions.length) return;
+
+            const shelfHeight = sMeta.heightPx;
+            const shelfTopPx  = bodyTopPx + meta.bodyHPx - sMeta.bottomPx - sMeta.heightPx;
+
+            positions.forEach((pos) => {
+                if (pos._phantom) return;
+
                 const product = productsMap[pos.product_id];
                 if (!product) return;
 
-                const singleWidth  = product.width_in * scale;
-                const blockHeight  = Math.min(product.height_in * scale, shelfHeight - 4);
-                const baseLeft     = pos.x_position * scale;
-
-                const isLastPos  = posIdx === posCount - 1;
-                const isFirstPos = posIdx === 0;
-                const bridgeRight = isLastPos  && crossBay.has(bayIdx + ':' + shelf.shelf_number + ':right');
-                const bridgeLeft  = isFirstPos && crossBay.has(bayIdx + ':' + shelf.shelf_number + ':left');
+                const singleWidth = product.width_in * scale;
+                const blockHeight = Math.min(product.height_in * scale, shelfHeight - 4);
+                const baseLeft    = pos.x_position * scale;
 
                 for (let f = 0; f < pos.facings_wide; f++) {
                     const block = document.createElement('div');
                     block.className = 'product-block';
                     if (f > 0) block.classList.add('facing-repeat');
 
-                    const isRightEdge = bridgeRight && f === pos.facings_wide - 1;
-                    const isLeftEdge  = bridgeLeft  && f === 0;
-                    if (isRightEdge) block.classList.add('cross-bay-right');
-                    if (isLeftEdge)  block.classList.add('cross-bay-left');
+                    const leftPx  = bodyLeftPx + baseLeft + f * singleWidth;
+                    const widthPx = singleWidth;
 
-                    const leftPx  = Math.floor(baseLeft + f * singleWidth);
-                    let   rightPx = Math.floor(baseLeft + (f + 1) * singleWidth);
-
-                    // Stretch last facing to fill remaining shelf space (no visual gap)
-                    if (isLastPos && f === pos.facings_wide - 1) {
-                        rightPx = Math.floor(shelfWidthPx);
-                    }
-
-                    block.style.width  = (rightPx - leftPx) + 'px';
+                    block.style.width  = widthPx + 'px';
                     block.style.height = blockHeight + 'px';
                     block.style.left   = leftPx + 'px';
+                    block.style.top    = shelfTopPx + (shelfHeight - blockHeight) + 'px';
 
                     const labelEl = document.createElement('div');
                     labelEl.className = 'product-label';
@@ -135,10 +138,55 @@ function renderPlanogram() {
                     block.addEventListener('mousemove',  (e) => moveTooltip(e));
                     block.addEventListener('mouseleave', hideTooltip);
 
-                    shelfEl.appendChild(block);
+                    productLayer.appendChild(block);
                 }
             });
-        },
+        });
+
+        const rightBorder = bay.glued_right ? 0 : borderW;
+        cumulativeLeft += leftBorder + meta.widthPx + rightBorder;
+    });
+
+    // ── LAYER 3: Bay border overlay lines (on top of products) ──
+    const borderOverlay = document.createElement('div');
+    borderOverlay.className = 'bay-border-overlay';
+    container.appendChild(borderOverlay);
+
+    let bdrLeft = 0;
+    bays.forEach((bay, bayIdx) => {
+        const meta = layout[bayIdx];
+        if (!meta) return;
+
+        const prevBay     = bayIdx > 0 ? bays[bayIdx - 1] : null;
+        const gluedToPrev = prevBay && prevBay.glued_right;
+
+        if (bayIdx > 0) {
+            bdrLeft += gluedToPrev ? gluedGapPx : bayGapPx;
+        }
+        const lBorder = gluedToPrev ? 0 : borderW;
+        const rBorder = bay.glued_right ? 0 : borderW;
+        const bayTotalW = lBorder + meta.widthPx + rBorder;
+
+        // Draw left and right vertical border lines for this bay
+        if (lBorder > 0) {
+            const line = document.createElement('div');
+            line.className = 'bay-border-line';
+            line.style.left   = bdrLeft + 'px';
+            line.style.top    = '0';
+            line.style.width  = borderW + 'px';
+            line.style.height = '100%';
+            borderOverlay.appendChild(line);
+        }
+        if (rBorder > 0) {
+            const line = document.createElement('div');
+            line.className = 'bay-border-line';
+            line.style.left   = (bdrLeft + bayTotalW - borderW) + 'px';
+            line.style.top    = '0';
+            line.style.width  = borderW + 'px';
+            line.style.height = '100%';
+            borderOverlay.appendChild(line);
+        }
+
+        bdrLeft += bayTotalW;
     });
 }
-
