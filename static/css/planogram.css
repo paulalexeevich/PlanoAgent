@@ -12,7 +12,7 @@
 /* PLANOGRAM VISUAL */
 .planogram-container {
     display: flex;
-    gap: 4px;
+    gap: 0;
     width: fit-content;
     margin: 0 auto 24px auto;
 }
@@ -25,6 +25,17 @@
     overflow: visible;
     box-sizing: content-box;
     flex-shrink: 0;
+    margin-left: 4px;
+}
+.bay:first-child { margin-left: 0; }
+.bay.bay-glued {
+    margin-left: -2px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+.bay:has(+ .bay-glued) {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
 }
 .bay-header {
     background: var(--bg-shelf);

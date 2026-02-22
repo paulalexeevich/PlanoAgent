@@ -170,7 +170,9 @@ function _edLiveWidth(bayIdx) {
     if (bayEl) {
         bayEl.style.width = wpx + 'px';
         const title = bayEl.querySelector('.bay-hdr-title');
-        if (title) title.textContent = `Bay ${bayIdx + 1} — ${dFmt(w)} × ${dFmt(heightIn)}`;
+        if (title) title.textContent = `Bay ${bayIdx + 1}`;
+        const footerEl = bayEl.querySelector('.bay-footer');
+        if (footerEl) footerEl.textContent = dFmt(w);
         const body = bayEl.querySelector('.eq-editor-bay-body');
         if (body) body.style.width = wpx + 'px';
     }
@@ -189,6 +191,8 @@ function _edLiveShelfH(bayIdx) {
             shelfEls[si].style.height = (h * EDITOR_SCALE) + 'px';
             const dl = shelfEls[si].querySelector('.shelf-drag-line');
             if (dl) dl.dataset.dim = Math.round(h) + '"';
+            const lbl = shelfEls[si].querySelector('.eq-editor-shelf-label');
+            if (lbl) lbl.textContent = `S${si + 1} — ${dFmt(h)}`;
         }
         yPos += h;
     });
@@ -253,7 +257,7 @@ function renderEditorBays() {
         const hdr = document.createElement('div');
         hdr.className = 'eq-editor-bay-hdr';
         hdr.innerHTML = `
-            <span class="bay-hdr-title">Bay ${idx + 1} — ${dFmt(bay.width_in)} × ${dFmt(heightIn)}</span>
+            <span class="bay-hdr-title">Bay ${idx + 1}</span>
             <div class="bay-shelf-ctrl">
                 <button class="bsc-btn" title="Remove shelf">−</button>
                 <span class="bsc-val">${numShelves}S</span>
@@ -281,7 +285,7 @@ function renderEditorBays() {
 
             const lbl = document.createElement('span');
             lbl.className = 'eq-editor-shelf-label';
-            lbl.textContent = `S${si + 1}`;
+            lbl.textContent = `S${si + 1} — ${dFmt(shelfH)}`;
             shelfEl.appendChild(lbl);
 
             if (si > 0) {
@@ -309,6 +313,11 @@ function renderEditorBays() {
         }
 
         bayEl.appendChild(body);
+
+        const footer = document.createElement('div');
+        footer.className = 'bay-footer';
+        footer.textContent = dFmt(bay.width_in);
+        bayEl.appendChild(footer);
 
         const edgeHandleLeft = document.createElement('div');
         edgeHandleLeft.className = 'bay-edge-handle-left';

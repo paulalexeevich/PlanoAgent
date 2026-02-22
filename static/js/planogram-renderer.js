@@ -37,9 +37,12 @@ function renderPlanogram() {
 
     const segMap = (!isDtLayer) ? buildSegmentMap() : {};
 
-    equipment.bays.forEach(bay => {
+    equipment.bays.forEach((bay, bayIdx) => {
+        const prevBay = bayIdx > 0 ? equipment.bays[bayIdx - 1] : null;
+        const gluedToPrev = prevBay && prevBay.glued_right;
+
         const bayEl = document.createElement('div');
-        bayEl.className = 'bay';
+        bayEl.className = 'bay' + (gluedToPrev ? ' bay-glued' : '');
         bayEl.style.width = (bay.width_in * scale) + 'px';
 
         const header = document.createElement('div');
