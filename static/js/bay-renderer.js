@@ -99,8 +99,7 @@ const BayRenderer = {
 
                 shelfMeta.push({
                     shelf_number: shelf.shelf_number,
-                    bottomPx: shelf.y_position * scale,
-                    heightPx: shelf.height_in * scale,
+                    el: shelfEl,
                 });
             });
 

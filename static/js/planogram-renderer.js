@@ -1,9 +1,14 @@
 /* PLANOGRAM RENDERER — Dashboard visualization (uses shared BayRenderer)
  *
- * Two-layer architecture:
+ * Three-layer architecture:
  *   1. Equipment layer — bay borders, shelves, labels (BayRenderer)
  *   2. Product layer   — product blocks as absolute overlay, NOT clipped
  *      by bay boundaries.  Cross-bay products visually span the border.
+ *   3. Bay border overlay — thin lines on top of products.
+ *
+ * Product positioning deferred to requestAnimationFrame so the browser
+ * has completed layout of the equipment layer first, making
+ * getBoundingClientRect reliable.
  */
 
 function renderPlanogram() {
@@ -49,144 +54,125 @@ function renderPlanogram() {
 
     if (!layout || !layout.length) return;
 
-    // ── LAYER 2: Products (absolute overlay spanning full planogram) ──
+    // Prepare overlay containers now (visible immediately, populated in rAF)
     const productLayer = document.createElement('div');
     productLayer.className = 'product-layer';
     container.appendChild(productLayer);
 
-    // Calculate bay body offsets from known geometry
-    // (getBoundingClientRect unreliable during same-frame render)
-    const bayGapPx   = 4;
-    const gluedGapPx = 0;
-    const borderW    = 2;   // .br-bay border-width
-    let cumulativeLeft = 0;
-
-    bays.forEach((bay, bayIdx) => {
-        const meta = layout[bayIdx];
-        if (!meta) return;
-
-        const prevBay     = bayIdx > 0 ? bays[bayIdx - 1] : null;
-        const gluedToPrev = prevBay && prevBay.glued_right;
-
-        if (bayIdx > 0) {
-            cumulativeLeft += gluedToPrev ? gluedGapPx : bayGapPx;
-        }
-
-        const leftBorder = gluedToPrev ? 0 : borderW;
-        const bodyLeftPx = cumulativeLeft + leftBorder;
-        const headerH    = meta.bodyEl.previousElementSibling
-            ? meta.bodyEl.previousElementSibling.offsetHeight : 33;
-        const bodyTopPx  = headerH + borderW;
-
-        bay.shelves.forEach((shelf) => {
-            const sMeta = meta.shelves.find(s => s.shelf_number === shelf.shelf_number);
-            if (!sMeta) return;
-
-            const positions = shelf.positions || [];
-            if (!positions.length) return;
-
-            const shelfHeight = sMeta.heightPx;
-            const shelfTopPx  = bodyTopPx + meta.bodyHPx - sMeta.bottomPx - sMeta.heightPx;
-
-            positions.forEach((pos) => {
-                if (pos._phantom) return;
-
-                const product = productsMap[pos.product_id];
-                if (!product) return;
-
-                const singleWidth = product.width_in * scale;
-                const blockHeight = Math.min(product.height_in * scale, shelfHeight - 4);
-                const baseLeft    = pos.x_position * scale;
-
-                for (let f = 0; f < pos.facings_wide; f++) {
-                    const block = document.createElement('div');
-                    block.className = 'product-block';
-                    if (f > 0) block.classList.add('facing-repeat');
-
-                    const leftPx  = bodyLeftPx + baseLeft + f * singleWidth;
-                    const widthPx = singleWidth;
-
-                    block.style.width  = widthPx + 'px';
-                    block.style.height = blockHeight + 'px';
-                    block.style.left   = leftPx + 'px';
-                    block.style.top    = shelfTopPx + (shelfHeight - blockHeight) + 'px';
-
-                    const labelEl = document.createElement('div');
-                    labelEl.className = 'product-label';
-
-                    if (isDtLayer && dtLevelName) {
-                        const groups   = dtPositionMap[pos.product_id];
-                        const groupVal = groups ? (groups[dtLevelName] || '?') : '?';
-                        const color    = dtPalette[groupVal] || '#666';
-                        block.style.backgroundColor = color;
-                        labelEl.textContent = groupVal;
-                        block.appendChild(labelEl);
-                    } else {
-                        block.style.backgroundColor = product.color_hex || '#666';
-                        const shortName = product.brand + (product.pack_size > 1 ? ' ' + product.pack_size + 'pk' : '');
-                        labelEl.textContent = shortName;
-                        block.appendChild(labelEl);
-                        if (blockHeight > 25) {
-                            const priceEl = document.createElement('div');
-                            priceEl.className = 'product-price';
-                            priceEl.textContent = cFmt(product.price);
-                            block.appendChild(priceEl);
-                        }
-                    }
-
-                    block.addEventListener('mouseenter', (e) => showTooltip(e, product, pos));
-                    block.addEventListener('mousemove',  (e) => moveTooltip(e));
-                    block.addEventListener('mouseleave', hideTooltip);
-
-                    productLayer.appendChild(block);
-                }
-            });
-        });
-
-        const rightBorder = bay.glued_right ? 0 : borderW;
-        cumulativeLeft += leftBorder + meta.widthPx + rightBorder;
-    });
-
-    // ── LAYER 3: Bay border overlay lines (on top of products) ──
     const borderOverlay = document.createElement('div');
     borderOverlay.className = 'bay-border-overlay';
     container.appendChild(borderOverlay);
 
-    let bdrLeft = 0;
-    bays.forEach((bay, bayIdx) => {
-        const meta = layout[bayIdx];
-        if (!meta) return;
+    // Defer product + border-overlay rendering until browser has completed layout
+    requestAnimationFrame(() => {
+        const containerRect = container.getBoundingClientRect();
 
-        const prevBay     = bayIdx > 0 ? bays[bayIdx - 1] : null;
-        const gluedToPrev = prevBay && prevBay.glued_right;
+        bays.forEach((bay, bayIdx) => {
+            const meta = layout[bayIdx];
+            if (!meta || !meta.bodyEl) return;
 
-        if (bayIdx > 0) {
-            bdrLeft += gluedToPrev ? gluedGapPx : bayGapPx;
-        }
-        const lBorder = gluedToPrev ? 0 : borderW;
-        const rBorder = bay.glued_right ? 0 : borderW;
-        const bayTotalW = lBorder + meta.widthPx + rBorder;
+            const bodyRect   = meta.bodyEl.getBoundingClientRect();
+            const bodyLeftPx = bodyRect.left - containerRect.left;
+            const bodyTopPx  = bodyRect.top  - containerRect.top;
+            const bodyHPx    = bodyRect.height;
 
-        // Draw left and right vertical border lines for this bay
-        if (lBorder > 0) {
-            const line = document.createElement('div');
-            line.className = 'bay-border-line';
-            line.style.left   = bdrLeft + 'px';
-            line.style.top    = '0';
-            line.style.width  = borderW + 'px';
-            line.style.height = '100%';
-            borderOverlay.appendChild(line);
-        }
-        if (rBorder > 0) {
-            const line = document.createElement('div');
-            line.className = 'bay-border-line';
-            line.style.left   = (bdrLeft + bayTotalW - borderW) + 'px';
-            line.style.top    = '0';
-            line.style.width  = borderW + 'px';
-            line.style.height = '100%';
-            borderOverlay.appendChild(line);
-        }
+            bay.shelves.forEach((shelf) => {
+                const sMeta = meta.shelves.find(s => s.shelf_number === shelf.shelf_number);
+                if (!sMeta || !sMeta.el) return;
 
-        bdrLeft += bayTotalW;
+                const positions = shelf.positions || [];
+                if (!positions.length) return;
+
+                const shelfRect   = sMeta.el.getBoundingClientRect();
+                const shelfTopPx  = shelfRect.top  - containerRect.top;
+                const shelfHeight = shelfRect.height;
+
+                positions.forEach((pos) => {
+                    if (pos._phantom) return;
+
+                    const product = productsMap[pos.product_id];
+                    if (!product) return;
+
+                    const singleWidth = product.width_in * scale;
+                    const blockHeight = Math.min(product.height_in * scale, shelfHeight - 4);
+                    const baseLeft    = pos.x_position * scale;
+
+                    for (let f = 0; f < pos.facings_wide; f++) {
+                        const block = document.createElement('div');
+                        block.className = 'product-block';
+                        if (f > 0) block.classList.add('facing-repeat');
+
+                        const leftPx  = bodyLeftPx + baseLeft + f * singleWidth;
+                        const widthPx = singleWidth;
+
+                        block.style.width  = widthPx + 'px';
+                        block.style.height = blockHeight + 'px';
+                        block.style.left   = leftPx + 'px';
+                        block.style.top    = (shelfTopPx + shelfHeight - blockHeight) + 'px';
+
+                        const labelEl = document.createElement('div');
+                        labelEl.className = 'product-label';
+
+                        if (isDtLayer && dtLevelName) {
+                            const groups   = dtPositionMap[pos.product_id];
+                            const groupVal = groups ? (groups[dtLevelName] || '?') : '?';
+                            const color    = dtPalette[groupVal] || '#666';
+                            block.style.backgroundColor = color;
+                            labelEl.textContent = groupVal;
+                            block.appendChild(labelEl);
+                        } else {
+                            block.style.backgroundColor = product.color_hex || '#666';
+                            const shortName = product.brand + (product.pack_size > 1 ? ' ' + product.pack_size + 'pk' : '');
+                            labelEl.textContent = shortName;
+                            block.appendChild(labelEl);
+                            if (blockHeight > 25) {
+                                const priceEl = document.createElement('div');
+                                priceEl.className = 'product-price';
+                                priceEl.textContent = cFmt(product.price);
+                                block.appendChild(priceEl);
+                            }
+                        }
+
+                        block.addEventListener('mouseenter', (e) => showTooltip(e, product, pos));
+                        block.addEventListener('mousemove',  (e) => moveTooltip(e));
+                        block.addEventListener('mouseleave', hideTooltip);
+
+                        productLayer.appendChild(block);
+                    }
+                });
+            });
+        });
+
+        // ── LAYER 3: Bay border overlay lines ──
+        const borderW = 2;
+        bays.forEach((bay, bayIdx) => {
+            const meta = layout[bayIdx];
+            if (!meta || !meta.bodyEl) return;
+
+            const bayEl     = meta.bodyEl.parentElement;
+            const bayRect   = bayEl.getBoundingClientRect();
+            const bayLeftPx = bayRect.left - containerRect.left;
+            const bayWPx    = bayRect.width;
+
+            const prevBay     = bayIdx > 0 ? bays[bayIdx - 1] : null;
+            const gluedToPrev = prevBay && prevBay.glued_right;
+
+            if (!gluedToPrev) {
+                const line = document.createElement('div');
+                line.className = 'bay-border-line';
+                line.style.left   = bayLeftPx + 'px';
+                line.style.width  = borderW + 'px';
+                line.style.height = '100%';
+                borderOverlay.appendChild(line);
+            }
+            if (!bay.glued_right) {
+                const line = document.createElement('div');
+                line.className = 'bay-border-line';
+                line.style.left   = (bayLeftPx + bayWPx - borderW) + 'px';
+                line.style.width  = borderW + 'px';
+                line.style.height = '100%';
+                borderOverlay.appendChild(line);
+            }
+        });
     });
 }
