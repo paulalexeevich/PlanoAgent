@@ -3066,7 +3066,7 @@
             const MIN_SHELF = 2, MIN_BAY = 12;
 
             if (_edDrag.type === 'width') {
-                const deltaIn = (e.clientX - _edDrag.startX) / EDITOR_SCALE;
+                const deltaIn = Math.round((e.clientX - _edDrag.startX) / EDITOR_SCALE);
                 const bayA = editorState.bays[_edDrag.bayIdx];
                 const bayB = editorState.bays[_edDrag.bayIdxNext]; // may be undefined (last bay)
 
@@ -3088,7 +3088,7 @@
                 }
             } else {
                 // Shelf: drag UP = move line up = shelf below grows, shelf above shrinks
-                const deltaIn = (_edDrag.startY - e.clientY) / EDITOR_SCALE;
+                const deltaIn = Math.round((_edDrag.startY - e.clientY) / EDITOR_SCALE);
                 const bay = editorState.bays[_edDrag.bayIdx];
                 const si  = _edDrag.shelfIdx;
                 const siAbove = si + 1;
@@ -3098,14 +3098,14 @@
                     const maxUp   = _edDrag.startValueAbove - MIN_SHELF;
                     const maxDown = _edDrag.startValue      - MIN_SHELF;
                     const clamped = Math.max(-maxDown, Math.min(maxUp, deltaIn));
-                    bay.shelf_clearances[si]      = parseFloat((_edDrag.startValue      + clamped).toFixed(1));
-                    bay.shelf_clearances[siAbove] = parseFloat((_edDrag.startValueAbove - clamped).toFixed(1));
+                    bay.shelf_clearances[si]      = Math.round(_edDrag.startValue      + clamped);
+                    bay.shelf_clearances[siAbove] = Math.round(_edDrag.startValueAbove - clamped);
                     _edLiveShelfH(_edDrag.bayIdx);
                     tooltip.textContent = dFmt(bay.shelf_clearances[si]) + ' | ' + dFmt(bay.shelf_clearances[siAbove]);
                     if (_edDrag.handle) _edDrag.handle.dataset.dim = Math.round(bay.shelf_clearances[si]) + '"';
                 } else {
                     // Top shelf — resize freely
-                    const newH = Math.max(MIN_SHELF, parseFloat((_edDrag.startValue + deltaIn).toFixed(1)));
+                    const newH = Math.max(MIN_SHELF, Math.round(_edDrag.startValue + deltaIn));
                     bay.shelf_clearances[si] = newH;
                     _edLiveShelfH(_edDrag.bayIdx);
                     tooltip.textContent = dFmt(newH);
