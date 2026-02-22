@@ -62,6 +62,7 @@
 ## CSS Layout Lessons
 - **Never use `justify-content: center` on scrollable flex containers** — left side becomes inaccessible. Use `width: fit-content; margin: 0 auto` instead.
 - **Collapsible panels**: Use `max-height` + `overflow: hidden` + `opacity` transitions. Set `max-height` high enough (200px).
+- **Shelf visual**: Use `border-bottom` (not `border-top`) on `.shelf-row` to represent the physical shelf board. Shelf rows must be `background: transparent` — grey fill hides the open-air nature of a real gondola. Empty shelves should always get the `empty-shelf` class (not only when the entire planogram is empty).
 
 ## Algorithm vs AI Comparison (v0.7)
 - **Mode selector**: Dropdown in UI with Algorithm/AI/Compare options.
