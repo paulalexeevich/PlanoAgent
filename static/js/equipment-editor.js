@@ -4,45 +4,6 @@ let EDITOR_SCALE = 3;
 let editorState = null;
 let _edDrag = null;
 
-function updateEditorStats() {
-    if (!editorState) return;
-    const bays = editorState.bays;
-    document.getElementById('edStatBays').textContent = bays.length;
-    const totalShelves = bays.reduce((sum, bay) => sum + (bay.num_shelves || 5), 0);
-    document.getElementById('edStatShelves').textContent = totalShelves;
-    const totalWidth = bays.reduce((sum, bay) => sum + bay.width_in, 0);
-    document.getElementById('edStatWidth').textContent = dFmt(totalWidth);
-    const ht = parseFloat(document.getElementById('edEqHeight').value) || editorState.height_in || 72;
-    const dp = parseFloat(document.getElementById('edEqDepth').value) || editorState.depth_in || 24;
-    document.getElementById('edStatDims').textContent = dFmt(ht) + ' × ' + dFmt(dp);
-}
-
-function updateEditorStats() {
-    if (!editorState) return;
-    const bays = editorState.bays;
-    document.getElementById('edStatBays').textContent = bays.length;
-    const totalShelves = bays.reduce((sum, bay) => sum + (bay.num_shelves || 5), 0);
-    document.getElementById('edStatShelves').textContent = totalShelves;
-    const totalWidth = bays.reduce((sum, bay) => sum + bay.width_in, 0);
-    document.getElementById('edStatWidth').textContent = dFmt(totalWidth);
-    const ht = parseFloat(document.getElementById('edEqHeight').value) || editorState.height_in || 72;
-    const dp = parseFloat(document.getElementById('edEqDepth').value) || editorState.depth_in || 24;
-    document.getElementById('edStatDims').textContent = dFmt(ht) + ' × ' + dFmt(dp);
-}
-
-function updateEditorStats() {
-    if (!editorState) return;
-    const bays = editorState.bays;
-    document.getElementById('edStatBays').textContent = bays.length;
-    const totalShelves = bays.reduce((sum, bay) => sum + (bay.num_shelves || 5), 0);
-    document.getElementById('edStatShelves').textContent = totalShelves;
-    const totalWidth = bays.reduce((sum, bay) => sum + bay.width_in, 0);
-    document.getElementById('edStatWidth').textContent = dFmt(totalWidth);
-    const ht = parseFloat(document.getElementById('edEqHeight').value) || editorState.height_in || 72;
-    const dp = parseFloat(document.getElementById('edEqDepth').value) || editorState.depth_in || 24;
-    document.getElementById('edStatDims').textContent = dFmt(ht) + ' × ' + dFmt(dp);
-}
-
 function editorZoom(dir) {
     EDITOR_SCALE = Math.max(1, Math.min(8, EDITOR_SCALE + dir));
     document.getElementById('edZoomLabel').textContent = EDITOR_SCALE + ' px/in';
@@ -225,7 +186,6 @@ function openEquipmentEditor() {
     document.getElementById('edRemoveBayBtn').disabled = editorState.bays.length <= 1;
     toggleAllBaysPopover(false);
     renderEditorBays();
-    updateEditorStats();
     document.getElementById('eqEditorOverlay').classList.add('open');
 }
 
@@ -341,8 +301,6 @@ function renderEditorBays() {
             container.appendChild(toggle);
         }
     });
-
-    updateEditorStats();
 }
 
 function toggleBayGlue(bayIdx) {

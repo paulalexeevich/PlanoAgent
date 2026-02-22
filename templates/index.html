@@ -214,7 +214,7 @@
         <div class="s-toolbar eq-editor-toolbar">
             <div class="s-toolbar-group">
                 <span class="s-toolbar-label">Type</span>
-                <select class="s-toolbar-select" id="edEqType" onchange="updateEditorStats()">
+                <select class="s-toolbar-select" id="edEqType">
                     <option value="gondola">Gondola</option>
                     <option value="cooler">Cooler</option>
                     <option value="endcap">Endcap</option>
@@ -230,7 +230,7 @@
             </div>
             <div class="s-toolbar-group">
                 <span class="s-toolbar-label">Depth</span>
-                <input type="number" class="s-toolbar-input" id="edEqDepth" value="24" min="6" max="48" step="1" oninput="updateEditorStats()">
+                <input type="number" class="s-toolbar-input" id="edEqDepth" value="24" min="6" max="48" step="1">
                 <span class="s-toolbar-unit">in</span>
             </div>
             <div class="s-toolbar-divider"></div>
@@ -269,28 +269,6 @@
                         <button class="btn btn-primary" onclick="applyAllBaysConfig()">Apply to All</button>
                         <button class="btn btn-secondary" onclick="toggleAllBaysPopover(false)">Cancel</button>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Equipment Stats (shared card component) -->
-        <div class="eq-editor-stats" id="editorStatsRow">
-            <div class="s-card-grid cols-4">
-                <div class="s-card compact">
-                    <div class="s-card-label">Bays</div>
-                    <div class="s-card-value" id="edStatBays">3</div>
-                </div>
-                <div class="s-card compact">
-                    <div class="s-card-label">Total Shelves</div>
-                    <div class="s-card-value" id="edStatShelves">15</div>
-                </div>
-                <div class="s-card compact">
-                    <div class="s-card-label">Total Width</div>
-                    <div class="s-card-value" id="edStatWidth">144"</div>
-                </div>
-                <div class="s-card compact">
-                    <div class="s-card-label">Height × Depth</div>
-                    <div class="s-card-value" id="edStatDims">72" × 24"</div>
                 </div>
             </div>
         </div>

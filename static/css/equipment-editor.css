@@ -43,13 +43,6 @@
     overflow: hidden;
 }
 
-.eq-editor-stats {
-    padding: 12px 24px;
-    background: var(--bg-card);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-}
-
 .btn-icon {
     padding: 5px 10px;
     background: var(--bg-shelf);

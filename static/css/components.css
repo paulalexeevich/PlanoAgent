@@ -60,13 +60,6 @@
     color: var(--text-secondary);
 }
 
-/* Compact variant */
-.s-card.compact { padding: 12px 14px; }
-.s-card.compact .s-card-value {
-    font-size: 18px;
-    font-weight: 700;
-}
-
 /* Card color modifiers */
 .s-green .s-card-value { color: var(--accent-green); }
 .s-orange .s-card-value { color: var(--accent-orange); }
