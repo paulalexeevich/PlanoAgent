@@ -1710,6 +1710,11 @@
             </div>
             <div class="eq-toolbar-divider"></div>
             <!-- Configure All Bays — relative wrapper for popover positioning -->
+            <div class="eq-toolbar-group" style="margin-left:auto; gap:4px;">
+                <button class="bsc-btn" onclick="editorZoom(-1)" title="Zoom out">−</button>
+                <span id="edZoomLabel" style="font-size:10px;min-width:38px;text-align:center;color:var(--text-secondary);font-weight:600;">3 px/in</span>
+                <button class="bsc-btn" onclick="editorZoom(1)" title="Zoom in">+</button>
+            </div>
             <div style="position:relative;">
                 <button class="btn-all-bays" id="edAllBaysBtn" onclick="toggleAllBaysPopover()">⚙ All Bays</button>
                 <div class="all-bays-popover" id="allBaysPopover">
@@ -3023,7 +3028,13 @@
         // ============================================================
         // EQUIPMENT EDITOR — Direct Manipulation
         // ============================================================
-        const EDITOR_SCALE = 3; // px per inch — visual scale in editor
+        let EDITOR_SCALE = 3; // px per inch — visual scale in editor
+
+        function editorZoom(dir) {
+            EDITOR_SCALE = Math.max(1, Math.min(8, EDITOR_SCALE + dir));
+            document.getElementById('edZoomLabel').textContent = EDITOR_SCALE + ' px/in';
+            renderEditorBays();
+        }
 
         let editorState = null; // { equipment_type, height_in, depth_in, bays: [{width_in, num_shelves, shelf_clearances}] }
         let _edDrag = null;     // active drag state
