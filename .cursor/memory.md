@@ -120,6 +120,13 @@
 - **`applyEquipmentEditor()`**: posts `bays_config` to `/api/generate-equipment`, closes overlay, renders empty planogram.
 - **EDITOR_SCALE = 3px/in**: editor visualization scale.
 
+## Frontend Refactor (v0.30)
+- **Monolith split**: `templates/index.html` was 3,552 lines (1,532 CSS + 270 HTML + 1,716 JS). Now 327-line HTML with 7 CSS + 11 JS external files in `static/`.
+- **No build system**: Plain `<script>` and `<link>` tags. All functions remain global scope. Load order matters: `state.js` first (defines globals), `app.js` last (DOMContentLoaded glue).
+- **File map**: CSS: `base` (layout/buttons), `controls` (loading/tags/config), `planogram` (bays/shelves/products/tooltip), `dashboard` (KPI/detail), `modals` (compare/error), `layers` (DT/compliance), `equipment-editor` (editor overlay). JS: `state` (globals), `utils` (conversion/helpers), `tooltip`, `layer-system`, `planogram-renderer`, `bay-config`, `compare`, `dashboard`, `api`, `equipment-editor`, `app` (init).
+- **Largest modules**: `equipment-editor.js` (440 lines) + `equipment-editor.css` (435 lines) = 875 total. `dashboard.js` (335 lines) + `dashboard.css` (251 lines) = 586 total.
+- **Flask**: `static_folder="static"` was already configured in `app.py`. Static files served at `/static/css/*.css` and `/static/js/*.js`.
+
 ## Known Issues & TODOs
 - Fill target is 99% but achievable ~96% due to fractional inch gaps (product widths don't evenly divide shelf width).
 - `ComplianceReport` uses `.overall_pct` not `.overall_score` — always check attribute names.
