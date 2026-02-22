@@ -1087,6 +1087,291 @@
             font-weight: 600;
             white-space: nowrap;
         }
+
+        /* ============================================================
+           EQUIPMENT EDITOR OVERLAY
+           ============================================================ */
+        .eq-editor-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: var(--bg-dark);
+            z-index: 200;
+            flex-direction: column;
+        }
+        .eq-editor-overlay.open { display: flex; }
+
+        .eq-editor-hdr {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            gap: 12px;
+        }
+        .eq-editor-hdr h2 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: 0.2px;
+        }
+        .eq-editor-hdr .hdr-actions { display: flex; gap: 8px; align-items: center; }
+
+        .eq-editor-toolbar {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+        .eq-toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .eq-toolbar-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+        }
+        .eq-toolbar-input {
+            padding: 5px 8px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            width: 68px;
+        }
+        .eq-toolbar-input:focus { border-color: var(--accent); }
+        .eq-toolbar-select {
+            padding: 5px 8px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            min-width: 110px;
+        }
+        .eq-toolbar-select:focus { border-color: var(--accent); }
+        .eq-toolbar-divider { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+        .eq-toolbar-unit {
+            font-size: 10px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .btn-icon {
+            padding: 5px 10px;
+            background: var(--bg-shelf);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            line-height: 1;
+            font-weight: 600;
+        }
+        .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-icon:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .btn-all-bays {
+            padding: 6px 14px;
+            background: rgba(74,158,255,0.08);
+            border: 1px solid rgba(74,158,255,0.5);
+            border-radius: 6px;
+            color: var(--accent);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .btn-all-bays:hover { background: rgba(74,158,255,0.18); border-color: var(--accent); }
+        .btn-all-bays.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+        .eq-editor-main {
+            flex: 1;
+            overflow: auto;
+            padding: 28px 24px 24px;
+        }
+        .eq-editor-bays {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            width: fit-content;
+            margin: 0 auto;
+        }
+        .eq-editor-bay {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            flex-shrink: 0;
+            position: relative;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            box-sizing: content-box;
+            overflow: visible;
+        }
+        .eq-editor-bay.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent), 0 0 16px rgba(74,158,255,0.15);
+        }
+        .eq-editor-bay-hdr {
+            background: var(--bg-shelf);
+            padding: 7px 10px;
+            text-align: center;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            border-radius: 5px 5px 0 0;
+        }
+        .eq-editor-bay-body {
+            position: relative;
+            overflow: hidden;
+        }
+        .eq-editor-shelf {
+            position: absolute;
+            width: 100%;
+            border-bottom: 3px solid var(--shelf-metal);
+            box-sizing: border-box;
+        }
+        .eq-editor-shelf-label {
+            position: absolute;
+            left: 2px;
+            top: 2px;
+            font-size: 8px;
+            color: var(--text-secondary);
+            opacity: 0.55;
+        }
+        .eq-editor-empty-label {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            opacity: 0.4;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            pointer-events: none;
+        }
+
+        /* Configure button — inside each bay body */
+        .eq-bay-cfg-btn {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15,17,23,0.88);
+            border: 1px solid rgba(74,158,255,0.6);
+            color: var(--accent);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 4px 11px;
+            border-radius: 5px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+            z-index: 10;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+        .eq-bay-cfg-btn:hover,
+        .eq-editor-bay.selected .eq-bay-cfg-btn {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        /* Config Drawer — slides up from bottom of overlay */
+        .eq-config-drawer {
+            background: var(--bg-card);
+            border-top: 2px solid var(--accent);
+            flex-shrink: 0;
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height 0.28s ease;
+        }
+        .eq-config-drawer.open { max-height: 160px; }
+        .eq-config-drawer-inner {
+            padding: 14px 24px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .eq-config-drawer-title {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--accent);
+        }
+        .eq-config-drawer-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        .eq-config-field {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .eq-config-field label {
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+        .eq-config-field input[type="number"] {
+            padding: 5px 8px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            width: 75px;
+        }
+        .eq-config-field input[type="text"] {
+            padding: 5px 8px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            width: 200px;
+        }
+        .eq-config-field input:focus { border-color: var(--accent); }
+        .eq-config-drawer-btns {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+            padding-bottom: 1px;
+        }
     </style>
 </head>
 <body>
@@ -1273,6 +1558,85 @@
         </div>
         <!-- Hidden file input for assortment upload -->
         <input type="file" id="assortmentFileInput" accept=".csv,.txt,.json" style="display:none" onchange="handleAssortmentUpload(event)">
+    </div>
+
+    <!-- EQUIPMENT EDITOR OVERLAY -->
+    <div class="eq-editor-overlay" id="eqEditorOverlay">
+        <!-- Header -->
+        <div class="eq-editor-hdr">
+            <h2>Equipment Editor</h2>
+            <div class="hdr-actions">
+                <button class="btn btn-primary" id="eqEditorApplyBtn" onclick="applyEquipmentEditor()">
+                    <span id="eqEditorApplyLabel">Generate Equipment</span>
+                    <span id="eqEditorApplySpinner" style="display:none" class="btn-spinner"></span>
+                </button>
+                <button class="btn btn-secondary" onclick="closeEquipmentEditor()">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="eq-editor-toolbar">
+            <div class="eq-toolbar-group">
+                <span class="eq-toolbar-label">Type</span>
+                <select class="eq-toolbar-select" id="edEqType">
+                    <option value="gondola">Gondola</option>
+                    <option value="cooler">Cooler</option>
+                    <option value="endcap">Endcap</option>
+                    <option value="wall_section">Wall Section</option>
+                    <option value="island">Island</option>
+                </select>
+            </div>
+            <div class="eq-toolbar-divider"></div>
+            <div class="eq-toolbar-group">
+                <span class="eq-toolbar-label">Height</span>
+                <input type="number" class="eq-toolbar-input" id="edEqHeight" value="72" min="24" max="120" step="1" oninput="renderEditorBays()">
+                <span class="eq-toolbar-unit">in</span>
+            </div>
+            <div class="eq-toolbar-group">
+                <span class="eq-toolbar-label">Depth</span>
+                <input type="number" class="eq-toolbar-input" id="edEqDepth" value="24" min="6" max="48" step="1">
+                <span class="eq-toolbar-unit">in</span>
+            </div>
+            <div class="eq-toolbar-divider"></div>
+            <div class="eq-toolbar-group">
+                <span class="eq-toolbar-label">Bays</span>
+                <button class="btn-icon" id="edRemoveBayBtn" onclick="editorRemoveBay()" disabled>−</button>
+                <span id="edBayCount" style="font-size:14px;font-weight:600;min-width:20px;text-align:center">3</span>
+                <button class="btn-icon" id="edAddBayBtn" onclick="editorAddBay()">+</button>
+            </div>
+            <div class="eq-toolbar-divider"></div>
+            <button class="btn-all-bays" id="edAllBaysBtn" onclick="openAllBaysConfig()">⚙ Configure All Bays</button>
+        </div>
+
+        <!-- Main: bay visualization -->
+        <div class="eq-editor-main">
+            <div class="eq-editor-bays" id="editorBaysContainer"></div>
+        </div>
+
+        <!-- Config Drawer (slides up from bottom) -->
+        <div class="eq-config-drawer" id="eqConfigDrawer">
+            <div class="eq-config-drawer-inner">
+                <div class="eq-config-drawer-title" id="eqConfigDrawerTitle">Configure Bay 1</div>
+                <div class="eq-config-drawer-row">
+                    <div class="eq-config-field" id="edCfgWidthField">
+                        <label>Width (in)</label>
+                        <input type="number" id="edCfgWidth" value="48" min="12" max="120" step="1">
+                    </div>
+                    <div class="eq-config-field">
+                        <label>Shelves</label>
+                        <input type="number" id="edCfgShelves" value="5" min="1" max="12" step="1">
+                    </div>
+                    <div class="eq-config-field">
+                        <label>Shelf Heights (in, comma-sep)</label>
+                        <input type="text" id="edCfgHeights" placeholder="auto — evenly distributed">
+                    </div>
+                    <div class="eq-config-drawer-btns">
+                        <button class="btn btn-primary" id="edCfgApplyBtn" onclick="applyBayConfig()">Apply</button>
+                        <button class="btn btn-secondary" onclick="closeConfigDrawer()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- TOOLTIP -->
@@ -2537,11 +2901,296 @@
             panel.classList.toggle('active');
         }
 
+        // Legacy inline config toggle — now opens the full editor
         function toggleConfig() {
-            const form = document.getElementById('equipmentForm');
-            const btn = document.getElementById('configToggle');
-            form.classList.toggle('open');
-            btn.classList.toggle('active');
+            openEquipmentEditor();
+        }
+
+        // ============================================================
+        // EQUIPMENT EDITOR
+        // ============================================================
+        const EDITOR_SCALE = 3; // px per inch — visual scale in editor
+
+        let editorState = null;       // { equipment_type, height_in, depth_in, bays: [{width_in, num_shelves, shelf_clearances}] }
+        let editorSelectedBay = null; // null = none, -1 = all bays, 0+ = specific bay index
+        let _editorConfigTarget = null; // closure: which bay index to apply to (-1 = all)
+
+        function _defaultEditorState() {
+            return {
+                equipment_type: 'gondola',
+                height_in: 72,
+                depth_in: 24,
+                bays: [
+                    { width_in: 48, num_shelves: 5, shelf_clearances: null },
+                    { width_in: 48, num_shelves: 5, shelf_clearances: null },
+                    { width_in: 48, num_shelves: 5, shelf_clearances: null }
+                ]
+            };
+        }
+
+        function initEditorState() {
+            if (planogramData && planogramData.equipment && planogramData.equipment.bays && planogramData.equipment.bays.length > 0) {
+                const eq = planogramData.equipment;
+                const firstBay = eq.bays[0];
+                editorState = {
+                    equipment_type: eq.equipment_type || 'gondola',
+                    height_in: firstBay.height_in || 72,
+                    depth_in: firstBay.depth_in || 24,
+                    bays: eq.bays.map(bay => {
+                        const sortedShelves = bay.shelves
+                            ? [...bay.shelves].sort((a, b) => a.y_position - b.y_position)
+                            : [];
+                        const clearances = sortedShelves.length > 0
+                            ? sortedShelves.map(s => s.height_in)
+                            : null;
+                        return {
+                            width_in: bay.width_in || 48,
+                            num_shelves: sortedShelves.length || 5,
+                            shelf_clearances: clearances
+                        };
+                    })
+                };
+            } else {
+                editorState = _defaultEditorState();
+            }
+        }
+
+        function openEquipmentEditor() {
+            initEditorState();
+
+            // Sync toolbar
+            document.getElementById('edEqType').value = editorState.equipment_type;
+            document.getElementById('edEqHeight').value = editorState.height_in;
+            document.getElementById('edEqDepth').value = editorState.depth_in;
+            document.getElementById('edBayCount').textContent = editorState.bays.length;
+            document.getElementById('edRemoveBayBtn').disabled = editorState.bays.length <= 1;
+
+            editorSelectedBay = null;
+            _editorConfigTarget = null;
+            closeConfigDrawer(false);
+            renderEditorBays();
+            document.getElementById('eqEditorOverlay').classList.add('open');
+        }
+
+        function closeEquipmentEditor() {
+            document.getElementById('eqEditorOverlay').classList.remove('open');
+            editorSelectedBay = null;
+        }
+
+        function renderEditorBays() {
+            const container = document.getElementById('editorBaysContainer');
+            container.innerHTML = '';
+
+            const heightIn = parseFloat(document.getElementById('edEqHeight').value) || editorState.height_in || 72;
+
+            editorState.bays.forEach((bay, idx) => {
+                const bayEl = document.createElement('div');
+                bayEl.className = 'eq-editor-bay' + (editorSelectedBay === idx ? ' selected' : '');
+                bayEl.style.width = (bay.width_in * EDITOR_SCALE) + 'px';
+
+                // Bay header
+                const hdr = document.createElement('div');
+                hdr.className = 'eq-editor-bay-hdr';
+                hdr.textContent = `Bay ${idx + 1} — ${dFmt(bay.width_in)} × ${dFmt(heightIn)}`;
+                bayEl.appendChild(hdr);
+
+                // Bay body
+                const body = document.createElement('div');
+                body.className = 'eq-editor-bay-body';
+                body.style.height = (heightIn * EDITOR_SCALE) + 'px';
+                body.style.width = (bay.width_in * EDITOR_SCALE) + 'px';
+
+                // Render shelves
+                const numShelves = bay.num_shelves || 5;
+                const clearances = bay.shelf_clearances;
+
+                if (clearances && clearances.length > 0) {
+                    let yPos = 0;
+                    clearances.forEach((h, si) => {
+                        const shelfEl = document.createElement('div');
+                        shelfEl.className = 'eq-editor-shelf';
+                        shelfEl.style.bottom = (yPos * EDITOR_SCALE) + 'px';
+                        shelfEl.style.height = (h * EDITOR_SCALE) + 'px';
+                        const lbl = document.createElement('span');
+                        lbl.className = 'eq-editor-shelf-label';
+                        lbl.textContent = `S${si + 1}`;
+                        shelfEl.appendChild(lbl);
+                        body.appendChild(shelfEl);
+                        yPos += h;
+                    });
+                } else {
+                    const shelfHeight = heightIn / numShelves;
+                    for (let si = 0; si < numShelves; si++) {
+                        const shelfEl = document.createElement('div');
+                        shelfEl.className = 'eq-editor-shelf';
+                        shelfEl.style.bottom = (si * shelfHeight * EDITOR_SCALE) + 'px';
+                        shelfEl.style.height = (shelfHeight * EDITOR_SCALE) + 'px';
+                        const lbl = document.createElement('span');
+                        lbl.className = 'eq-editor-shelf-label';
+                        lbl.textContent = `S${si + 1}`;
+                        shelfEl.appendChild(lbl);
+                        body.appendChild(shelfEl);
+                    }
+                }
+
+                // "EMPTY" watermark
+                const emptyLbl = document.createElement('div');
+                emptyLbl.className = 'eq-editor-empty-label';
+                emptyLbl.textContent = 'Empty';
+                body.appendChild(emptyLbl);
+
+                // Configure button — floats inside the bay body, not in the header
+                const cfgBtn = document.createElement('button');
+                cfgBtn.className = 'eq-bay-cfg-btn';
+                cfgBtn.textContent = '⚙ Configure';
+                cfgBtn.onclick = (e) => { e.stopPropagation(); openBayConfig(idx); };
+                body.appendChild(cfgBtn);
+
+                bayEl.appendChild(body);
+                container.appendChild(bayEl);
+            });
+        }
+
+        function openBayConfig(idx) {
+            editorSelectedBay = idx;
+            _editorConfigTarget = idx;
+            const bay = editorState.bays[idx];
+
+            document.getElementById('eqConfigDrawerTitle').textContent = `Configure Bay ${idx + 1}`;
+            document.getElementById('edCfgWidth').value = bay.width_in;
+            document.getElementById('edCfgShelves').value = bay.num_shelves;
+            document.getElementById('edCfgHeights').value = bay.shelf_clearances ? bay.shelf_clearances.join(', ') : '';
+            document.getElementById('edCfgApplyBtn').textContent = 'Apply to Bay';
+            document.getElementById('edCfgWidthField').style.display = '';
+
+            document.getElementById('edAllBaysBtn').classList.remove('active');
+            document.getElementById('eqConfigDrawer').classList.add('open');
+            renderEditorBays();
+        }
+
+        function openAllBaysConfig() {
+            editorSelectedBay = -1;
+            _editorConfigTarget = -1;
+            const firstBay = editorState.bays[0] || { width_in: 48, num_shelves: 5, shelf_clearances: null };
+
+            document.getElementById('eqConfigDrawerTitle').textContent = 'Configure All Bays';
+            document.getElementById('edCfgWidth').value = firstBay.width_in;
+            document.getElementById('edCfgShelves').value = firstBay.num_shelves;
+            document.getElementById('edCfgHeights').value = firstBay.shelf_clearances ? firstBay.shelf_clearances.join(', ') : '';
+            document.getElementById('edCfgApplyBtn').textContent = 'Apply to All Bays';
+            document.getElementById('edCfgWidthField').style.display = '';
+
+            document.getElementById('edAllBaysBtn').classList.add('active');
+            document.getElementById('eqConfigDrawer').classList.add('open');
+            renderEditorBays();
+        }
+
+        function closeConfigDrawer(doRender) {
+            doRender = (doRender !== false);
+            document.getElementById('eqConfigDrawer').classList.remove('open');
+            document.getElementById('edAllBaysBtn').classList.remove('active');
+            editorSelectedBay = null;
+            _editorConfigTarget = null;
+            if (doRender) renderEditorBays();
+        }
+
+        function applyBayConfig() {
+            const width = parseFloat(document.getElementById('edCfgWidth').value);
+            const shelves = parseInt(document.getElementById('edCfgShelves').value);
+            const heightsStr = document.getElementById('edCfgHeights').value.trim();
+            const clearances = heightsStr
+                ? heightsStr.split(',').map(h => { const n = parseFloat(h.trim()); return isNaN(n) ? null : n; }).filter(h => h !== null)
+                : null;
+
+            const bayData = {
+                width_in: isNaN(width) ? 48 : Math.max(12, width),
+                num_shelves: isNaN(shelves) ? 5 : Math.max(1, shelves),
+                shelf_clearances: (clearances && clearances.length > 0) ? clearances : null
+            };
+
+            if (_editorConfigTarget === -1) {
+                editorState.bays = editorState.bays.map(() => ({ ...bayData }));
+            } else if (_editorConfigTarget !== null && _editorConfigTarget >= 0) {
+                editorState.bays[_editorConfigTarget] = { ...bayData };
+            }
+
+            closeConfigDrawer(false);
+            renderEditorBays();
+        }
+
+        function editorAddBay() {
+            const last = editorState.bays[editorState.bays.length - 1] || { width_in: 48, num_shelves: 5, shelf_clearances: null };
+            editorState.bays.push({ ...last });
+            document.getElementById('edBayCount').textContent = editorState.bays.length;
+            document.getElementById('edRemoveBayBtn').disabled = editorState.bays.length <= 1;
+            renderEditorBays();
+        }
+
+        function editorRemoveBay() {
+            if (editorState.bays.length <= 1) return;
+            editorState.bays.pop();
+            if (editorSelectedBay >= editorState.bays.length) closeConfigDrawer(false);
+            document.getElementById('edBayCount').textContent = editorState.bays.length;
+            document.getElementById('edRemoveBayBtn').disabled = editorState.bays.length <= 1;
+            renderEditorBays();
+        }
+
+        async function applyEquipmentEditor() {
+            // Read global settings from toolbar
+            editorState.equipment_type = document.getElementById('edEqType').value;
+            editorState.height_in = parseFloat(document.getElementById('edEqHeight').value) || 72;
+            editorState.depth_in = parseFloat(document.getElementById('edEqDepth').value) || 24;
+
+            const config = {
+                equipment_type: editorState.equipment_type,
+                num_bays: editorState.bays.length,
+                num_shelves: editorState.bays[0] ? editorState.bays[0].num_shelves : 5,
+                bay_width: editorState.bays[0] ? editorState.bays[0].width_in : 48,
+                bay_height: editorState.height_in,
+                bay_depth: editorState.depth_in,
+                bays_config: editorState.bays.map(bay => ({
+                    width_in: bay.width_in,
+                    num_shelves: bay.num_shelves,
+                    shelf_clearances: bay.shelf_clearances
+                }))
+            };
+
+            const applyBtn = document.getElementById('eqEditorApplyBtn');
+            const applyLabel = document.getElementById('eqEditorApplyLabel');
+            const applySpinner = document.getElementById('eqEditorApplySpinner');
+            applyBtn.disabled = true;
+            applyLabel.textContent = 'Generating...';
+            applySpinner.style.display = 'inline-block';
+            hideError();
+
+            try {
+                const res = await fetch('/api/generate-equipment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const data = await res.json();
+
+                if (data.status === 'error') {
+                    throw new Error(data.error || 'Equipment generation failed');
+                }
+
+                planogramData = data.planogram;
+                summaryData = data.summary;
+                buildProductsMap();
+                renderAll();
+                setSourceTag('equipment_only');
+                equipmentGenerated = true;
+                enableFillBtn(true);
+                closeEquipmentEditor();
+            } catch (err) {
+                console.error('Equipment editor apply failed:', err);
+                showError('Equipment generation failed: ' + err.message);
+            }
+
+            applyBtn.disabled = false;
+            applyLabel.textContent = 'Generate Equipment';
+            applySpinner.style.display = 'none';
         }
     </script>
 </body>
