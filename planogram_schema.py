@@ -94,23 +94,21 @@ class Shelf:
     shelf_type: str = "standard"  # standard, wire, slanted
 
     def used_width(self, products_map: dict) -> float:
-        """Calculate total used width across all positions (skips phantoms).
+        """Calculate total used width visible on this shelf.
 
-        For cross-bay products whose primary position extends past the shelf
-        boundary, only the portion within this shelf is counted.
+        For cross-bay products (both primary and phantom), only the portion
+        physically within [0, shelf_width] is counted.  This gives a fill
+        rate that matches the visual rendering.
         """
-        total = 0
+        total = 0.0
         for pos in self.positions:
-            if getattr(pos, '_phantom', False):
-                continue
             product = products_map.get(pos.product_id)
-            if product:
-                pw = product.width_in * pos.facings_wide
-                x = getattr(pos, 'x_position', 0)
-                available = self.width_in - x
-                if 0 < available < pw:
-                    pw = available
-                total += max(0, pw)
+            if not product:
+                continue
+            pw = product.width_in * pos.facings_wide
+            x = getattr(pos, 'x_position', 0.0)
+            visible = max(0.0, min(self.width_in, x + pw) - max(0.0, x))
+            total += visible
         return total
 
     def fill_rate(self, products_map: dict) -> float:

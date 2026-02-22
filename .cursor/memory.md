@@ -153,11 +153,12 @@
 
 ## Cross-Bay Phantom Position Bugs (v0.45 fix)
 - **Phantom double-counting**: `generate_summary()` had 3 loops (sku_space, category_breakdown, brand_breakdown) that didn't skip `_phantom` positions. Cross-bay products got counted twice — once for primary, once for phantom — doubling facings, space, and revenue in the dashboard table.
-- **Fix**: Add `if getattr(pos, '_phantom', False): continue` to ALL position loops in summary generation. The earlier fill-rate loop (line 311) already had this check; the later aggregation loops were missing it.
-- **Shelf fill rate >100%**: `Shelf.used_width()` counted full product width for cross-bay primary positions that extend past the shelf boundary. Fix: clamp each product's contribution at `self.width_in - x_position`.
+- **Fix**: Add `if getattr(pos, '_phantom', False): continue` to ALL per-SKU aggregation loops. These count unique product totals, so phantoms must be skipped.
+- **Shelf fill rate must include phantom visible portions**: `Shelf.used_width()` must count the visible portion of ALL positions (primary AND phantom) within `[0, shelf_width]`. Formula: `visible = max(0, min(shelf_width, x + pw) - max(0, x))`. This gives a "visual" fill rate matching what the user sees. Skipping phantoms entirely makes shelves with cross-bay overflow appear underfilled (e.g. 40% when visually 100%).
+- **Two distinct metrics**: Per-SKU aggregation (facings, space, revenue) skips phantoms to avoid double-counting. Per-shelf fill rate includes phantom visible portions to match visual reality. Don't confuse them.
 - **Fill rate index bug**: Frontend `renderSpaceUtilDetail()` used `bi * bay.shelves.length + si` to index flat array — breaks when bays have different shelf counts. Fix: use running counter.
 - **Stale summary on reload**: `_load_saved_state()` used saved `summary` from file (stale). Fix: always call `generate_summary()` on load to recompute from current planogram data.
-- **LESSON**: When adding `_phantom` to a dataclass, audit ALL loops that iterate positions — not just the obvious ones. Summary/aggregation code is easy to miss.
+- **LESSON**: When adding `_phantom` to a dataclass, audit ALL loops that iterate positions — not just the obvious ones. Summary/aggregation code is easy to miss. And fill rate (visual metric) vs SKU aggregation (data metric) have different phantom handling.
 
 ## Known Issues & TODOs
 - Fill target is 99% but achievable ~96% due to fractional inch gaps (product widths don't evenly divide shelf width).
