@@ -1374,29 +1374,36 @@
         .shelf-drag-line:hover::after,
         .shelf-drag-line.dragging::after { opacity: 1; }
 
-        /* Bay edge resize handle — right border of each bay card */
-        .bay-edge-handle {
+        /* Bay edge resize handles — left and right borders */
+        .bay-edge-handle,
+        .bay-edge-handle-left {
             position: absolute;
             top: 0;
-            right: -5px;
             width: 10px;
             height: 100%;
             cursor: ew-resize;
             z-index: 20;
         }
-        /* Blue highlight on the bay's right border */
-        .bay-edge-handle::before {
+        .bay-edge-handle       { right: -5px; }
+        .bay-edge-handle-left  { left:  -5px; }
+
+        .bay-edge-handle::before,
+        .bay-edge-handle-left::before {
             content: '';
             position: absolute;
             top: 0;
             bottom: 0;
-            left: 3px;
             width: 2px;
             background: transparent;
             transition: background 0.1s;
         }
-        .bay-edge-handle:hover::before,
-        .bay-edge-handle.dragging::before { background: var(--accent); }
+        .bay-edge-handle::before      { left:  3px; } /* aligns on right border */
+        .bay-edge-handle-left::before { right: 3px; } /* aligns on left border  */
+
+        .bay-edge-handle:hover::before,      .bay-edge-handle.dragging::before,
+        .bay-edge-handle-left:hover::before, .bay-edge-handle-left.dragging::before {
+            background: var(--accent);
+        }
 
         /* Floating dimension tooltip shown during drag */
         #edDimTooltip {
@@ -3066,51 +3073,22 @@
             const MIN_SHELF = 2, MIN_BAY = 12;
 
             if (_edDrag.type === 'width') {
-                const deltaIn = Math.round((e.clientX - _edDrag.startX) / EDITOR_SCALE);
-                const bayA = editorState.bays[_edDrag.bayIdx];
-                const bayB = editorState.bays[_edDrag.bayIdxNext]; // may be undefined (last bay)
-
-                if (bayB) {
-                    // Move the divider: A grows → B shrinks, clamped so neither < MIN_BAY
-                    const maxRight = _edDrag.startValueNext - MIN_BAY;
-                    const maxLeft  = _edDrag.startValue    - MIN_BAY;
-                    const clamped  = Math.max(-maxLeft, Math.min(maxRight, deltaIn));
-                    bayA.width_in  = Math.round(_edDrag.startValue     + clamped);
-                    bayB.width_in  = Math.round(_edDrag.startValueNext - clamped);
-                    _edLiveWidth(_edDrag.bayIdx);
-                    _edLiveWidth(_edDrag.bayIdxNext);
-                    tooltip.textContent = dFmt(bayA.width_in) + ' | ' + dFmt(bayB.width_in);
-                } else {
-                    // Last bay — resize freely
-                    bayA.width_in = Math.max(MIN_BAY, Math.round(_edDrag.startValue + deltaIn));
-                    _edLiveWidth(_edDrag.bayIdx);
-                    tooltip.textContent = dFmt(bayA.width_in);
-                }
+                // Left handle inverts direction: dragging right shrinks the bay
+                const rawDelta = Math.round((e.clientX - _edDrag.startX) / EDITOR_SCALE);
+                const deltaIn  = _edDrag.side === 'left' ? -rawDelta : rawDelta;
+                const bay = editorState.bays[_edDrag.bayIdx];
+                bay.width_in = Math.max(MIN_BAY, _edDrag.startValue + deltaIn);
+                _edLiveWidth(_edDrag.bayIdx);
+                tooltip.textContent = dFmt(bay.width_in);
             } else {
-                // Shelf: drag UP = move line up = shelf below grows, shelf above shrinks
+                // Drag UP = taller shelf; other shelves shift, none change size
                 const deltaIn = Math.round((_edDrag.startY - e.clientY) / EDITOR_SCALE);
                 const bay = editorState.bays[_edDrag.bayIdx];
-                const si  = _edDrag.shelfIdx;
-                const siAbove = si + 1;
-
-                if (siAbove < bay.shelf_clearances.length) {
-                    // Move divider between si and siAbove
-                    const maxUp   = _edDrag.startValueAbove - MIN_SHELF;
-                    const maxDown = _edDrag.startValue      - MIN_SHELF;
-                    const clamped = Math.max(-maxDown, Math.min(maxUp, deltaIn));
-                    bay.shelf_clearances[si]      = Math.round(_edDrag.startValue      + clamped);
-                    bay.shelf_clearances[siAbove] = Math.round(_edDrag.startValueAbove - clamped);
-                    _edLiveShelfH(_edDrag.bayIdx);
-                    tooltip.textContent = dFmt(bay.shelf_clearances[si]) + ' | ' + dFmt(bay.shelf_clearances[siAbove]);
-                    if (_edDrag.handle) _edDrag.handle.dataset.dim = Math.round(bay.shelf_clearances[si]) + '"';
-                } else {
-                    // Top shelf — resize freely
-                    const newH = Math.max(MIN_SHELF, Math.round(_edDrag.startValue + deltaIn));
-                    bay.shelf_clearances[si] = newH;
-                    _edLiveShelfH(_edDrag.bayIdx);
-                    tooltip.textContent = dFmt(newH);
-                    if (_edDrag.handle) _edDrag.handle.dataset.dim = Math.round(newH) + '"';
-                }
+                const newH = Math.max(MIN_SHELF, _edDrag.startValue + deltaIn);
+                bay.shelf_clearances[_edDrag.shelfIdx] = newH;
+                _edLiveShelfH(_edDrag.bayIdx);
+                tooltip.textContent = dFmt(newH);
+                if (_edDrag.handle) _edDrag.handle.dataset.dim = newH + '"';
             }
 
             tooltip.style.display = 'block';
@@ -3128,17 +3106,16 @@
             renderEditorBays();
         }
 
-        function _edStartWidth(e, bayIdx) {
+        // side: 'right' (default) or 'left'
+        function _edStartWidth(e, bayIdx, side) {
             e.preventDefault();
             const handle = e.currentTarget;
             handle.classList.add('dragging');
-            const bayIdxNext = bayIdx + 1 < editorState.bays.length ? bayIdx + 1 : null;
             _edDrag = {
-                type: 'width',
-                bayIdx, bayIdxNext,
-                startX: e.clientX,
-                startValue:     editorState.bays[bayIdx].width_in,
-                startValueNext: bayIdxNext !== null ? editorState.bays[bayIdxNext].width_in : null,
+                type: 'width', side: side || 'right',
+                bayIdx,
+                startX:     e.clientX,
+                startValue: editorState.bays[bayIdx].width_in,
                 handle
             };
             document.body.style.cursor = 'ew-resize';
@@ -3148,21 +3125,18 @@
         function _edStartHeight(e, bayIdx, shelfIdx) {
             e.preventDefault();
             const bay = editorState.bays[bayIdx];
-            // Convert auto distribution to custom clearances before dragging
             if (!bay.shelf_clearances) {
                 const h = parseFloat(document.getElementById('edEqHeight').value) || 72;
-                const even = parseFloat((h / bay.num_shelves).toFixed(2));
+                const even = Math.round(h / bay.num_shelves);
                 bay.shelf_clearances = Array(bay.num_shelves).fill(even);
             }
             const handle = e.currentTarget;
             handle.classList.add('dragging');
-            const aboveIdx = shelfIdx + 1;
             _edDrag = {
                 type: 'height',
                 bayIdx, shelfIdx,
-                startY:          e.clientY,
-                startValue:      bay.shelf_clearances[shelfIdx],
-                startValueAbove: aboveIdx < bay.shelf_clearances.length ? bay.shelf_clearances[aboveIdx] : null,
+                startY:     e.clientY,
+                startValue: bay.shelf_clearances[shelfIdx],
                 handle
             };
             document.body.style.cursor = 'ns-resize';
@@ -3308,10 +3282,16 @@
 
                 bayEl.appendChild(body);
 
-                // Right edge handle — drag to resize bay width
+                // Left edge handle — drag to resize bay width from the left
+                const edgeHandleLeft = document.createElement('div');
+                edgeHandleLeft.className = 'bay-edge-handle-left';
+                edgeHandleLeft.addEventListener('mousedown', e => _edStartWidth(e, idx, 'left'));
+                bayEl.appendChild(edgeHandleLeft);
+
+                // Right edge handle — drag to resize bay width from the right
                 const edgeHandle = document.createElement('div');
                 edgeHandle.className = 'bay-edge-handle';
-                edgeHandle.addEventListener('mousedown', e => _edStartWidth(e, idx));
+                edgeHandle.addEventListener('mousedown', e => _edStartWidth(e, idx, 'right'));
                 bayEl.appendChild(edgeHandle);
 
                 wrapper.appendChild(bayEl);
