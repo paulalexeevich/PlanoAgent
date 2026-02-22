@@ -73,7 +73,7 @@ def _load_saved_state() -> bool:
             payload = json.load(f)
 
         current_planogram = Planogram.from_dict(payload["planogram"])
-        current_summary = generate_summary(current_planogram)
+        current_summary = generate_summary(current_planogram, _full_catalog_size())
 
         from dataclasses import asdict
         current_equipment = asdict(current_planogram.equipment)
@@ -95,7 +95,7 @@ def init_default_planogram():
     """Initialize with default beer planogram (from file defaults)."""
     global current_planogram, current_summary, current_equipment, current_compliance, current_decision_tree
     current_planogram = generate_planogram()
-    current_summary = generate_summary(current_planogram)
+    current_summary = generate_summary(current_planogram, _full_catalog_size())
     from dataclasses import asdict
     current_equipment = asdict(current_planogram.equipment)
     decision_tree = get_tree_for_category("Beer")
@@ -111,6 +111,11 @@ def _load_products_json() -> list:
     products_file = os.path.join(os.path.dirname(__file__), "data", "beer_products.json")
     with open(products_file, 'r') as f:
         return json.load(f)
+
+
+def _full_catalog_size() -> int:
+    """Return total number of SKUs in the master product catalog."""
+    return len(_load_products_json())
 
 
 @app.route("/")
@@ -155,7 +160,7 @@ def generate():
         planogram_name=data.get("name", "Beer Category Planogram"),
         store_type=data.get("store_type", "Standard Grocery")
     )
-    current_summary = generate_summary(current_planogram)
+    current_summary = generate_summary(current_planogram, _full_catalog_size())
     _save_state()
 
     return jsonify({
@@ -182,7 +187,7 @@ def remove_products():
                 shelf.positions = []
     current_planogram.products = []
     current_compliance = None
-    current_summary = generate_summary(current_planogram)
+    current_summary = generate_summary(current_planogram, _full_catalog_size())
     _save_state()
 
     return jsonify({
@@ -243,7 +248,7 @@ def generate_equipment():
             "placement_strategy": "empty — awaiting product fill",
         },
     )
-    current_summary = generate_summary(current_planogram)
+    current_summary = generate_summary(current_planogram, _full_catalog_size())
     _save_state()
 
     return jsonify({
@@ -552,7 +557,7 @@ def fill_products():
     }
 
     current_planogram = Planogram.from_dict(planogram_data)
-    current_summary = generate_summary(current_planogram)
+    current_summary = generate_summary(current_planogram, _full_catalog_size())
 
     # Validate decision tree compliance
     global current_compliance, current_decision_tree
@@ -609,7 +614,7 @@ def generate_ai():
 
         # Parse into Planogram object for summary generation
         current_planogram = Planogram.from_dict(planogram_data)
-        current_summary = generate_summary(current_planogram)
+        current_summary = generate_summary(current_planogram, _full_catalog_size())
         _save_state()
 
         return jsonify({

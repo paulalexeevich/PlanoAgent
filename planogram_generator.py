@@ -284,8 +284,12 @@ def generate_planogram(
     return planogram
 
 
-def generate_summary(planogram: Planogram) -> dict:
-    """Generate a comprehensive summary of the planogram."""
+def generate_summary(planogram: Planogram, full_catalog_size: int = 0) -> dict:
+    """Generate a comprehensive summary of the planogram.
+    
+    full_catalog_size: total SKUs in the master catalog (before capacity filtering).
+                       When 0, falls back to len(planogram.products).
+    """
     products_map = planogram.products_map
     
     # Collect stats
@@ -417,8 +421,9 @@ def generate_summary(planogram: Planogram) -> dict:
     )
     avg_revenue_per_space = round(revenue_potential / total_space_used_in, 2) if total_space_used_in > 0 else 0
 
-    # Assortment analysis
+    # Assortment analysis — use full catalog size when available
     catalog_ids = set(p.id for p in planogram.products)
+    total_catalog = full_catalog_size if full_catalog_size > 0 else len(catalog_ids)
     unplaced_products = []
     for p in planogram.products:
         if p.id not in placed_ids:
@@ -428,7 +433,7 @@ def generate_summary(planogram: Planogram) -> dict:
                 "brand": p.brand,
                 "subcategory": p.subcategory,
             })
-    assortment_pct = round(len(placed_ids) / len(catalog_ids) * 100, 1) if catalog_ids else 0
+    assortment_pct = round(len(placed_ids) / total_catalog * 100, 1) if total_catalog > 0 else 0
 
     return {
         "planogram_name": planogram.name,
@@ -462,7 +467,7 @@ def generate_summary(planogram: Planogram) -> dict:
             "total_space_available_in": round(total_space_available_in, 1),
         },
         "assortment": {
-            "total_catalog": len(catalog_ids),
+            "total_catalog": total_catalog,
             "total_placed": len(placed_ids),
             "assortment_pct": assortment_pct,
             "placed_ids": list(placed_ids),
