@@ -187,7 +187,7 @@ function _edLiveShelfH(bayIdx) {
     const wrapper = edContainer.querySelector('.br-bay-wrapper[data-idx="' + bayIdx + '"]');
     if (!wrapper) return;
     const shelfEls = wrapper.querySelectorAll('.br-shelf');
-    let yPos = 0;
+    let yPos = BayRenderer.SHELF_BASE;
     bay.shelf_clearances.forEach((h, si) => {
         if (shelfEls[si]) {
             shelfEls[si].style.bottom = (yPos * EDITOR_SCALE) + 'px';
@@ -197,7 +197,7 @@ function _edLiveShelfH(bayIdx) {
             const lbl = shelfEls[si].querySelector('.br-shelf-label');
             if (lbl) lbl.textContent = 'S' + (si + 1) + ' \u2014 ' + dFmt(h);
         }
-        yPos += h;
+        yPos += h + BayRenderer.SHELF_THICKNESS;
     });
 }
 
@@ -315,7 +315,7 @@ function toggleBayGlue(bayIdx) {
 }
 
 function _redistributeClearances(bay, newCount, heightIn) {
-    const base = 6, thickness = 1;
+    const base = BayRenderer.SHELF_BASE, thickness = BayRenderer.SHELF_THICKNESS;
     const totalAvailable = heightIn - base - (newCount * thickness);
     if (totalAvailable <= 0) {
         bay.shelf_clearances = Array(newCount).fill(Math.max(2, Math.round(heightIn / newCount)));

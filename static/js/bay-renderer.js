@@ -21,6 +21,9 @@
 
 const BayRenderer = {
 
+    SHELF_BASE: 6,
+    SHELF_THICKNESS: 1,
+
     render(config) {
         const {
             container,
@@ -128,21 +131,26 @@ const BayRenderer = {
 
     normalizeEditor(editorBays, heightIn) {
         if (!editorBays) return [];
+        const base = this.SHELF_BASE;
+        const thick = this.SHELF_THICKNESS;
+
         return editorBays.map((bay, idx) => {
             const numShelves = bay.num_shelves || 5;
             const clearances = bay.shelf_clearances;
             const shelves = [];
 
             if (clearances && clearances.length > 0) {
-                let yPos = 0;
+                let yPos = base;
                 clearances.forEach((h, si) => {
                     shelves.push({ shelf_number: si + 1, y_position: yPos, height_in: h });
-                    yPos += h;
+                    yPos += h + thick;
                 });
             } else {
-                const shelfH = heightIn / numShelves;
+                const shelfH = (heightIn - base - numShelves * thick) / numShelves;
+                let yPos = base;
                 for (let si = 0; si < numShelves; si++) {
-                    shelves.push({ shelf_number: si + 1, y_position: si * shelfH, height_in: shelfH });
+                    shelves.push({ shelf_number: si + 1, y_position: yPos, height_in: shelfH });
+                    yPos += shelfH + thick;
                 }
             }
 
