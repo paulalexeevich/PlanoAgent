@@ -107,16 +107,18 @@
 - **`updateLayerSelector()`**: Removes old `.dt-btn` elements and re-inserts from tree definition; validates `currentLayer` still exists after data changes.
 - **Screenshot timing**: Browser screenshots may lag by one frame after click — always take a second screenshot to confirm the current state.
 
-## Equipment Editor Overlay (v0.11)
-- **Full-screen dedicated page** replaces inline collapsible panel. Opened via "Equipment Config ▼" button.
-- **Editor state** (`editorState`): stores `{equipment_type, height_in, depth_in, bays: [{width_in, num_shelves, shelf_clearances}]}`. Initialized from current planogram equipment or defaults (3 × 48"×72" gondola).
-- **Per-bay ⚙ Configure button**: absolutely positioned INSIDE each bay body (not in header), floats at bottom center. Opens a slide-up config drawer at bottom of screen.
-- **Configure All Bays button**: in toolbar (top), applies width/shelves/heights to all bays simultaneously.
-- **Config drawer**: slides up from bottom with `max-height` animation. Shows "CONFIGURE BAY N" or "CONFIGURE ALL BAYS" title, input fields for width/shelves/shelf heights, and "Apply to Bay" / "Apply to All Bays" / Cancel.
-- **Bay highlight**: selected bay gets accent border + glow box-shadow.
-- **EDITOR_SCALE = 3px/in**: fixed scale for editor visualization (vs 6px/in main view). Bay headers use `dFmt()` for current unit system.
-- **applyEquipmentEditor()**: posts `bays_config` array to `/api/generate-equipment`, closes overlay on success, renders empty planogram.
-- **`toggleConfig()`**: now calls `openEquipmentEditor()` — old inline form stays in DOM but is no longer reachable.
+## Equipment Editor Overlay (v0.12)
+- **Full-screen dedicated page** replaces inline collapsible panel. Opened via "Equipment Config ▼" button (`toggleConfig()` → `openEquipmentEditor()`).
+- **Editor state** (`editorState`): `{equipment_type, height_in, depth_in, bays: [{width_in, num_shelves, shelf_clearances}]}`. Initialized from current planogram or defaults.
+- **Direct manipulation** (no config drawer):
+  - `↔` width drag handle below each bay — `ew-resize`, live DOM update via `_edLiveWidth(bayIdx)` (no full re-render during drag)
+  - `↕` shelf height handles on right side of each shelf — `ns-resize`, live via `_edLiveShelfH(bayIdx)`. Auto-converts even distribution to custom clearances on first drag.
+  - `−` / `+` shelf count buttons in each bay header
+  - "⚙ All Bays" dropdown popover (not a drawer) for setting all bays at once
+- **Gap = 68px** between `.eq-bay-wrapper` elements so 58px shelf handles don't overlap neighboring bays.
+- **`initEditorDragHandlers()`**: Called in DOMContentLoaded. document-level mousemove/mouseup listeners.
+- **`applyEquipmentEditor()`**: posts `bays_config` to `/api/generate-equipment`, closes overlay, renders empty planogram.
+- **EDITOR_SCALE = 3px/in**: editor visualization scale.
 
 ## Known Issues & TODOs
 - Fill target is 99% but achievable ~96% due to fractional inch gaps (product widths don't evenly divide shelf width).
