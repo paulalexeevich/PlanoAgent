@@ -36,7 +36,7 @@ function renderPlanogram() {
         container,
         scale,
         bayGap:   4,
-        gluedGap: 0,
+        gluedGap: -2,  // collapse double border between glued bays into single 2px line
         bays,
 
         onShelf(shelfEl, shelf, si, bay, bayIdx) {

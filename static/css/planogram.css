@@ -48,6 +48,14 @@
     opacity: 0.7;
 }
 
+/* Dashboard: restore ALL bay borders (products flow freely in the product layer) */
+.planogram-container .br-bay-glued-left {
+    border-left: 2px solid var(--border);
+}
+.planogram-container .br-bay-glued-right {
+    border-right: 2px solid var(--border);
+}
+
 /* Dashboard-specific shelf refinements */
 .planogram-container .br-shelf {
     min-height: 40px;
