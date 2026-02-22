@@ -71,6 +71,8 @@ function renderPlanogram() {
             const shelfHeight = shelf.height_in * scale;
             const posCount = shelf.positions.length;
 
+            const shelfWidthPx = bay.width_in * scale;
+
             shelf.positions.forEach((pos, posIdx) => {
                 const product = productsMap[pos.product_id];
                 if (!product) return;
@@ -95,7 +97,13 @@ function renderPlanogram() {
                     if (isLeftEdge)  block.classList.add('cross-bay-left');
 
                     const leftPx  = Math.floor(baseLeft + f * singleWidth);
-                    const rightPx = Math.floor(baseLeft + (f + 1) * singleWidth);
+                    let   rightPx = Math.floor(baseLeft + (f + 1) * singleWidth);
+
+                    // Stretch last facing to fill remaining shelf space (no visual gap)
+                    if (isLastPos && f === pos.facings_wide - 1) {
+                        rightPx = Math.floor(shelfWidthPx);
+                    }
+
                     block.style.width  = (rightPx - leftPx) + 'px';
                     block.style.height = blockHeight + 'px';
                     block.style.left   = leftPx + 'px';
