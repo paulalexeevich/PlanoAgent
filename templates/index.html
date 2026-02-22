@@ -784,9 +784,43 @@
             pointer-events: none;
         }
 
+        /* CONFIG MODE SWITCH */
+        .config-mode-switch {
+            display: inline-flex;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+            font-size: 11px;
+            margin-bottom: 10px;
+        }
+        .config-mode-switch button {
+            padding: 5px 14px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            transition: all 0.15s;
+        }
+        .config-mode-switch button.active {
+            background: var(--accent);
+            color: white;
+        }
+        .config-mode-switch button:not(.active):hover {
+            background: var(--bg-shelf);
+            color: var(--text-primary);
+        }
+        .config-mode-divider {
+            width: 1px;
+            background: var(--border);
+        }
+
         /* PER-BAY CONFIG TABLE */
         .bay-config-section {
-            margin-top: 10px;
+            margin-top: 4px;
             display: none;
         }
         .bay-config-section.open { display: block; }
@@ -1098,7 +1132,15 @@
         </div>
         <!-- Equipment Config (hidden by default) -->
         <div class="equipment-config-panel" id="equipmentForm">
-            <div class="form-row">
+            <!-- Mode switch -->
+            <div class="config-mode-switch">
+                <button id="modeSimpleBtn" class="active" onclick="setBayMode('simple')">Simple</button>
+                <div class="config-mode-divider"></div>
+                <button id="modePerBayBtn" onclick="setBayMode('perbay')">Per-Bay</button>
+            </div>
+
+            <!-- Shared fields (always visible) -->
+            <div class="form-row" id="eqFormRowShared">
                 <div class="form-group">
                     <label>Equipment Type</label>
                     <select id="eqType">
@@ -1113,14 +1155,16 @@
                     <label>Bays</label>
                     <input type="number" id="eqBays" value="3" min="1" max="10" style="width:60px">
                 </div>
-                <div class="form-group">
+                <!-- Simple-only fields -->
+                <div class="form-group" id="fgShelves">
                     <label>Shelves / Bay</label>
                     <input type="number" id="eqShelves" value="5" min="1" max="10" style="width:60px">
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="fgWidth">
                     <label id="labelEqWidth">Bay Width (in)</label>
                     <input type="number" id="eqWidth" value="48" min="12" max="120" step="1" style="width:70px">
                 </div>
+                <!-- Always-shared fields -->
                 <div class="form-group">
                     <label id="labelEqHeight">Bay Height (in)</label>
                     <input type="number" id="eqHeight" value="72" min="24" max="120" step="1" style="width:70px">
@@ -1130,10 +1174,11 @@
                     <input type="number" id="eqDepth" value="24" min="6" max="48" step="1" style="width:70px">
                 </div>
             </div>
-            <!-- Per-Bay Configuration section -->
+
+            <!-- Per-Bay Configuration table -->
             <div class="bay-config-section" id="bayConfigSection">
-                <div class="bay-config-header">
-                    <span class="bay-config-title">Per-Bay Configuration</span>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+                    <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);">Per-Bay Configuration</span>
                     <button class="assortment-upload-btn" onclick="resetBayConfigDefaults()" style="font-size:9px;padding:2px 8px;">Reset to Defaults</button>
                 </div>
                 <div style="overflow-x:auto;">
@@ -1158,10 +1203,6 @@
                 <button class="btn btn-primary" id="genEquipBtn" onclick="generateEquipment()">
                     <span id="genEquipLabel">Generate Equipment</span>
                     <span id="genEquipSpinner" style="display:none" class="btn-spinner"></span>
-                </button>
-                <button class="config-toggle" id="bayConfigToggle" onclick="toggleBayConfig()">
-                    <span>Per-Bay Config</span>
-                    <span class="toggle-caret">&#9660;</span>
                 </button>
             </div>
         </div>
@@ -1407,10 +1448,12 @@
                 document.getElementById('scaleValue').textContent = scale + 'px/in';
                 if (planogramData) renderPlanogram();
             });
-            // Rebuild per-bay table when bay count changes (preserves existing overrides)
+            // Rebuild per-bay table when bay count changes (only in per-bay mode)
             document.getElementById('eqBays').addEventListener('input', () => {
                 if (bayConfigVisible) buildBayConfigTable(true);
             });
+            // Sync eqShelves/eqWidth from per-bay table row 1 when switching back to simple
+            // (handled inside setBayMode via sync — nothing extra needed here)
         });
 
         // ============================================================
@@ -1442,14 +1485,16 @@
         // ============================================================
         // PER-BAY CONFIG
         // ============================================================
-        let bayConfigVisible = false;
+        let bayConfigVisible = false; // true when Per-Bay mode is active
 
-        function toggleBayConfig() {
-            bayConfigVisible = !bayConfigVisible;
+        function setBayMode(mode) {
+            bayConfigVisible = (mode === 'perbay');
+            document.getElementById('modeSimpleBtn').classList.toggle('active', !bayConfigVisible);
+            document.getElementById('modePerBayBtn').classList.toggle('active', bayConfigVisible);
+            document.getElementById('fgShelves').style.display = bayConfigVisible ? 'none' : '';
+            document.getElementById('fgWidth').style.display   = bayConfigVisible ? 'none' : '';
             const section = document.getElementById('bayConfigSection');
-            const btn = document.getElementById('bayConfigToggle');
             section.classList.toggle('open', bayConfigVisible);
-            btn.classList.toggle('active', bayConfigVisible);
             if (bayConfigVisible) buildBayConfigTable();
         }
 
