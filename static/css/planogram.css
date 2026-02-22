@@ -80,16 +80,11 @@
     font-weight: 700;
     margin-top: 1px;
 }
-.product-block .facing-badge {
-    position: absolute;
-    top: 1px;
-    right: 1px;
-    background: rgba(0,0,0,0.6);
-    color: white;
-    font-size: 7px;
-    padding: 1px 3px;
-    border-radius: 2px;
-    font-weight: 700;
+/* Repeat facings: subtle left divider to separate from neighbor */
+.product-block.facing-repeat {
+    border-left: 1px solid rgba(255,255,255,0.25);
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
 }
 
 /* TOOLTIP */

@@ -44,52 +44,47 @@ function renderPlanogram() {
                 const product = productsMap[pos.product_id];
                 if (!product) return;
 
-                const blockWidth  = product.width_in * pos.facings_wide * scale;
-                const blockHeight = Math.min(product.height_in * scale, shelfHeight - 4);
+                const singleWidth  = product.width_in * scale;
+                const blockHeight  = Math.min(product.height_in * scale, shelfHeight - 4);
+                const baseLeft     = pos.x_position * scale;
 
-                /* segment bands hidden in Products view; DT layers use their own coloring */
+                for (let f = 0; f < pos.facings_wide; f++) {
+                    const block = document.createElement('div');
+                    block.className = 'product-block';
+                    if (f > 0) block.classList.add('facing-repeat');
+                    block.style.width  = singleWidth + 'px';
+                    block.style.height = blockHeight + 'px';
+                    block.style.left   = (baseLeft + f * singleWidth) + 'px';
 
-                const block = document.createElement('div');
-                block.className = 'product-block';
-                block.style.width  = blockWidth + 'px';
-                block.style.height = blockHeight + 'px';
-                block.style.left   = (pos.x_position * scale) + 'px';
+                    const labelEl = document.createElement('div');
+                    labelEl.className = 'product-label';
 
-                const labelEl = document.createElement('div');
-                labelEl.className = 'product-label';
-
-                if (isDtLayer && dtLevelName) {
-                    const groups   = dtPositionMap[pos.product_id];
-                    const groupVal = groups ? (groups[dtLevelName] || '?') : '?';
-                    const color    = dtPalette[groupVal] || '#666';
-                    block.style.backgroundColor = color;
-                    labelEl.textContent = groupVal;
-                    block.appendChild(labelEl);
-                } else {
-                    block.style.backgroundColor = product.color_hex || '#666';
-                    const shortName = product.brand + (product.pack_size > 1 ? ' ' + product.pack_size + 'pk' : '');
-                    labelEl.textContent = shortName;
-                    block.appendChild(labelEl);
-                    if (blockHeight > 25) {
-                        const priceEl = document.createElement('div');
-                        priceEl.className = 'product-price';
-                        priceEl.textContent = cFmt(product.price);
-                        block.appendChild(priceEl);
+                    if (isDtLayer && dtLevelName) {
+                        const groups   = dtPositionMap[pos.product_id];
+                        const groupVal = groups ? (groups[dtLevelName] || '?') : '?';
+                        const color    = dtPalette[groupVal] || '#666';
+                        block.style.backgroundColor = color;
+                        labelEl.textContent = groupVal;
+                        block.appendChild(labelEl);
+                    } else {
+                        block.style.backgroundColor = product.color_hex || '#666';
+                        const shortName = product.brand + (product.pack_size > 1 ? ' ' + product.pack_size + 'pk' : '');
+                        labelEl.textContent = shortName;
+                        block.appendChild(labelEl);
+                        if (blockHeight > 25) {
+                            const priceEl = document.createElement('div');
+                            priceEl.className = 'product-price';
+                            priceEl.textContent = cFmt(product.price);
+                            block.appendChild(priceEl);
+                        }
                     }
+
+                    block.addEventListener('mouseenter', (e) => showTooltip(e, product, pos));
+                    block.addEventListener('mousemove',  (e) => moveTooltip(e));
+                    block.addEventListener('mouseleave', hideTooltip);
+
+                    shelfEl.appendChild(block);
                 }
-
-                if (pos.facings_wide > 1) {
-                    const badge = document.createElement('div');
-                    badge.className = 'facing-badge';
-                    badge.textContent = pos.facings_wide + 'x';
-                    block.appendChild(badge);
-                }
-
-                block.addEventListener('mouseenter', (e) => showTooltip(e, product, pos));
-                block.addEventListener('mousemove',  (e) => moveTooltip(e));
-                block.addEventListener('mouseleave', hideTooltip);
-
-                shelfEl.appendChild(block);
             });
         },
     });
