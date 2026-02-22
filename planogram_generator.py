@@ -33,41 +33,78 @@ def create_default_equipment(
     bay_width: float = 48.0,
     bay_height: float = 72.0,
     bay_depth: float = 24.0,
-    shelf_heights: list = None
+    shelf_heights: list = None,
+    bays_config: list = None,
 ) -> Equipment:
-    """Create equipment with default or specified configuration."""
+    """Create equipment with default or specified configuration.
+
+    Args:
+        bays_config: Optional per-bay overrides — list of dicts (one per bay) with:
+            - width_in (float): Bay width override; falls back to bay_width
+            - num_shelves (int): Number of shelves override; falls back to num_shelves
+            - shelf_clearances (list[float]): Usable clearance height per shelf slot.
+              If omitted, shelves are evenly distributed within the bay height.
+        shelf_heights: Legacy parameter — y-positions from floor for ALL bays
+          (only used when bays_config is None and shelf_heights is not None).
+    """
+
+    def _positions_from_clearances(clearances, b_height, base=6, thickness=1):
+        """Convert per-shelf clearance heights → y-positions from floor."""
+        positions = []
+        y = float(base)
+        for c in clearances:
+            if y >= b_height:
+                break
+            positions.append(round(y, 1))
+            y += float(c) + thickness
+        return positions
+
+    def _positions_evenly(n, b_height, base=6):
+        """Distribute n shelves evenly from base to top."""
+        total_usable = b_height - base
+        spacing = total_usable / n
+        return [round(base + i * spacing, 1) for i in range(n)]
 
     bays = []
-    for b in range(1, num_bays + 1):
-        shelves = []
-        # Default shelf height positions (from floor up)
-        if shelf_heights is None:
-            # Standard grocery shelf layout
-            total_usable = bay_height - 6  # 6 inches for base
-            shelf_spacing = total_usable / num_shelves
-            positions = [6 + i * shelf_spacing for i in range(num_shelves)]
-        else:
-            positions = shelf_heights
+    for b_idx in range(num_bays):
+        # Per-bay overrides (if provided)
+        bay_cfg = (bays_config[b_idx] if bays_config and b_idx < len(bays_config) else None) or {}
 
+        b_width = float(bay_cfg.get("width_in") or bay_width)
+        n_shelves = int(bay_cfg.get("num_shelves") or num_shelves)
+        clearances = bay_cfg.get("shelf_clearances") or None  # list[float] or None
+
+        # Compute shelf y-positions
+        if clearances and len(clearances) > 0:
+            positions = _positions_from_clearances(clearances, bay_height)
+        elif shelf_heights is not None and bays_config is None:
+            # Legacy: use global shelf_heights y-positions as-is
+            positions = shelf_heights
+        else:
+            positions = _positions_evenly(n_shelves, bay_height)
+
+        shelves = []
         for s_idx, y_pos in enumerate(positions):
-            # Calculate clearance (distance to next shelf or top)
-            if s_idx < len(positions) - 1:
-                clearance = positions[s_idx + 1] - y_pos - 1  # 1 inch for shelf thickness
+            # Clearance height for this shelf slot
+            if clearances and s_idx < len(clearances):
+                clearance = float(clearances[s_idx])
+            elif s_idx < len(positions) - 1:
+                clearance = positions[s_idx + 1] - y_pos - 1  # 1 inch shelf thickness
             else:
                 clearance = bay_height - y_pos - 1
 
             shelves.append(Shelf(
                 shelf_number=s_idx + 1,
-                width_in=bay_width,
-                height_in=round(clearance, 1),
+                width_in=b_width,
+                height_in=round(max(clearance, 1.0), 1),
                 depth_in=bay_depth,
                 y_position=round(y_pos, 1),
                 positions=[]
             ))
 
         bays.append(Bay(
-            bay_number=b,
-            width_in=bay_width,
+            bay_number=b_idx + 1,
+            width_in=b_width,
             height_in=bay_height,
             depth_in=bay_depth,
             shelves=shelves

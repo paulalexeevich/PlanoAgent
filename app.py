@@ -137,6 +137,8 @@ def generate_equipment():
         "bay_width":      float(data.get("bay_width", 48.0)),
         "bay_height":     float(data.get("bay_height", 72.0)),
         "bay_depth":      float(data.get("bay_depth", 24.0)),
+        # Per-bay overrides: [{width_in, num_shelves, shelf_clearances}, ...]
+        "bays_config":    data.get("bays_config", None),
     }
 
     # Create equipment object
