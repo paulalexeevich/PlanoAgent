@@ -26,6 +26,7 @@
             background: var(--bg-dark);
             color: var(--text-primary);
             min-height: 100vh;
+            overflow-x: hidden;
         }
 
         /* HEADER */
@@ -1098,6 +1099,7 @@
             background: var(--bg-dark);
             z-index: 200;
             flex-direction: column;
+            overflow: hidden;
         }
         .eq-editor-overlay.open { display: flex; }
 
@@ -1109,6 +1111,8 @@
             align-items: center;
             flex-shrink: 0;
             gap: 16px;
+            max-width: 100%;
+            box-sizing: border-box;
         }
         .eq-editor-hdr h2 {
             font-size: 15px;
@@ -1127,6 +1131,8 @@
             gap: 10px;
             flex-wrap: wrap;
             flex-shrink: 0;
+            max-width: 100%;
+            box-sizing: border-box;
         }
         .eq-toolbar-group {
             display: flex;
