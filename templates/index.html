@@ -1210,7 +1210,7 @@
         }
         .eq-editor-bays {
             display: flex;
-            gap: 8px;
+            gap: 68px; /* extra gap for the ↕ shelf height handles that extend right */
             align-items: flex-start;
             width: fit-content;
             margin: 0 auto;
@@ -1277,75 +1277,178 @@
             pointer-events: none;
         }
 
-        /* Configure button — inside each bay body */
-        .eq-bay-cfg-btn {
-            position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(15,17,23,0.88);
-            border: 1px solid rgba(74,158,255,0.6);
-            color: var(--accent);
-            font-size: 10px;
-            font-weight: 700;
-            padding: 4px 11px;
-            border-radius: 5px;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.2s;
-            z-index: 10;
-            letter-spacing: 0.3px;
-            text-transform: uppercase;
-        }
-        .eq-bay-cfg-btn:hover,
-        .eq-editor-bay.selected .eq-bay-cfg-btn {
-            background: var(--accent);
-            color: white;
-            border-color: var(--accent);
-        }
-
-        /* Config Drawer — slides up from bottom of overlay */
-        .eq-config-drawer {
-            background: var(--bg-card);
-            border-top: 2px solid var(--accent);
-            flex-shrink: 0;
-            overflow: hidden;
-            max-height: 0;
-            transition: max-height 0.28s ease;
-        }
-        .eq-config-drawer.open { max-height: 160px; }
-        .eq-config-drawer-inner {
-            padding: 14px 24px 16px;
+        /* Bay wrapper — holds the bay card + width handle below */
+        .eq-bay-wrapper {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            align-items: center;
+            gap: 0;
+            flex-shrink: 0;
         }
-        .eq-config-drawer-title {
+
+        /* Bay header — flex to support shelf +/- controls */
+        .eq-editor-bay-hdr {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+        .bay-hdr-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        /* Shelf count +/- controls in bay header */
+        .bay-shelf-ctrl {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+        .bsc-btn {
+            padding: 1px 5px;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.3;
+            transition: all 0.15s;
+        }
+        .bsc-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .bsc-val {
+            font-size: 9px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            min-width: 14px;
+            text-align: center;
+        }
+
+        /* Bay body: overflow visible so shelf height handles can extend right */
+        .eq-editor-bay-body { overflow: visible !important; }
+
+        /* Width drag handle — below each bay */
+        .bay-width-handle {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            margin-top: 5px;
+            cursor: ew-resize;
+            user-select: none;
+        }
+        .bw-line {
+            flex: 1;
+            height: 1px;
+            background: rgba(74,158,255,0.3);
+        }
+        .bw-grip {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 9px;
+            background: var(--bg-card);
+            border: 1px solid rgba(74,158,255,0.45);
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--accent);
+            cursor: ew-resize;
+            white-space: nowrap;
+            transition: border-color 0.15s, background 0.15s;
+            user-select: none;
+        }
+        .bay-width-handle:hover .bw-grip {
+            border-color: var(--accent);
+            background: rgba(74,158,255,0.12);
+        }
+        .bw-icon { font-size: 11px; }
+
+        /* Shelf height drag handle — right side of each shelf */
+        .shelf-h-handle {
+            position: absolute;
+            right: -58px;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            cursor: ns-resize;
+            user-select: none;
+            z-index: 20;
+        }
+        .sh-track {
+            width: 10px;
+            height: 1px;
+            background: rgba(74,158,255,0.3);
+            flex-shrink: 0;
+        }
+        .sh-grip {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            padding: 3px 7px;
+            background: var(--bg-card);
+            border: 1px solid rgba(74,158,255,0.45);
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--accent);
+            cursor: ns-resize;
+            white-space: nowrap;
+            transition: border-color 0.15s, background 0.15s;
+            user-select: none;
+        }
+        .shelf-h-handle:hover .sh-grip,
+        .shelf-h-handle.dragging .sh-grip {
+            border-color: var(--accent);
+            background: rgba(74,158,255,0.12);
+        }
+        .sh-icon { font-size: 9px; }
+
+        /* Configure All Bays — popover */
+        .all-bays-popover {
+            display: none;
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            background: var(--bg-card);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            padding: 14px 16px 12px;
+            z-index: 300;
+            min-width: 280px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .all-bays-popover.open { display: block; }
+        .abp-title {
             font-size: 10px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             color: var(--accent);
+            margin-bottom: 10px;
         }
-        .eq-config-drawer-row {
+        .abp-fields {
             display: flex;
             gap: 10px;
             align-items: flex-end;
             flex-wrap: wrap;
+            margin-bottom: 10px;
         }
-        .eq-config-field {
+        .abp-field {
             display: flex;
             flex-direction: column;
             gap: 3px;
         }
-        .eq-config-field label {
+        .abp-field label {
             font-size: 9px;
             font-weight: 600;
             color: var(--text-secondary);
             text-transform: uppercase;
             letter-spacing: 0.4px;
         }
-        .eq-config-field input[type="number"] {
+        .abp-field input {
             padding: 5px 8px;
             background: var(--bg-dark);
             border: 1px solid var(--border);
@@ -1353,25 +1456,11 @@
             color: var(--text-primary);
             font-size: 13px;
             outline: none;
-            width: 75px;
         }
-        .eq-config-field input[type="text"] {
-            padding: 5px 8px;
-            background: var(--bg-dark);
-            border: 1px solid var(--border);
-            border-radius: 5px;
-            color: var(--text-primary);
-            font-size: 13px;
-            outline: none;
-            width: 200px;
-        }
-        .eq-config-field input:focus { border-color: var(--accent); }
-        .eq-config-drawer-btns {
-            display: flex;
-            gap: 8px;
-            align-items: flex-end;
-            padding-bottom: 1px;
-        }
+        .abp-field input[type="number"] { width: 72px; }
+        .abp-field input[type="text"] { width: 150px; }
+        .abp-field input:focus { border-color: var(--accent); }
+        .abp-actions { display: flex; gap: 8px; }
     </style>
 </head>
 <body>
@@ -1605,37 +1694,36 @@
                 <button class="btn-icon" id="edAddBayBtn" onclick="editorAddBay()">+</button>
             </div>
             <div class="eq-toolbar-divider"></div>
-            <button class="btn-all-bays" id="edAllBaysBtn" onclick="openAllBaysConfig()">⚙ Configure All Bays</button>
-        </div>
-
-        <!-- Main: bay visualization -->
-        <div class="eq-editor-main">
-            <div class="eq-editor-bays" id="editorBaysContainer"></div>
-        </div>
-
-        <!-- Config Drawer (slides up from bottom) -->
-        <div class="eq-config-drawer" id="eqConfigDrawer">
-            <div class="eq-config-drawer-inner">
-                <div class="eq-config-drawer-title" id="eqConfigDrawerTitle">Configure Bay 1</div>
-                <div class="eq-config-drawer-row">
-                    <div class="eq-config-field" id="edCfgWidthField">
-                        <label>Width (in)</label>
-                        <input type="number" id="edCfgWidth" value="48" min="12" max="120" step="1">
+            <!-- Configure All Bays — relative wrapper for popover positioning -->
+            <div style="position:relative;">
+                <button class="btn-all-bays" id="edAllBaysBtn" onclick="toggleAllBaysPopover()">⚙ All Bays</button>
+                <div class="all-bays-popover" id="allBaysPopover">
+                    <div class="abp-title">Configure All Bays</div>
+                    <div class="abp-fields">
+                        <div class="abp-field">
+                            <label>Width (in)</label>
+                            <input type="number" id="abpWidth" value="48" min="12" max="120" step="1">
+                        </div>
+                        <div class="abp-field">
+                            <label>Shelves</label>
+                            <input type="number" id="abpShelves" value="5" min="1" max="12" step="1">
+                        </div>
+                        <div class="abp-field">
+                            <label>Heights (comma-sep)</label>
+                            <input type="text" id="abpHeights" placeholder="auto">
+                        </div>
                     </div>
-                    <div class="eq-config-field">
-                        <label>Shelves</label>
-                        <input type="number" id="edCfgShelves" value="5" min="1" max="12" step="1">
-                    </div>
-                    <div class="eq-config-field">
-                        <label>Shelf Heights (in, comma-sep)</label>
-                        <input type="text" id="edCfgHeights" placeholder="auto — evenly distributed">
-                    </div>
-                    <div class="eq-config-drawer-btns">
-                        <button class="btn btn-primary" id="edCfgApplyBtn" onclick="applyBayConfig()">Apply</button>
-                        <button class="btn btn-secondary" onclick="closeConfigDrawer()">Cancel</button>
+                    <div class="abp-actions">
+                        <button class="btn btn-primary" onclick="applyAllBaysConfig()">Apply to All</button>
+                        <button class="btn btn-secondary" onclick="toggleAllBaysPopover(false)">Cancel</button>
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Main: bay visualization (extra right padding for shelf height handles) -->
+        <div class="eq-editor-main" style="padding-right: 80px;">
+            <div class="eq-editor-bays" id="editorBaysContainer"></div>
         </div>
     </div>
 
@@ -1816,8 +1904,16 @@
             document.getElementById('eqBays').addEventListener('input', () => {
                 if (bayConfigVisible) buildBayConfigTable(true);
             });
-            // Sync eqShelves/eqWidth from per-bay table row 1 when switching back to simple
-            // (handled inside setBayMode via sync — nothing extra needed here)
+            // Close All Bays popover when clicking outside it
+            document.addEventListener('click', (e) => {
+                const popover = document.getElementById('allBaysPopover');
+                const btn = document.getElementById('edAllBaysBtn');
+                if (popover && popover.classList.contains('open') && !popover.contains(e.target) && e.target !== btn) {
+                    toggleAllBaysPopover(false);
+                }
+            });
+            // Init equipment editor drag handlers
+            initEditorDragHandlers();
         });
 
         // ============================================================
@@ -2907,13 +3003,12 @@
         }
 
         // ============================================================
-        // EQUIPMENT EDITOR
+        // EQUIPMENT EDITOR — Direct Manipulation
         // ============================================================
         const EDITOR_SCALE = 3; // px per inch — visual scale in editor
 
-        let editorState = null;       // { equipment_type, height_in, depth_in, bays: [{width_in, num_shelves, shelf_clearances}] }
-        let editorSelectedBay = null; // null = none, -1 = all bays, 0+ = specific bay index
-        let _editorConfigTarget = null; // closure: which bay index to apply to (-1 = all)
+        let editorState = null; // { equipment_type, height_in, depth_in, bays: [{width_in, num_shelves, shelf_clearances}] }
+        let _edDrag = null;     // active drag state
 
         function _defaultEditorState() {
             return {
@@ -2937,17 +3032,9 @@
                     height_in: firstBay.height_in || 72,
                     depth_in: firstBay.depth_in || 24,
                     bays: eq.bays.map(bay => {
-                        const sortedShelves = bay.shelves
-                            ? [...bay.shelves].sort((a, b) => a.y_position - b.y_position)
-                            : [];
-                        const clearances = sortedShelves.length > 0
-                            ? sortedShelves.map(s => s.height_in)
-                            : null;
-                        return {
-                            width_in: bay.width_in || 48,
-                            num_shelves: sortedShelves.length || 5,
-                            shelf_clearances: clearances
-                        };
+                        const sorted = bay.shelves ? [...bay.shelves].sort((a, b) => a.y_position - b.y_position) : [];
+                        const clearances = sorted.length > 0 ? sorted.map(s => s.height_in) : null;
+                        return { width_in: bay.width_in || 48, num_shelves: sorted.length || 5, shelf_clearances: clearances };
                     })
                 };
             } else {
@@ -2955,172 +3042,241 @@
             }
         }
 
+        // ── Init document-level drag handlers (called once) ────────
+        function initEditorDragHandlers() {
+            document.addEventListener('mousemove', _edOnMove);
+            document.addEventListener('mouseup', _edOnUp);
+        }
+
+        function _edOnMove(e) {
+            if (!_edDrag) return;
+            const bay = editorState.bays[_edDrag.bayIdx];
+            if (_edDrag.type === 'width') {
+                const deltaIn = (e.clientX - _edDrag.startX) / EDITOR_SCALE;
+                bay.width_in = Math.max(12, Math.round(_edDrag.startValue + deltaIn));
+                _edLiveWidth(_edDrag.bayIdx);
+            } else {
+                // shelf height: drag UP = taller (startY > currentY)
+                const deltaIn = (_edDrag.startY - e.clientY) / EDITOR_SCALE;
+                const newH = Math.max(3, parseFloat((_edDrag.startValue + deltaIn).toFixed(1)));
+                bay.shelf_clearances[_edDrag.shelfIdx] = newH;
+                _edLiveShelfH(_edDrag.bayIdx);
+            }
+        }
+
+        function _edOnUp() {
+            if (!_edDrag) return;
+            _edDrag = null;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            renderEditorBays();
+        }
+
+        function _edStartWidth(e, bayIdx) {
+            e.preventDefault();
+            _edDrag = { type: 'width', bayIdx, startX: e.clientX, startValue: editorState.bays[bayIdx].width_in };
+            document.body.style.cursor = 'ew-resize';
+            document.body.style.userSelect = 'none';
+        }
+
+        function _edStartHeight(e, bayIdx, shelfIdx) {
+            e.preventDefault();
+            const bay = editorState.bays[bayIdx];
+            // Convert auto distribution to custom clearances before dragging
+            if (!bay.shelf_clearances) {
+                const h = parseFloat(document.getElementById('edEqHeight').value) || 72;
+                const even = parseFloat((h / bay.num_shelves).toFixed(2));
+                bay.shelf_clearances = Array(bay.num_shelves).fill(even);
+            }
+            _edDrag = { type: 'height', bayIdx, shelfIdx, startY: e.clientY, startValue: bay.shelf_clearances[shelfIdx] };
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+        }
+
+        // Live DOM updates (no full re-render during drag)
+        function _edLiveWidth(bayIdx) {
+            const bay = editorState.bays[bayIdx];
+            const w = bay.width_in;
+            const heightIn = parseFloat(document.getElementById('edEqHeight').value) || 72;
+            const wrapper = document.querySelector(`.eq-bay-wrapper[data-idx="${bayIdx}"]`);
+            if (!wrapper) return;
+            const bayEl = wrapper.querySelector('.eq-editor-bay');
+            if (bayEl) {
+                bayEl.style.width = (w * EDITOR_SCALE) + 'px';
+                const title = bayEl.querySelector('.bay-hdr-title');
+                if (title) title.textContent = `Bay ${bayIdx + 1} — ${dFmt(w)} × ${dFmt(heightIn)}`;
+                const body = bayEl.querySelector('.eq-editor-bay-body');
+                if (body) body.style.width = (w * EDITOR_SCALE) + 'px';
+            }
+            const bwVal = wrapper.querySelector('.bw-val');
+            if (bwVal) bwVal.textContent = dFmt(w);
+        }
+
+        function _edLiveShelfH(bayIdx) {
+            const bay = editorState.bays[bayIdx];
+            if (!bay.shelf_clearances) return;
+            const wrapper = document.querySelector(`.eq-bay-wrapper[data-idx="${bayIdx}"]`);
+            if (!wrapper) return;
+            const shelfEls = wrapper.querySelectorAll('.eq-editor-shelf');
+            const handleEls = wrapper.querySelectorAll('.shelf-h-handle');
+            let yPos = 0;
+            bay.shelf_clearances.forEach((h, si) => {
+                if (shelfEls[si]) {
+                    shelfEls[si].style.bottom = (yPos * EDITOR_SCALE) + 'px';
+                    shelfEls[si].style.height = (h * EDITOR_SCALE) + 'px';
+                }
+                if (handleEls[si]) {
+                    const centerPx = (yPos + h / 2) * EDITOR_SCALE;
+                    handleEls[si].style.bottom = (centerPx - 11) + 'px';
+                    const val = handleEls[si].querySelector('.sh-val');
+                    if (val) val.textContent = Math.round(h) + '"';
+                }
+                yPos += h;
+            });
+        }
+
         function openEquipmentEditor() {
             initEditorState();
-
-            // Sync toolbar
             document.getElementById('edEqType').value = editorState.equipment_type;
             document.getElementById('edEqHeight').value = editorState.height_in;
             document.getElementById('edEqDepth').value = editorState.depth_in;
             document.getElementById('edBayCount').textContent = editorState.bays.length;
             document.getElementById('edRemoveBayBtn').disabled = editorState.bays.length <= 1;
-
-            editorSelectedBay = null;
-            _editorConfigTarget = null;
-            closeConfigDrawer(false);
+            toggleAllBaysPopover(false);
             renderEditorBays();
             document.getElementById('eqEditorOverlay').classList.add('open');
         }
 
         function closeEquipmentEditor() {
             document.getElementById('eqEditorOverlay').classList.remove('open');
-            editorSelectedBay = null;
+            toggleAllBaysPopover(false);
         }
 
         function renderEditorBays() {
             const container = document.getElementById('editorBaysContainer');
             container.innerHTML = '';
-
             const heightIn = parseFloat(document.getElementById('edEqHeight').value) || editorState.height_in || 72;
 
             editorState.bays.forEach((bay, idx) => {
+                const numShelves = bay.num_shelves || 5;
+
+                // Outer wrapper (bay card + width handle below)
+                const wrapper = document.createElement('div');
+                wrapper.className = 'eq-bay-wrapper';
+                wrapper.dataset.idx = idx;
+
+                // Bay card
                 const bayEl = document.createElement('div');
-                bayEl.className = 'eq-editor-bay' + (editorSelectedBay === idx ? ' selected' : '');
+                bayEl.className = 'eq-editor-bay';
                 bayEl.style.width = (bay.width_in * EDITOR_SCALE) + 'px';
 
-                // Bay header
+                // Header: title + shelf ± controls
                 const hdr = document.createElement('div');
                 hdr.className = 'eq-editor-bay-hdr';
-                hdr.textContent = `Bay ${idx + 1} — ${dFmt(bay.width_in)} × ${dFmt(heightIn)}`;
+                hdr.innerHTML = `
+                    <span class="bay-hdr-title">Bay ${idx + 1} — ${dFmt(bay.width_in)} × ${dFmt(heightIn)}</span>
+                    <div class="bay-shelf-ctrl">
+                        <button class="bsc-btn" title="Remove shelf">−</button>
+                        <span class="bsc-val">${numShelves}S</span>
+                        <button class="bsc-btn" title="Add shelf">+</button>
+                    </div>`;
+                hdr.querySelectorAll('.bsc-btn')[0].addEventListener('click', e => { e.stopPropagation(); editorRemoveShelf(idx); });
+                hdr.querySelectorAll('.bsc-btn')[1].addEventListener('click', e => { e.stopPropagation(); editorAddShelf(idx); });
                 bayEl.appendChild(hdr);
 
-                // Bay body
+                // Body
                 const body = document.createElement('div');
                 body.className = 'eq-editor-bay-body';
                 body.style.height = (heightIn * EDITOR_SCALE) + 'px';
                 body.style.width = (bay.width_in * EDITOR_SCALE) + 'px';
 
-                // Render shelves
-                const numShelves = bay.num_shelves || 5;
-                const clearances = bay.shelf_clearances;
-
-                if (clearances && clearances.length > 0) {
-                    let yPos = 0;
-                    clearances.forEach((h, si) => {
-                        const shelfEl = document.createElement('div');
-                        shelfEl.className = 'eq-editor-shelf';
-                        shelfEl.style.bottom = (yPos * EDITOR_SCALE) + 'px';
-                        shelfEl.style.height = (h * EDITOR_SCALE) + 'px';
-                        const lbl = document.createElement('span');
-                        lbl.className = 'eq-editor-shelf-label';
-                        lbl.textContent = `S${si + 1}`;
-                        shelfEl.appendChild(lbl);
-                        body.appendChild(shelfEl);
-                        yPos += h;
-                    });
-                } else {
-                    const shelfHeight = heightIn / numShelves;
-                    for (let si = 0; si < numShelves; si++) {
-                        const shelfEl = document.createElement('div');
-                        shelfEl.className = 'eq-editor-shelf';
-                        shelfEl.style.bottom = (si * shelfHeight * EDITOR_SCALE) + 'px';
-                        shelfEl.style.height = (shelfHeight * EDITOR_SCALE) + 'px';
-                        const lbl = document.createElement('span');
-                        lbl.className = 'eq-editor-shelf-label';
-                        lbl.textContent = `S${si + 1}`;
-                        shelfEl.appendChild(lbl);
-                        body.appendChild(shelfEl);
-                    }
-                }
-
-                // "EMPTY" watermark
+                // EMPTY watermark
                 const emptyLbl = document.createElement('div');
                 emptyLbl.className = 'eq-editor-empty-label';
                 emptyLbl.textContent = 'Empty';
                 body.appendChild(emptyLbl);
 
-                // Configure button — floats inside the bay body, not in the header
-                const cfgBtn = document.createElement('button');
-                cfgBtn.className = 'eq-bay-cfg-btn';
-                cfgBtn.textContent = '⚙ Configure';
-                cfgBtn.onclick = (e) => { e.stopPropagation(); openBayConfig(idx); };
-                body.appendChild(cfgBtn);
+                // Shelves + height handles
+                const clearances = bay.shelf_clearances;
+                const _buildShelf = (si, bottomPx, heightPx, shelfH, yPos) => {
+                    // Shelf bar
+                    const shelfEl = document.createElement('div');
+                    shelfEl.className = 'eq-editor-shelf';
+                    shelfEl.style.bottom = bottomPx + 'px';
+                    shelfEl.style.height = heightPx + 'px';
+                    const lbl = document.createElement('span');
+                    lbl.className = 'eq-editor-shelf-label';
+                    lbl.textContent = `S${si + 1}`;
+                    shelfEl.appendChild(lbl);
+                    body.appendChild(shelfEl);
+
+                    // Height drag handle — right of bay body, centered in shelf space
+                    const handle = document.createElement('div');
+                    handle.className = 'shelf-h-handle';
+                    const centerPx = (yPos + shelfH / 2) * EDITOR_SCALE;
+                    handle.style.bottom = (centerPx - 11) + 'px';
+                    handle.innerHTML = `<div class="sh-track"></div><div class="sh-grip"><span class="sh-icon">↕</span><span class="sh-val">${Math.round(shelfH)}"</span></div>`;
+                    handle.addEventListener('mousedown', e => _edStartHeight(e, idx, si));
+                    body.appendChild(handle);
+                };
+
+                if (clearances && clearances.length > 0) {
+                    let yPos = 0;
+                    clearances.forEach((h, si) => {
+                        _buildShelf(si, yPos * EDITOR_SCALE, h * EDITOR_SCALE, h, yPos);
+                        yPos += h;
+                    });
+                } else {
+                    const shelfH = heightIn / numShelves;
+                    for (let si = 0; si < numShelves; si++) {
+                        const yPos = si * shelfH;
+                        _buildShelf(si, yPos * EDITOR_SCALE, shelfH * EDITOR_SCALE, shelfH, yPos);
+                    }
+                }
 
                 bayEl.appendChild(body);
-                container.appendChild(bayEl);
+                wrapper.appendChild(bayEl);
+
+                // Width drag handle — below bay
+                const widthHandle = document.createElement('div');
+                widthHandle.className = 'bay-width-handle';
+                widthHandle.innerHTML = `<div class="bw-line"></div><div class="bw-grip"><span class="bw-icon">↔</span><span class="bw-val">${dFmt(bay.width_in)}</span></div><div class="bw-line"></div>`;
+                widthHandle.addEventListener('mousedown', e => _edStartWidth(e, idx));
+                wrapper.appendChild(widthHandle);
+
+                container.appendChild(wrapper);
             });
         }
 
-        function openBayConfig(idx) {
-            editorSelectedBay = idx;
-            _editorConfigTarget = idx;
-            const bay = editorState.bays[idx];
-
-            document.getElementById('eqConfigDrawerTitle').textContent = `Configure Bay ${idx + 1}`;
-            document.getElementById('edCfgWidth').value = bay.width_in;
-            document.getElementById('edCfgShelves').value = bay.num_shelves;
-            document.getElementById('edCfgHeights').value = bay.shelf_clearances ? bay.shelf_clearances.join(', ') : '';
-            document.getElementById('edCfgApplyBtn').textContent = 'Apply to Bay';
-            document.getElementById('edCfgWidthField').style.display = '';
-
-            document.getElementById('edAllBaysBtn').classList.remove('active');
-            document.getElementById('eqConfigDrawer').classList.add('open');
-            renderEditorBays();
-        }
-
-        function openAllBaysConfig() {
-            editorSelectedBay = -1;
-            _editorConfigTarget = -1;
-            const firstBay = editorState.bays[0] || { width_in: 48, num_shelves: 5, shelf_clearances: null };
-
-            document.getElementById('eqConfigDrawerTitle').textContent = 'Configure All Bays';
-            document.getElementById('edCfgWidth').value = firstBay.width_in;
-            document.getElementById('edCfgShelves').value = firstBay.num_shelves;
-            document.getElementById('edCfgHeights').value = firstBay.shelf_clearances ? firstBay.shelf_clearances.join(', ') : '';
-            document.getElementById('edCfgApplyBtn').textContent = 'Apply to All Bays';
-            document.getElementById('edCfgWidthField').style.display = '';
-
-            document.getElementById('edAllBaysBtn').classList.add('active');
-            document.getElementById('eqConfigDrawer').classList.add('open');
-            renderEditorBays();
-        }
-
-        function closeConfigDrawer(doRender) {
-            doRender = (doRender !== false);
-            document.getElementById('eqConfigDrawer').classList.remove('open');
-            document.getElementById('edAllBaysBtn').classList.remove('active');
-            editorSelectedBay = null;
-            _editorConfigTarget = null;
-            if (doRender) renderEditorBays();
-        }
-
-        function applyBayConfig() {
-            const width = parseFloat(document.getElementById('edCfgWidth').value);
-            const shelves = parseInt(document.getElementById('edCfgShelves').value);
-            const heightsStr = document.getElementById('edCfgHeights').value.trim();
-            const clearances = heightsStr
-                ? heightsStr.split(',').map(h => { const n = parseFloat(h.trim()); return isNaN(n) ? null : n; }).filter(h => h !== null)
-                : null;
-
-            const bayData = {
-                width_in: isNaN(width) ? 48 : Math.max(12, width),
-                num_shelves: isNaN(shelves) ? 5 : Math.max(1, shelves),
-                shelf_clearances: (clearances && clearances.length > 0) ? clearances : null
-            };
-
-            if (_editorConfigTarget === -1) {
-                editorState.bays = editorState.bays.map(() => ({ ...bayData }));
-            } else if (_editorConfigTarget !== null && _editorConfigTarget >= 0) {
-                editorState.bays[_editorConfigTarget] = { ...bayData };
+        // Shelf add/remove per bay
+        function editorAddShelf(bayIdx) {
+            const bay = editorState.bays[bayIdx];
+            const heightIn = parseFloat(document.getElementById('edEqHeight').value) || 72;
+            if (bay.shelf_clearances) {
+                const avg = parseFloat((bay.shelf_clearances.reduce((a, b) => a + b, 0) / bay.shelf_clearances.length).toFixed(1));
+                bay.shelf_clearances.push(avg);
+                bay.num_shelves = bay.shelf_clearances.length;
+            } else {
+                bay.num_shelves = Math.min(12, (bay.num_shelves || 5) + 1);
             }
+            renderEditorBays();
+        }
 
-            closeConfigDrawer(false);
+        function editorRemoveShelf(bayIdx) {
+            const bay = editorState.bays[bayIdx];
+            if ((bay.num_shelves || 5) <= 1) return;
+            if (bay.shelf_clearances) {
+                bay.shelf_clearances.pop();
+                bay.num_shelves = bay.shelf_clearances.length;
+            } else {
+                bay.num_shelves = Math.max(1, (bay.num_shelves || 5) - 1);
+            }
             renderEditorBays();
         }
 
         function editorAddBay() {
             const last = editorState.bays[editorState.bays.length - 1] || { width_in: 48, num_shelves: 5, shelf_clearances: null };
-            editorState.bays.push({ ...last });
+            editorState.bays.push({ ...last, shelf_clearances: last.shelf_clearances ? [...last.shelf_clearances] : null });
             document.getElementById('edBayCount').textContent = editorState.bays.length;
             document.getElementById('edRemoveBayBtn').disabled = editorState.bays.length <= 1;
             renderEditorBays();
@@ -3129,9 +3285,40 @@
         function editorRemoveBay() {
             if (editorState.bays.length <= 1) return;
             editorState.bays.pop();
-            if (editorSelectedBay >= editorState.bays.length) closeConfigDrawer(false);
             document.getElementById('edBayCount').textContent = editorState.bays.length;
             document.getElementById('edRemoveBayBtn').disabled = editorState.bays.length <= 1;
+            renderEditorBays();
+        }
+
+        // Configure All Bays popover
+        function toggleAllBaysPopover(forceState) {
+            const popover = document.getElementById('allBaysPopover');
+            const btn = document.getElementById('edAllBaysBtn');
+            const show = forceState !== undefined ? !!forceState : !popover.classList.contains('open');
+            popover.classList.toggle('open', show);
+            btn.classList.toggle('active', show);
+            if (show) {
+                const first = editorState.bays[0] || { width_in: 48, num_shelves: 5, shelf_clearances: null };
+                document.getElementById('abpWidth').value = first.width_in;
+                document.getElementById('abpShelves').value = first.num_shelves;
+                document.getElementById('abpHeights').value = first.shelf_clearances ? first.shelf_clearances.join(', ') : '';
+            }
+        }
+
+        function applyAllBaysConfig() {
+            const width = parseFloat(document.getElementById('abpWidth').value);
+            const shelves = parseInt(document.getElementById('abpShelves').value);
+            const heightsStr = document.getElementById('abpHeights').value.trim();
+            const clearances = heightsStr
+                ? heightsStr.split(',').map(h => { const n = parseFloat(h.trim()); return isNaN(n) ? null : n; }).filter(h => h !== null)
+                : null;
+            const patch = {
+                width_in: isNaN(width) ? 48 : Math.max(12, width),
+                num_shelves: isNaN(shelves) ? 5 : Math.max(1, shelves),
+                shelf_clearances: (clearances && clearances.length > 0) ? clearances : null
+            };
+            editorState.bays = editorState.bays.map(() => ({ ...patch }));
+            toggleAllBaysPopover(false);
             renderEditorBays();
         }
 

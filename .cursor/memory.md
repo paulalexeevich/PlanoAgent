@@ -107,6 +107,17 @@
 - **`updateLayerSelector()`**: Removes old `.dt-btn` elements and re-inserts from tree definition; validates `currentLayer` still exists after data changes.
 - **Screenshot timing**: Browser screenshots may lag by one frame after click — always take a second screenshot to confirm the current state.
 
+## Equipment Editor Overlay (v0.11)
+- **Full-screen dedicated page** replaces inline collapsible panel. Opened via "Equipment Config ▼" button.
+- **Editor state** (`editorState`): stores `{equipment_type, height_in, depth_in, bays: [{width_in, num_shelves, shelf_clearances}]}`. Initialized from current planogram equipment or defaults (3 × 48"×72" gondola).
+- **Per-bay ⚙ Configure button**: absolutely positioned INSIDE each bay body (not in header), floats at bottom center. Opens a slide-up config drawer at bottom of screen.
+- **Configure All Bays button**: in toolbar (top), applies width/shelves/heights to all bays simultaneously.
+- **Config drawer**: slides up from bottom with `max-height` animation. Shows "CONFIGURE BAY N" or "CONFIGURE ALL BAYS" title, input fields for width/shelves/shelf heights, and "Apply to Bay" / "Apply to All Bays" / Cancel.
+- **Bay highlight**: selected bay gets accent border + glow box-shadow.
+- **EDITOR_SCALE = 3px/in**: fixed scale for editor visualization (vs 6px/in main view). Bay headers use `dFmt()` for current unit system.
+- **applyEquipmentEditor()**: posts `bays_config` array to `/api/generate-equipment`, closes overlay on success, renders empty planogram.
+- **`toggleConfig()`**: now calls `openEquipmentEditor()` — old inline form stays in DOM but is no longer reachable.
+
 ## Known Issues & TODOs
 - Fill target is 99% but achievable ~96% due to fractional inch gaps (product widths don't evenly divide shelf width).
 - `ComplianceReport` uses `.overall_pct` not `.overall_score` — always check attribute names.
