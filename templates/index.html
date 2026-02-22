@@ -219,11 +219,11 @@
 
         .shelf-row {
             position: relative;
-            border-top: 3px solid var(--shelf-metal);
+            border-bottom: 3px solid var(--shelf-metal);
             min-height: 40px;
             overflow: visible;
+            background: transparent;
         }
-        .shelf-row:first-child { border-top: none; }
         .shelf-label {
             position: absolute;
             left: -2px;
@@ -769,9 +769,7 @@
 
         /* EMPTY SHELF */
         .shelf-row.empty-shelf {
-            border: 2px dashed var(--border);
-            border-top: 3px solid var(--shelf-metal);
-            background: rgba(42,45,58,0.3);
+            background: transparent;
         }
         .empty-shelf-label {
             position: absolute;
@@ -1497,7 +1495,7 @@
                 sortedShelves.forEach((shelf, idx) => {
                     const hasProducts = shelf.positions && shelf.positions.length > 0;
                     const shelfEl = document.createElement('div');
-                    shelfEl.className = 'shelf-row' + ((!hasProducts && isEmpty) ? ' empty-shelf' : '');
+                    shelfEl.className = 'shelf-row' + (!hasProducts ? ' empty-shelf' : '');
 
                     const shelfHeight = shelf.height_in * scale;
                     shelfEl.style.height = shelfHeight + 'px';
@@ -1513,10 +1511,10 @@
                     shelfEl.appendChild(label);
 
                     // Empty shelf indicator
-                    if (!hasProducts && isEmpty) {
+                    if (!hasProducts) {
                         const emptyLabel = document.createElement('span');
                         emptyLabel.className = 'empty-shelf-label';
-                        emptyLabel.textContent = `Empty — ${dFmt(shelf.width_in)} x ${dFmt(shelf.height_in)}`;
+                        emptyLabel.textContent = `Empty`;
                         shelfEl.appendChild(emptyLabel);
                     }
 
