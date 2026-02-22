@@ -1243,11 +1243,20 @@
             color: var(--accent);
             border-color: var(--accent);
         }
+        .bay-glue-toggle.glued {
+            width: 0;
+            overflow: visible;
+        }
         .bay-glue-toggle.glued .glue-icon {
-            opacity: 1;
+            opacity: 0;
             color: var(--accent);
             background: rgba(74,158,255,0.15);
             border-color: var(--accent);
+            position: absolute;
+            z-index: 30;
+        }
+        .bay-glue-toggle.glued:hover .glue-icon {
+            opacity: 1;
         }
         .eq-editor-bay {
             background: var(--bg-card);
