@@ -1213,12 +1213,6 @@
             gap: 12px;
             align-items: flex-start;
             width: fit-content;
-            margin: 0 auto;
-        }
-        /* During a width drag, pin the container so auto-centering doesn't shift siblings */
-        .eq-editor-bays.dragging-width {
-            margin-left: var(--drag-pin-ml);
-            margin-right: auto;
         }
         .eq-editor-bay {
             background: var(--bg-card);
@@ -3104,10 +3098,7 @@
         function _edOnUp() {
             if (!_edDrag) return;
             if (_edDrag.handle) _edDrag.handle.classList.remove('dragging');
-            // Unpin the bays container
-            const baysC = document.getElementById('editorBaysContainer');
-            baysC.classList.remove('dragging-width');
-            baysC.style.removeProperty('--drag-pin-ml');
+            
             _edDrag = null;
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
@@ -3120,13 +3111,6 @@
             e.preventDefault();
             const handle = e.currentTarget;
             handle.classList.add('dragging');
-
-            // Pin the bays container at its current computed margin-left so
-            // auto-centering doesn't shift siblings during the drag
-            const baysC = document.getElementById('editorBaysContainer');
-            const currentML = parseFloat(window.getComputedStyle(baysC).marginLeft) || 0;
-            baysC.style.setProperty('--drag-pin-ml', currentML + 'px');
-            baysC.classList.add('dragging-width');
 
             _edDrag = {
                 type: 'width', side: side || 'right',
