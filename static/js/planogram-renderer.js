@@ -1,23 +1,5 @@
 /* PLANOGRAM RENDERER — Dashboard visualization (uses shared BayRenderer) */
 
-function _addGroupBand(shelfEl, startX, width, segment, shelfHeight) {
-    if (width <= 0) return;
-    const color = SEGMENT_COLORS[segment] || SEGMENT_COLORS.Other;
-    const band = document.createElement('div');
-    band.className = 'group-band';
-    band.style.left = startX + 'px';
-    band.style.width = width + 'px';
-    band.style.borderColor = color;
-    band.style.backgroundColor = color;
-    shelfEl.appendChild(band);
-    const lbl = document.createElement('div');
-    lbl.className = 'group-label-overlay';
-    lbl.style.left = (startX + 2) + 'px';
-    lbl.style.color = color;
-    lbl.textContent = segment;
-    shelfEl.appendChild(lbl);
-}
-
 function renderPlanogram() {
     const container = document.getElementById('planogramContainer');
     if (!planogramData || !planogramData.equipment) {
@@ -34,7 +16,6 @@ function renderPlanogram() {
 
     renderLayerLegend(dtLevelName, dtPalette);
 
-    const segMap = (!isDtLayer) ? buildSegmentMap() : {};
     const bays   = BayRenderer.normalizeDashboard(planogramData.equipment);
 
     BayRenderer.render({
@@ -56,8 +37,6 @@ function renderPlanogram() {
             }
 
             const shelfHeight = shelf.height_in * scale;
-            let currentSegment = null;
-            let segStartX = 0;
 
             shelf.positions.forEach((pos, posIdx) => {
                 const product = productsMap[pos.product_id];
@@ -66,20 +45,7 @@ function renderPlanogram() {
                 const blockWidth  = product.width_in * pos.facings_wide * scale;
                 const blockHeight = Math.min(product.height_in * scale, shelfHeight - 4);
 
-                if (!isDtLayer) {
-                    const seg = segMap[pos.product_id] || null;
-                    if (seg && seg !== currentSegment) {
-                        if (currentSegment) {
-                            _addGroupBand(shelfEl, segStartX, pos.x_position * scale - segStartX, currentSegment, shelfHeight);
-                        }
-                        currentSegment = seg;
-                        segStartX = pos.x_position * scale;
-                    }
-                    if (posIdx === shelf.positions.length - 1 && currentSegment) {
-                        const endX = pos.x_position * scale + blockWidth;
-                        _addGroupBand(shelfEl, segStartX, endX - segStartX, currentSegment, shelfHeight);
-                    }
-                }
+                /* segment bands hidden in Products view; DT layers use their own coloring */
 
                 const block = document.createElement('div');
                 block.className = 'product-block';
@@ -127,13 +93,3 @@ function renderPlanogram() {
     });
 }
 
-function buildSegmentMap() {
-    if (!complianceData || !complianceData.position_groups) return {};
-    const map = {};
-    complianceData.position_groups.forEach(pg => {
-        if (pg.groups && pg.groups.Segment) {
-            map[pg.product_id] = pg.groups.Segment;
-        }
-    });
-    return map;
-}
