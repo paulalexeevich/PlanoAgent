@@ -67,7 +67,8 @@ async function fillProducts() {
     const mode = fillMode || 'algorithm';
     const loadingMsg = mode === 'ai' ? 'Gemini AI is filling products...'
         : mode === 'compare' ? 'Running Algorithm + AI comparison...'
-        : 'Algorithm is filling products...';
+        : mode === 'cross_bay' ? 'Cross-Bay algorithm is filling products...'
+        : 'Standard algorithm is filling products...';
 
     setFillLoading(true);
     showLoading(true, loadingMsg);

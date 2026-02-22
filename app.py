@@ -22,7 +22,8 @@ from planogram_generator import (
 from planogram_schema import Planogram, Equipment
 from gemini_agent import generate_planogram_with_ai, fill_products_with_ai
 from product_logic import (
-    ProductLogicRules, fill_equipment_rule_based, build_fill_prompt,
+    ProductLogicRules, fill_equipment_rule_based, fill_equipment_cross_bay,
+    build_fill_prompt,
     compute_facings_for_ai, get_total_shelf_width, phase1_capacity_check,
     phase2_optimal_facings, validate_and_fix_shelves,
     recover_missing_products, boost_underused_shelves, fill_shelf_gaps,
@@ -404,6 +405,14 @@ def fill_products():
                 filled_eq = result["equipment"]
                 timings["rule_based_ms"] = round((_time.time() - t_rb) * 1000)
                 src = "rule_based_fallback"
+        elif run_mode == "cross_bay":
+            t_rb = _time.time()
+            result = fill_equipment_cross_bay(
+                eq_copy, products_json, rules, decision_tree=decision_tree,
+            )
+            filled_eq = result["equipment"]
+            timings["rule_based_ms"] = round((_time.time() - t_rb) * 1000)
+            src = "cross_bay"
         else:
             t_rb = _time.time()
             result = fill_equipment_rule_based(
@@ -423,11 +432,11 @@ def fill_products():
         # and distributes facings. Only run overflow fix (safe for compliance).
         # For AI mode: run full pipeline (recover, boost, gap-fill).
         t_pp = _time.time()
-        if run_mode == "algorithm":
+        if run_mode in ("algorithm", "cross_bay"):
             # Minimal post-processing: only fix shelf overflows
             filled_eq = validate_and_fix_shelves(filled_eq, prod_map)
             pp_timings = {"overflow_fix": _time.time() - t_pp}
-            print(f"[{src}] Algorithm mode: skipping recover/boost/gap-fill "
+            print(f"[{src}] {run_mode} mode: skipping recover/boost/gap-fill "
                   f"to preserve tree compliance", flush=True)
         else:
             filled_eq, pp_timings = _postprocess_pipeline(

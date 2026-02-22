@@ -12,6 +12,7 @@ while Gemini AI decides "where to place" (merchandising logic).
 
 import json
 import copy
+from collections import OrderedDict
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Optional, Tuple
 
@@ -211,6 +212,10 @@ def _classify_product(product: dict, rules: ProductLogicRules) -> str:
     return "middle"
 
 
+_HEIGHT_TOLERANCE = 0.5  # inches — shelves within this are "same height"
+_YPOS_TOLERANCE = 1.0    # inches — shelves within this are "same row"
+
+
 def _shelf_tier_for_index(shelf_idx: int, total_shelves: int) -> str:
     """Map a shelf index (0-based, bottom=0) to a tier label."""
     if total_shelves <= 2:
@@ -399,6 +404,303 @@ def phase3_rule_based_placement(
 
     placed_products = [p for p in selected_products if p["id"] in placed_product_ids]
 
+    return {
+        "equipment": equipment_dict,
+        "products": placed_products,
+    }
+
+
+# ==============================================================================
+# PHASE 3b: Cross-bay placement — merge glued bays with matching shelves
+# ==============================================================================
+
+def _build_bay_groups(bays: list) -> list:
+    """Group consecutive bays that are glued together."""
+    if not bays:
+        return []
+    sorted_bays = sorted(bays, key=lambda b: b.get("bay_number", 0))
+    groups: list = [[sorted_bays[0]]]
+    for i in range(1, len(sorted_bays)):
+        if sorted_bays[i - 1].get("glued_right", False):
+            groups[-1].append(sorted_bays[i])
+        else:
+            groups.append([sorted_bays[i]])
+    return groups
+
+
+def _build_virtual_shelves(bay_groups: list) -> list:
+    """
+    For each bay-group, merge shelves at matching (y_position, height_in) into
+    virtual wide shelves.  Non-glued groups keep original per-bay shelves.
+
+    Returns a list of virtual shelf dicts:
+        {
+            "width":  total merged width,
+            "height": clearance height (common to all merged shelves),
+            "sources": [(bay_dict, shelf_dict), ...] in left-to-right order,
+        }
+    sorted bottom-to-top, group-by-group (compliance walk order).
+    """
+    virtual: list = []
+
+    for group in bay_groups:
+        if len(group) == 1:
+            bay = group[0]
+            for shelf in sorted(bay.get("shelves", []),
+                                key=lambda s: s.get("shelf_number", 0)):
+                virtual.append({
+                    "width":   shelf.get("width_in", 48),
+                    "height":  shelf.get("height_in", 12),
+                    "sources": [(bay, shelf)],
+                })
+        else:
+            # Collect all shelves, keyed by (y_position ≈ , height_in ≈)
+            rows: dict = OrderedDict()
+            for bay in group:
+                for shelf in sorted(bay.get("shelves", []),
+                                    key=lambda s: s.get("shelf_number", 0)):
+                    y = shelf.get("y_position", 0)
+                    h = shelf.get("height_in", 12)
+                    matched = False
+                    for key in rows:
+                        ky, kh = key
+                        if abs(y - ky) <= _YPOS_TOLERANCE and abs(h - kh) <= _HEIGHT_TOLERANCE:
+                            rows[key].append((bay, shelf))
+                            matched = True
+                            break
+                    if not matched:
+                        rows[(y, h)] = [(bay, shelf)]
+
+            for (y, h), sources in sorted(rows.items(), key=lambda kv: kv[0][0]):
+                total_w = sum(s.get("width_in", 48) for _, s in sources)
+                virtual.append({
+                    "width":   total_w,
+                    "height":  h,
+                    "sources": sources,
+                })
+
+    return virtual
+
+
+def _split_positions_to_shelves(
+    virtual_positions: list,
+    virtual_shelves: list,
+    prod_map: dict,
+) -> None:
+    """
+    Distribute positions placed on virtual (merged) shelves back to their
+    physical source shelves.  Handles products that straddle bay boundaries
+    by splitting the facings across the two shelves.
+    """
+    for vs, positions in zip(virtual_shelves, virtual_positions):
+        sources = vs["sources"]
+
+        if len(sources) == 1:
+            _, shelf = sources[0]
+            shelf["positions"] = positions
+            continue
+
+        # Build cumulative-width boundaries for each source shelf
+        boundaries: list = []
+        running = 0.0
+        for bay, shelf in sources:
+            w = shelf.get("width_in", 48)
+            boundaries.append((running, running + w, shelf))
+            running += w
+
+        shelf_pos: dict = {id(shelf): [] for _, shelf in sources}
+
+        for pos in positions:
+            pid = pos["product_id"]
+            pw = prod_map[pid]["width_in"]
+            total_facings = pos["facings_wide"]
+            cursor_x = pos["x_position"]
+
+            for seg_start, seg_end, shelf in boundaries:
+                if total_facings <= 0:
+                    break
+                if cursor_x >= seg_end:
+                    continue
+
+                avail = seg_end - max(cursor_x, seg_start)
+                fit = int((avail + 0.1) / pw) if pw > 0 else 0
+                actual = min(fit, total_facings)
+                if actual <= 0:
+                    continue
+
+                local_x = max(cursor_x, seg_start) - seg_start
+                shelf_pos[id(shelf)].append({
+                    "product_id": pid,
+                    "x_position": round(local_x, 2),
+                    "facings_wide": actual,
+                    "facings_high": pos.get("facings_high", 1),
+                    "facings_deep": pos.get("facings_deep", 1),
+                    "orientation":  pos.get("orientation", "front"),
+                })
+                cursor_x += pw * actual
+                total_facings -= actual
+
+        for _, shelf in sources:
+            shelf["positions"] = shelf_pos[id(shelf)]
+
+
+def phase3_cross_bay_placement(
+    equipment_dict: dict,
+    selected_products: list,
+    facings: dict,
+    rules: ProductLogicRules,
+    decision_tree=None,
+) -> dict:
+    """
+    Cross-bay placement: when bays are glued and their shelves share the same
+    height / y-position, treat them as one continuous shelf surface.
+
+    Phases are identical to phase3_rule_based_placement except:
+      - Shelves from glued bays with matching dimensions are merged into
+        virtual wide shelves.
+      - Products flow across bay boundaries without resetting.
+      - After placement, positions are split back to physical shelves.
+    """
+    # Sort products by decision tree
+    if decision_tree:
+        sorted_products = sorted(
+            selected_products,
+            key=lambda p: get_product_group_tuple(p, decision_tree),
+        )
+    else:
+        sorted_products = sorted(
+            selected_products,
+            key=lambda p: (p.get("subcategory", ""), p.get("brand", ""), p.get("name", "")),
+        )
+
+    bays = equipment_dict.get("bays", [])
+    bay_groups = _build_bay_groups(bays)
+    virtual_shelves = _build_virtual_shelves(bay_groups)
+
+    prod_map = {p["id"]: p for p in selected_products}
+    placed_product_ids: set = set()
+
+    # ── MAIN PASS: place on virtual shelves ──
+    qi = 0
+    remaining_facings = 0
+    all_virtual_positions: list = []
+
+    for vs in virtual_shelves:
+        shelf_w = vs["width"]
+        shelf_h = vs["height"]
+        positions: list = []
+        x_pos = 0.0
+
+        # Carry over remaining facings from previous virtual shelf
+        if remaining_facings > 0 and qi > 0:
+            prev_prod = sorted_products[qi - 1]
+            pw = prev_prod["width_in"]
+            ph = prev_prod["height_in"]
+            if ph <= shelf_h:
+                max_fit = min(remaining_facings, int((shelf_w - x_pos) / pw)) if pw > 0 else 0
+                if max_fit > 0:
+                    positions.append({
+                        "product_id": prev_prod["id"],
+                        "x_position": round(x_pos, 2),
+                        "facings_wide": max_fit,
+                        "facings_high": 1,
+                        "facings_deep": 1,
+                        "orientation": "front",
+                    })
+                    x_pos += pw * max_fit
+                    remaining_facings -= max_fit
+
+        while qi < len(sorted_products):
+            prod = sorted_products[qi]
+            pid = prod["id"]
+            pw = prod["width_in"]
+            ph = prod["height_in"]
+            f = facings.get(pid, 1)
+
+            if ph > shelf_h:
+                qi += 1
+                continue
+
+            max_fit = int((shelf_w - x_pos + 0.1) / pw) if pw > 0 else 0
+            if max_fit < 1:
+                break
+
+            actual_f = min(f, max_fit)
+            positions.append({
+                "product_id": pid,
+                "x_position": round(x_pos, 2),
+                "facings_wide": actual_f,
+                "facings_high": 1,
+                "facings_deep": 1,
+                "orientation": "front",
+            })
+            x_pos += pw * actual_f
+            placed_product_ids.add(pid)
+
+            remaining_facings = f - actual_f
+            qi += 1
+            if remaining_facings > 0:
+                break
+
+        all_virtual_positions.append(positions)
+
+    # ── Split virtual positions back to physical shelves ──
+    _split_positions_to_shelves(all_virtual_positions, virtual_shelves, prod_map)
+
+    total_facings_placed = sum(
+        pos.get("facings_wide", 1)
+        for bay in bays
+        for shelf in bay.get("shelves", [])
+        for pos in shelf.get("positions", [])
+    )
+    print(f"  [Phase3-CrossBay] Placed {len(placed_product_ids)}/{len(selected_products)} products, "
+          f"{total_facings_placed} facings (cross-bay merged)", flush=True)
+
+    # ── BOOST PASS: fill remaining space on each *physical* shelf ──
+    total_extra = 0
+    for bay in bays:
+        for shelf in bay.get("shelves", []):
+            shelf_w = shelf.get("width_in", 48)
+            positions = shelf.get("positions", [])
+            if not positions:
+                continue
+
+            used = sum(prod_map[p["product_id"]]["width_in"] * p["facings_wide"]
+                       for p in positions if p["product_id"] in prod_map)
+            remaining = shelf_w - used
+            if remaining < 0.5:
+                continue
+
+            scorable = []
+            for i, pos in enumerate(positions):
+                prod = prod_map.get(pos["product_id"])
+                if prod:
+                    scorable.append((prod.get("weekly_units_sold", 0), i, prod))
+            scorable.sort(key=lambda x: x[0], reverse=True)
+
+            changed = True
+            while changed and remaining > 0.5:
+                changed = False
+                for sales, idx, prod in scorable:
+                    pos = positions[idx]
+                    pw = prod["width_in"]
+                    if pos["facings_wide"] < rules.max_facings and pw <= remaining + 0.1:
+                        pos["facings_wide"] += 1
+                        remaining -= pw
+                        total_extra += 1
+                        changed = True
+
+            x_pos = 0.0
+            for pos in positions:
+                pos["x_position"] = round(x_pos, 2)
+                prod = prod_map.get(pos["product_id"])
+                if prod:
+                    x_pos += prod["width_in"] * pos["facings_wide"]
+
+    if total_extra > 0:
+        print(f"  [Phase3-CrossBay-Boost] Added {total_extra} extra facings", flush=True)
+
+    placed_products = [p for p in selected_products if p["id"] in placed_product_ids]
     return {
         "equipment": equipment_dict,
         "products": placed_products,
@@ -888,6 +1190,30 @@ def fill_equipment_rule_based(
 
     # Phase 3
     return phase3_rule_based_placement(
+        equipment_dict, selected, facings, rules, decision_tree
+    )
+
+
+def fill_equipment_cross_bay(
+    equipment_dict: dict,
+    products_json: list,
+    rules: ProductLogicRules,
+    decision_tree: Optional[DecisionTree] = None,
+) -> dict:
+    """
+    Full pipeline: capacity check → optimal facings → cross-bay placement.
+    Glued bays with matching shelf heights are treated as one continuous surface.
+    """
+    total_w = get_total_shelf_width(equipment_dict)
+
+    # Phase 1
+    selected = phase1_capacity_check(products_json, total_w)
+
+    # Phase 2
+    facings = phase2_optimal_facings(selected, total_w, rules)
+
+    # Phase 3 — cross-bay variant
+    return phase3_cross_bay_placement(
         equipment_dict, selected, facings, rules, decision_tree
     )
 
