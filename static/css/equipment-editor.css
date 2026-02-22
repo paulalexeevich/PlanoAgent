@@ -1,4 +1,4 @@
-/* EQUIPMENT EDITOR — Overlay, Toolbar, Bay Wrappers, Shelves, Drag Handles, Glue, Popover */
+/* EQUIPMENT EDITOR — Overlay, Toolbar, Editor-specific bay overrides, Drag Handles, Glue, Popover */
 
 .eq-editor-overlay {
     display: none;
@@ -87,6 +87,32 @@
     width: fit-content;
 }
 
+/* Editor-specific bay overrides (scoped to .eq-editor-bays) */
+.eq-editor-bays .br-bay {
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.eq-editor-bays .br-bay.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 16px rgba(74,158,255,0.15);
+}
+.eq-editor-bays .br-bay-header {
+    padding: 7px 10px;
+    font-size: 10px;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-radius: 5px 5px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+.eq-editor-bays .br-shelf-label {
+    font-size: 8px;
+    opacity: 0.55;
+}
+
 /* Glue toggle — small button between adjacent bays */
 .bay-glue-toggle {
     display: flex;
@@ -130,89 +156,8 @@
 .bay-glue-toggle.glued:hover .glue-icon {
     opacity: 1;
 }
-.eq-editor-bay {
-    background: var(--bg-card);
-    border: 2px solid var(--border);
-    border-radius: 8px;
-    flex-shrink: 0;
-    position: relative;
-    transition: border-color 0.2s, box-shadow 0.2s;
-    box-sizing: content-box;
-    overflow: visible;
-}
-.eq-editor-bay.selected {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent), 0 0 16px rgba(74,158,255,0.15);
-}
-.eq-editor-bay-hdr {
-    background: var(--bg-shelf);
-    padding: 7px 10px;
-    text-align: center;
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    border-bottom: 1px solid var(--border);
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    border-radius: 5px 5px 0 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-}
-.eq-editor-bay-body {
-    position: relative;
-    overflow: hidden;
-}
-.eq-editor-shelf {
-    position: absolute;
-    width: 100%;
-    border-bottom: 3px solid var(--shelf-metal);
-    box-sizing: border-box;
-}
-.eq-editor-shelf-label {
-    position: absolute;
-    left: 2px;
-    top: 2px;
-    font-size: 8px;
-    color: var(--text-secondary);
-    opacity: 0.55;
-}
-.eq-editor-empty-label {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 9px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    opacity: 0.4;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    pointer-events: none;
-}
 
-/* Bay wrapper — holds the bay card + width handle below */
-.eq-bay-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
-    flex-shrink: 0;
-}
-
-/* Bay header — flex to support shelf +/- controls */
-.bay-hdr-title {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-/* Shelf count +/- controls in bay header */
+/* Bay header — shelf +/- controls */
 .bay-shelf-ctrl {
     display: flex;
     align-items: center;
@@ -264,7 +209,6 @@
 .shelf-drag-line:hover::before,
 .shelf-drag-line.dragging::before { background: var(--accent); }
 
-/* Dimension label on shelf line */
 .shelf-drag-line::after {
     content: attr(data-dim);
     position: absolute;

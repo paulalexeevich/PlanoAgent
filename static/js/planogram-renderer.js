@@ -1,4 +1,4 @@
-/* PLANOGRAM RENDERER — Main visualization rendering */
+/* PLANOGRAM RENDERER — Dashboard visualization (uses shared BayRenderer) */
 
 function _addGroupBand(shelfEl, startX, width, segment, shelfHeight) {
     if (width <= 0) return;
@@ -20,147 +20,110 @@ function _addGroupBand(shelfEl, startX, width, segment, shelfHeight) {
 
 function renderPlanogram() {
     const container = document.getElementById('planogramContainer');
-    container.innerHTML = '';
+    if (!planogramData || !planogramData.equipment) {
+        container.innerHTML = '';
+        return;
+    }
 
-    if (!planogramData || !planogramData.equipment) return;
-
-    const equipment = planogramData.equipment;
-
-    const isDtLayer = currentLayer.startsWith('dt-');
-    const dtLevelIdx = isDtLayer ? parseInt(currentLayer.split('-')[1]) : -1;
-    const dtLevel = isDtLayer && decisionTreeData && decisionTreeData.levels
+    const isDtLayer    = currentLayer.startsWith('dt-');
+    const dtLevelIdx   = isDtLayer ? parseInt(currentLayer.split('-')[1]) : -1;
+    const dtLevel      = isDtLayer && decisionTreeData && decisionTreeData.levels
         ? decisionTreeData.levels[dtLevelIdx] : null;
-    const dtLevelName = dtLevel ? dtLevel.name : null;
-    const dtPalette = dtLevelName ? buildDtPaletteForLevel(dtLevelName) : {};
+    const dtLevelName  = dtLevel ? dtLevel.name : null;
+    const dtPalette    = dtLevelName ? buildDtPaletteForLevel(dtLevelName) : {};
 
     renderLayerLegend(dtLevelName, dtPalette);
 
     const segMap = (!isDtLayer) ? buildSegmentMap() : {};
+    const bays   = BayRenderer.normalizeDashboard(planogramData.equipment);
 
-    equipment.bays.forEach((bay, bayIdx) => {
-        const prevBay = bayIdx > 0 ? equipment.bays[bayIdx - 1] : null;
-        const gluedToPrev = prevBay && prevBay.glued_right;
+    BayRenderer.render({
+        container,
+        scale,
+        bayGap:   4,
+        gluedGap: -2,
+        bays,
 
-        const bayEl = document.createElement('div');
-        bayEl.className = 'bay' + (gluedToPrev ? ' bay-glued' : '');
-        bayEl.style.width = (bay.width_in * scale) + 'px';
-
-        const header = document.createElement('div');
-        header.className = 'bay-header';
-        header.textContent = `Bay ${bay.bay_number}`;
-        bayEl.appendChild(header);
-
-        const body = document.createElement('div');
-        body.className = 'bay-body';
-        body.style.height = (bay.height_in * scale) + 'px';
-
-        const sortedShelves = [...bay.shelves].sort((a, b) => a.y_position - b.y_position);
-
-        sortedShelves.forEach((shelf) => {
+        onShelf(shelfEl, shelf, si, bay, bayIdx) {
             const hasProducts = shelf.positions && shelf.positions.length > 0;
-            const shelfEl = document.createElement('div');
-            shelfEl.className = 'shelf-row' + (!hasProducts ? ' empty-shelf' : '');
-
-            const shelfHeight = shelf.height_in * scale;
-            shelfEl.style.height = shelfHeight + 'px';
-            shelfEl.style.width = bay.width_in * scale + 'px';
-            shelfEl.style.position = 'absolute';
-            shelfEl.style.bottom = (shelf.y_position * scale) + 'px';
-            shelfEl.style.left = '0';
-
-            const label = document.createElement('span');
-            label.className = 'shelf-label';
-            label.textContent = `S${shelf.shelf_number} — ${dFmt(shelf.height_in)}`;
-            shelfEl.appendChild(label);
-
             if (!hasProducts) {
+                shelfEl.classList.add('empty-shelf');
                 const emptyLabel = document.createElement('span');
                 emptyLabel.className = 'empty-shelf-label';
-                emptyLabel.textContent = `Empty`;
+                emptyLabel.textContent = 'Empty';
                 shelfEl.appendChild(emptyLabel);
+                return;
             }
 
-            if (hasProducts) {
-                let currentSegment = null;
-                let segStartX = 0;
+            const shelfHeight = shelf.height_in * scale;
+            let currentSegment = null;
+            let segStartX = 0;
 
-                shelf.positions.forEach((pos, posIdx) => {
-                    const product = productsMap[pos.product_id];
-                    if (!product) return;
+            shelf.positions.forEach((pos, posIdx) => {
+                const product = productsMap[pos.product_id];
+                if (!product) return;
 
-                    const blockWidth = product.width_in * pos.facings_wide * scale;
-                    const blockHeight = Math.min(product.height_in * scale, shelfHeight - 4);
+                const blockWidth  = product.width_in * pos.facings_wide * scale;
+                const blockHeight = Math.min(product.height_in * scale, shelfHeight - 4);
 
-                    if (!isDtLayer) {
-                        const seg = segMap[pos.product_id] || null;
-                        if (seg && seg !== currentSegment) {
-                            if (currentSegment) {
-                                _addGroupBand(shelfEl, segStartX, pos.x_position * scale - segStartX, currentSegment, shelfHeight);
-                            }
-                            currentSegment = seg;
-                            segStartX = pos.x_position * scale;
+                if (!isDtLayer) {
+                    const seg = segMap[pos.product_id] || null;
+                    if (seg && seg !== currentSegment) {
+                        if (currentSegment) {
+                            _addGroupBand(shelfEl, segStartX, pos.x_position * scale - segStartX, currentSegment, shelfHeight);
                         }
-                        if (posIdx === shelf.positions.length - 1 && currentSegment) {
-                            const endX = pos.x_position * scale + blockWidth;
-                            _addGroupBand(shelfEl, segStartX, endX - segStartX, currentSegment, shelfHeight);
-                        }
+                        currentSegment = seg;
+                        segStartX = pos.x_position * scale;
                     }
-
-                    const block = document.createElement('div');
-                    block.className = 'product-block';
-                    block.style.width = blockWidth + 'px';
-                    block.style.height = blockHeight + 'px';
-                    block.style.left = (pos.x_position * scale) + 'px';
-
-                    const labelEl = document.createElement('div');
-                    labelEl.className = 'product-label';
-
-                    if (isDtLayer && dtLevelName) {
-                        const groups = dtPositionMap[pos.product_id];
-                        const groupVal = groups ? (groups[dtLevelName] || '?') : '?';
-                        const color = dtPalette[groupVal] || '#666';
-                        block.style.backgroundColor = color;
-                        labelEl.textContent = groupVal;
-                        block.appendChild(labelEl);
-                    } else {
-                        block.style.backgroundColor = product.color_hex || '#666';
-                        const shortName = product.brand + (product.pack_size > 1 ? ` ${product.pack_size}pk` : '');
-                        labelEl.textContent = shortName;
-                        block.appendChild(labelEl);
-                        if (blockHeight > 25) {
-                            const priceEl = document.createElement('div');
-                            priceEl.className = 'product-price';
-                            priceEl.textContent = '$' + product.price.toFixed(2);
-                            block.appendChild(priceEl);
-                        }
+                    if (posIdx === shelf.positions.length - 1 && currentSegment) {
+                        const endX = pos.x_position * scale + blockWidth;
+                        _addGroupBand(shelfEl, segStartX, endX - segStartX, currentSegment, shelfHeight);
                     }
+                }
 
-                    if (pos.facings_wide > 1) {
-                        const badge = document.createElement('div');
-                        badge.className = 'facing-badge';
-                        badge.textContent = pos.facings_wide + 'x';
-                        block.appendChild(badge);
+                const block = document.createElement('div');
+                block.className = 'product-block';
+                block.style.width  = blockWidth + 'px';
+                block.style.height = blockHeight + 'px';
+                block.style.left   = (pos.x_position * scale) + 'px';
+
+                const labelEl = document.createElement('div');
+                labelEl.className = 'product-label';
+
+                if (isDtLayer && dtLevelName) {
+                    const groups   = dtPositionMap[pos.product_id];
+                    const groupVal = groups ? (groups[dtLevelName] || '?') : '?';
+                    const color    = dtPalette[groupVal] || '#666';
+                    block.style.backgroundColor = color;
+                    labelEl.textContent = groupVal;
+                    block.appendChild(labelEl);
+                } else {
+                    block.style.backgroundColor = product.color_hex || '#666';
+                    const shortName = product.brand + (product.pack_size > 1 ? ' ' + product.pack_size + 'pk' : '');
+                    labelEl.textContent = shortName;
+                    block.appendChild(labelEl);
+                    if (blockHeight > 25) {
+                        const priceEl = document.createElement('div');
+                        priceEl.className = 'product-price';
+                        priceEl.textContent = '$' + product.price.toFixed(2);
+                        block.appendChild(priceEl);
                     }
+                }
 
-                    block.addEventListener('mouseenter', (e) => showTooltip(e, product, pos));
-                    block.addEventListener('mousemove', (e) => moveTooltip(e));
-                    block.addEventListener('mouseleave', hideTooltip);
+                if (pos.facings_wide > 1) {
+                    const badge = document.createElement('div');
+                    badge.className = 'facing-badge';
+                    badge.textContent = pos.facings_wide + 'x';
+                    block.appendChild(badge);
+                }
 
-                    shelfEl.appendChild(block);
-                });
-            }
+                block.addEventListener('mouseenter', (e) => showTooltip(e, product, pos));
+                block.addEventListener('mousemove',  (e) => moveTooltip(e));
+                block.addEventListener('mouseleave', hideTooltip);
 
-            body.appendChild(shelfEl);
-        });
-
-        bayEl.appendChild(body);
-
-        const footer = document.createElement('div');
-        footer.className = 'bay-footer';
-        footer.textContent = dFmt(bay.width_in);
-        bayEl.appendChild(footer);
-
-        container.appendChild(bayEl);
+                shelfEl.appendChild(block);
+            });
+        },
     });
 }
 

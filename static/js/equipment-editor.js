@@ -1,4 +1,4 @@
-/* EQUIPMENT EDITOR — Direct manipulation editor overlay */
+/* EQUIPMENT EDITOR — Direct manipulation editor overlay (uses shared BayRenderer) */
 
 let EDITOR_SCALE = 3;
 let editorState = null;
@@ -149,12 +149,14 @@ function _edStartHeight(e, bayIdx, shelfIdx) {
     document.body.style.userSelect = 'none';
 }
 
+/* Live DOM updates during drag — avoids full re-render for responsiveness */
+
 function _edLiveWidth(bayIdx) {
     const bay = editorState.bays[bayIdx];
     const w   = bay.width_in;
     const wpx = w * EDITOR_SCALE;
-    const heightIn = _edHeightIn();
-    const wrapper = document.querySelector(`.eq-bay-wrapper[data-idx="${bayIdx}"]`);
+    const edContainer = document.getElementById('editorBaysContainer');
+    const wrapper = edContainer.querySelector('.br-bay-wrapper[data-idx="' + bayIdx + '"]');
     if (!wrapper) return;
 
     wrapper.style.width = wpx + 'px';
@@ -166,14 +168,14 @@ function _edLiveWidth(bayIdx) {
         wrapper.style.marginLeft = '';
     }
 
-    const bayEl = wrapper.querySelector('.eq-editor-bay');
+    const bayEl = wrapper.querySelector('.br-bay');
     if (bayEl) {
         bayEl.style.width = wpx + 'px';
-        const title = bayEl.querySelector('.bay-hdr-title');
-        if (title) title.textContent = `Bay ${bayIdx + 1}`;
-        const footerEl = bayEl.querySelector('.bay-footer');
+        const title = bayEl.querySelector('.br-bay-title');
+        if (title) title.textContent = 'Bay ' + (bayIdx + 1);
+        const footerEl = bayEl.querySelector('.br-bay-footer');
         if (footerEl) footerEl.textContent = dFmt(w);
-        const body = bayEl.querySelector('.eq-editor-bay-body');
+        const body = bayEl.querySelector('.br-bay-body');
         if (body) body.style.width = wpx + 'px';
     }
 }
@@ -181,9 +183,10 @@ function _edLiveWidth(bayIdx) {
 function _edLiveShelfH(bayIdx) {
     const bay = editorState.bays[bayIdx];
     if (!bay.shelf_clearances) return;
-    const wrapper = document.querySelector(`.eq-bay-wrapper[data-idx="${bayIdx}"]`);
+    const edContainer = document.getElementById('editorBaysContainer');
+    const wrapper = edContainer.querySelector('.br-bay-wrapper[data-idx="' + bayIdx + '"]');
     if (!wrapper) return;
-    const shelfEls = wrapper.querySelectorAll('.eq-editor-shelf');
+    const shelfEls = wrapper.querySelectorAll('.br-shelf');
     let yPos = 0;
     bay.shelf_clearances.forEach((h, si) => {
         if (shelfEls[si]) {
@@ -191,8 +194,8 @@ function _edLiveShelfH(bayIdx) {
             shelfEls[si].style.height = (h * EDITOR_SCALE) + 'px';
             const dl = shelfEls[si].querySelector('.shelf-drag-line');
             if (dl) dl.dataset.dim = Math.round(h) + '"';
-            const lbl = shelfEls[si].querySelector('.eq-editor-shelf-label');
-            if (lbl) lbl.textContent = `S${si + 1} — ${dFmt(h)}`;
+            const lbl = shelfEls[si].querySelector('.br-shelf-label');
+            if (lbl) lbl.textContent = 'S' + (si + 1) + ' \u2014 ' + dFmt(h);
         }
         yPos += h;
     });
@@ -222,7 +225,7 @@ function syncEditorUnitLabels() {
     const u = dUnit();
     document.querySelectorAll('.ed-unit-label').forEach(el => { el.textContent = u; });
     const abpLabel = document.getElementById('abpWidthLabel');
-    if (abpLabel) abpLabel.textContent = `Width (${u})`;
+    if (abpLabel) abpLabel.textContent = 'Width (' + u + ')';
 }
 
 function _edHeightIn() {
@@ -237,115 +240,71 @@ function closeEquipmentEditor() {
 
 function renderEditorBays() {
     const container = document.getElementById('editorBaysContainer');
-    container.innerHTML = '';
-    const heightIn = _edHeightIn();
+    const heightIn  = _edHeightIn();
+    const bays      = BayRenderer.normalizeEditor(editorState.bays, heightIn);
 
-    editorState.bays.forEach((bay, idx) => {
-        const numShelves = bay.num_shelves || 5;
+    BayRenderer.render({
+        container,
+        scale:    EDITOR_SCALE,
+        bayGap:   12,
+        gluedGap: 0,
+        bays,
 
-        const wrapper = document.createElement('div');
-        wrapper.className = 'eq-bay-wrapper';
-        wrapper.dataset.idx = idx;
-        wrapper.style.width = (bay.width_in * EDITOR_SCALE) + 'px';
-        wrapper.style.marginLeft = '';
+        onHeader(headerEl, titleEl, bay, idx) {
+            const numShelves = bay._numShelves;
+            const ctrl = document.createElement('div');
+            ctrl.className = 'bay-shelf-ctrl';
+            const minBtn = document.createElement('button');
+            minBtn.className = 'bsc-btn';
+            minBtn.title = 'Remove shelf';
+            minBtn.textContent = '\u2212';
+            minBtn.addEventListener('click', e => { e.stopPropagation(); editorRemoveShelf(idx); });
+            const valSpan = document.createElement('span');
+            valSpan.className = 'bsc-val';
+            valSpan.textContent = numShelves + 'S';
+            const addBtn = document.createElement('button');
+            addBtn.className = 'bsc-btn';
+            addBtn.title = 'Add shelf';
+            addBtn.textContent = '+';
+            addBtn.addEventListener('click', e => { e.stopPropagation(); editorAddShelf(idx); });
+            ctrl.appendChild(minBtn);
+            ctrl.appendChild(valSpan);
+            ctrl.appendChild(addBtn);
+            headerEl.appendChild(ctrl);
+        },
 
-        const bayEl = document.createElement('div');
-        bayEl.className = 'eq-editor-bay';
-        bayEl.style.width = (bay.width_in * EDITOR_SCALE) + 'px';
-        bayEl.style.position = 'relative';
-
-        const hdr = document.createElement('div');
-        hdr.className = 'eq-editor-bay-hdr';
-        hdr.innerHTML = `
-            <span class="bay-hdr-title">Bay ${idx + 1}</span>
-            <div class="bay-shelf-ctrl">
-                <button class="bsc-btn" title="Remove shelf">−</button>
-                <span class="bsc-val">${numShelves}S</span>
-                <button class="bsc-btn" title="Add shelf">+</button>
-            </div>`;
-        hdr.querySelectorAll('.bsc-btn')[0].addEventListener('click', e => { e.stopPropagation(); editorRemoveShelf(idx); });
-        hdr.querySelectorAll('.bsc-btn')[1].addEventListener('click', e => { e.stopPropagation(); editorAddShelf(idx); });
-        bayEl.appendChild(hdr);
-
-        const body = document.createElement('div');
-        body.className = 'eq-editor-bay-body';
-        body.style.height = (heightIn * EDITOR_SCALE) + 'px';
-        body.style.width = (bay.width_in * EDITOR_SCALE) + 'px';
-        body.style.position = 'relative';
-        body.style.overflow = 'hidden';
-
-        const clearances = bay.shelf_clearances;
-        const _buildShelf = (si, bottomPx, heightPx, shelfH) => {
-            const shelfEl = document.createElement('div');
-            shelfEl.className = 'eq-editor-shelf';
-            shelfEl.style.bottom = bottomPx + 'px';
-            shelfEl.style.height = heightPx + 'px';
-            shelfEl.style.position = 'absolute';
-            shelfEl.style.width = '100%';
-
-            const lbl = document.createElement('span');
-            lbl.className = 'eq-editor-shelf-label';
-            lbl.textContent = `S${si + 1} — ${dFmt(shelfH)}`;
-            shelfEl.appendChild(lbl);
-
+        onShelf(shelfEl, shelf, si, bay, idx) {
             if (si > 0) {
                 const dragLine = document.createElement('div');
                 dragLine.className = 'shelf-drag-line';
-                dragLine.dataset.dim = Math.round(shelfH) + '"';
+                dragLine.dataset.dim = Math.round(shelf.height_in) + '"';
                 dragLine.addEventListener('mousedown', e => _edStartHeight(e, idx, si));
                 shelfEl.appendChild(dragLine);
             }
+        },
 
-            body.appendChild(shelfEl);
-        };
+        onDecorations(bayEl, wrapper, bay, idx) {
+            const edgeLeft = document.createElement('div');
+            edgeLeft.className = 'bay-edge-handle-left';
+            edgeLeft.addEventListener('mousedown', e => _edStartWidth(e, idx, 'left'));
+            bayEl.appendChild(edgeLeft);
 
-        if (clearances && clearances.length > 0) {
-            let yPos = 0;
-            clearances.forEach((h, si) => {
-                _buildShelf(si, yPos * EDITOR_SCALE, h * EDITOR_SCALE, h);
-                yPos += h;
-            });
-        } else {
-            const shelfH = heightIn / numShelves;
-            for (let si = 0; si < numShelves; si++) {
-                _buildShelf(si, si * shelfH * EDITOR_SCALE, shelfH * EDITOR_SCALE, shelfH);
+            const edgeRight = document.createElement('div');
+            edgeRight.className = 'bay-edge-handle';
+            edgeRight.addEventListener('mousedown', e => _edStartWidth(e, idx, 'right'));
+            bayEl.appendChild(edgeRight);
+        },
+
+        onAfterBay(container, bay, idx, isLast) {
+            if (!isLast) {
+                const toggle = document.createElement('div');
+                toggle.className = 'bay-glue-toggle' + (bay.glued_right ? ' glued' : '');
+                toggle.title = bay.glued_right ? 'Unglue bays' : 'Glue bays together';
+                toggle.innerHTML = '<span class="glue-icon">' + (bay.glued_right ? '\uD83D\uDD17' : '\u22EF') + '</span>';
+                toggle.addEventListener('click', () => toggleBayGlue(idx));
+                container.appendChild(toggle);
             }
-        }
-
-        bayEl.appendChild(body);
-
-        const footer = document.createElement('div');
-        footer.className = 'bay-footer';
-        footer.textContent = dFmt(bay.width_in);
-        bayEl.appendChild(footer);
-
-        const edgeHandleLeft = document.createElement('div');
-        edgeHandleLeft.className = 'bay-edge-handle-left';
-        edgeHandleLeft.addEventListener('mousedown', e => _edStartWidth(e, idx, 'left'));
-        bayEl.appendChild(edgeHandleLeft);
-
-        const edgeHandle = document.createElement('div');
-        edgeHandle.className = 'bay-edge-handle';
-        edgeHandle.addEventListener('mousedown', e => _edStartWidth(e, idx, 'right'));
-        bayEl.appendChild(edgeHandle);
-
-        wrapper.appendChild(bayEl);
-
-        if (idx > 0) {
-            const gluedToPrev = editorState.bays[idx - 1].glued_right;
-            wrapper.style.marginLeft = gluedToPrev ? '0' : '12px';
-        }
-
-        container.appendChild(wrapper);
-
-        if (idx < editorState.bays.length - 1) {
-            const toggle = document.createElement('div');
-            toggle.className = 'bay-glue-toggle' + (bay.glued_right ? ' glued' : '');
-            toggle.title = bay.glued_right ? 'Unglue bays' : 'Glue bays together';
-            toggle.innerHTML = `<span class="glue-icon">${bay.glued_right ? '🔗' : '⋯'}</span>`;
-            toggle.addEventListener('click', () => toggleBayGlue(idx));
-            container.appendChild(toggle);
-        }
+        },
     });
 }
 

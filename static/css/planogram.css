@@ -1,4 +1,4 @@
-/* PLANOGRAM — Visualization, Bays, Shelves, Product Blocks, Tooltip */
+/* PLANOGRAM — Dashboard-specific visualization overrides + product styles */
 
 /* MAIN VISUALIZATION AREA */
 .viz-area {
@@ -9,7 +9,7 @@
     min-height: 0;
 }
 
-/* PLANOGRAM VISUAL */
+/* PLANOGRAM VISUAL — flex container for bays */
 .planogram-container {
     display: flex;
     gap: 0;
@@ -17,70 +17,17 @@
     margin: 0 auto 24px auto;
 }
 
-.bay {
-    background: var(--bg-card);
-    border: 2px solid var(--border);
-    border-radius: 8px;
-    padding: 0;
-    overflow: visible;
-    box-sizing: content-box;
-    flex-shrink: 0;
-    margin-left: 4px;
-}
-.bay:first-child { margin-left: 0; }
-.bay.bay-glued {
-    margin-left: -2px;
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-}
-.bay:has(+ .bay-glued) {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-}
-.bay-header {
-    background: var(--bg-shelf);
-    padding: 8px 12px;
-    text-align: center;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    border-bottom: 1px solid var(--border);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.bay-footer {
-    background: var(--bg-shelf);
-    padding: 4px 8px;
-    text-align: center;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    border-top: 1px solid var(--border);
-    letter-spacing: 0.3px;
-}
-.bay-body {
-    position: relative;
-    padding: 0;
-    overflow: hidden;
-}
-
-.shelf-row {
-    position: relative;
-    border-bottom: 3px solid var(--shelf-metal);
+/* Dashboard-specific shelf refinements */
+.planogram-container .br-shelf {
     min-height: 40px;
     overflow: visible;
     background: transparent;
 }
-.shelf-label {
-    position: absolute;
+.planogram-container .br-shelf-label {
     left: -2px;
-    top: 2px;
-    font-size: 9px;
-    color: var(--text-secondary);
     background: var(--bg-card);
     padding: 1px 4px;
     border-radius: 2px;
-    z-index: 5;
     opacity: 0.7;
 }
 
@@ -155,7 +102,7 @@
 .tooltip .row .value { font-weight: 600; }
 
 /* EMPTY SHELF */
-.shelf-row.empty-shelf {
+.br-shelf.empty-shelf {
     background: transparent;
 }
 .empty-shelf-label {
