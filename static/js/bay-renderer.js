@@ -51,7 +51,10 @@ const BayRenderer = {
             const wrapper = document.createElement('div');
             wrapper.className = ('br-bay-wrapper' + (wrapperClass ? ' ' + wrapperClass : ''));
             wrapper.dataset.idx = idx;
-            wrapper.style.width = (bay.width_in * scale) + 'px';
+
+            const borderL = gluedToPrev    ? 0 : 2;
+            const borderR = bay.glued_right ? 0 : 2;
+            wrapper.style.width = (bay.width_in * scale + borderL + borderR) + 'px';
             wrapper.style.marginLeft = idx === 0
                 ? '0'
                 : (gluedToPrev ? gluedGap : bayGap) + 'px';
@@ -64,6 +67,9 @@ const BayRenderer = {
             const bayEl = document.createElement('div');
             bayEl.className = cls;
             bayEl.style.width = (bay.width_in * scale) + 'px';
+
+            if (gluedToPrev)    bayEl.style.borderLeft  = 'none';
+            if (bay.glued_right) bayEl.style.borderRight = 'none';
 
             const header = document.createElement('div');
             header.className = 'br-bay-header';
