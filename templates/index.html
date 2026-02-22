@@ -1210,9 +1210,44 @@
         }
         .eq-editor-bays {
             display: flex;
-            gap: 12px;
+            gap: 0; /* gaps managed per-item via margin */
             align-items: flex-start;
             width: fit-content;
+        }
+
+        /* Glue toggle — small button between adjacent bays */
+        .bay-glue-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            align-self: stretch;
+            cursor: pointer;
+            user-select: none;
+            flex-shrink: 0;
+            position: relative;
+        }
+        .bay-glue-toggle .glue-icon {
+            font-size: 12px;
+            color: var(--text-secondary);
+            opacity: 0.4;
+            transition: all 0.15s;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 2px 3px;
+            line-height: 1;
+        }
+        .bay-glue-toggle:hover .glue-icon {
+            opacity: 1;
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+        .bay-glue-toggle.glued .glue-icon {
+            opacity: 1;
+            color: var(--accent);
+            background: rgba(74,158,255,0.15);
+            border-color: var(--accent);
         }
         .eq-editor-bay {
             background: var(--bg-card);
@@ -3064,7 +3099,7 @@
                     bays: eq.bays.map(bay => {
                         const sorted = bay.shelves ? [...bay.shelves].sort((a, b) => a.y_position - b.y_position) : [];
                         const clearances = sorted.length > 0 ? sorted.map(s => s.height_in) : null;
-                        return { width_in: bay.width_in || 48, num_shelves: sorted.length || 5, shelf_clearances: clearances };
+                        return { width_in: bay.width_in || 48, num_shelves: sorted.length || 5, shelf_clearances: clearances, glued_right: !!bay.glued_right };
                     })
                 };
             } else {
@@ -3335,8 +3370,31 @@
                 bayEl.appendChild(edgeHandle);
 
                 wrapper.appendChild(bayEl);
+
+                // Add spacing before this bay (unless glued to the previous one)
+                if (idx > 0) {
+                    const gluedToPrev = editorState.bays[idx - 1].glued_right;
+                    wrapper.style.marginLeft = gluedToPrev ? '0' : '12px';
+                }
+
                 container.appendChild(wrapper);
+
+                // Glue toggle between this bay and the next
+                if (idx < editorState.bays.length - 1) {
+                    const toggle = document.createElement('div');
+                    toggle.className = 'bay-glue-toggle' + (bay.glued_right ? ' glued' : '');
+                    toggle.title = bay.glued_right ? 'Unglue bays' : 'Glue bays together';
+                    toggle.innerHTML = `<span class="glue-icon">${bay.glued_right ? '🔗' : '⋯'}</span>`;
+                    toggle.addEventListener('click', () => toggleBayGlue(idx));
+                    container.appendChild(toggle);
+                }
             });
+        }
+
+        function toggleBayGlue(bayIdx) {
+            const bay = editorState.bays[bayIdx];
+            bay.glued_right = !bay.glued_right;
+            renderEditorBays();
         }
 
         // Shelf add/remove per bay
@@ -3429,7 +3487,8 @@
                 bays_config: editorState.bays.map(bay => ({
                     width_in: bay.width_in,
                     num_shelves: bay.num_shelves,
-                    shelf_clearances: bay.shelf_clearances
+                    shelf_clearances: bay.shelf_clearances,
+                    glued_right: !!bay.glued_right
                 }))
             };
 
