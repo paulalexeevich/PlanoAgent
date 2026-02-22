@@ -94,9 +94,11 @@ function renderPlanogram() {
                     if (isRightEdge) block.classList.add('cross-bay-right');
                     if (isLeftEdge)  block.classList.add('cross-bay-left');
 
-                    block.style.width  = singleWidth + 'px';
+                    const leftPx  = Math.floor(baseLeft + f * singleWidth);
+                    const rightPx = Math.floor(baseLeft + (f + 1) * singleWidth);
+                    block.style.width  = (rightPx - leftPx) + 'px';
                     block.style.height = blockHeight + 'px';
-                    block.style.left   = (baseLeft + f * singleWidth) + 'px';
+                    block.style.left   = leftPx + 'px';
 
                     const labelEl = document.createElement('div');
                     labelEl.className = 'product-label';
