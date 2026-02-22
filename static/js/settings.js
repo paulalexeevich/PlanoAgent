@@ -35,6 +35,13 @@ function setCurrency(code) {
     if (planogramData) renderAll();
 }
 
+function setShowDimensions(val) {
+    showDimensions = val;
+    document.querySelector('.planogram-container')
+        ?.classList.toggle('show-dimensions', showDimensions);
+    saveSettings();
+}
+
 function setFillMode(mode) {
     fillMode = mode;
     const sel = document.getElementById('fillMode');
@@ -48,6 +55,7 @@ function openSettings() {
     document.getElementById('settingsUnitCm').classList.toggle('active', useMetric);
     document.getElementById('settingsCurrency').value = currency;
     document.getElementById('fillMode').value = fillMode || 'algorithm';
+    document.getElementById('settingsShowDims').checked = showDimensions;
     overlay.classList.add('open');
 }
 
@@ -68,6 +76,7 @@ function saveSettings() {
             useMetric,
             currency,
             fillMode,
+            showDimensions,
             scale,
             editorScale: EDITOR_SCALE,
         }));
@@ -91,6 +100,9 @@ function loadSettings() {
             fillMode = s.fillMode;
             const sel = document.getElementById('fillMode');
             if (sel) sel.value = fillMode;
+        }
+        if (s.showDimensions !== undefined) {
+            showDimensions = s.showDimensions;
         }
         if (typeof s.scale === 'number') {
             scale = s.scale;

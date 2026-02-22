@@ -7,6 +7,7 @@ let scale = 5; // pixels per inch
 let currency = 'USD'; // active currency code
 let useMetric = false; // false = inches, true = cm
 let fillMode = 'algorithm';     // 'algorithm' | 'ai' | 'compare'
+let showDimensions = false;     // show bay/shelf dimension labels
 let equipmentGenerated = false; // true after Step 1
 let decisionTreeData = null;   // decision tree definition
 let complianceData = null;     // compliance report from backend

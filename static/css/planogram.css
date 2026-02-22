@@ -31,6 +31,16 @@
     opacity: 0.7;
 }
 
+/* DIMENSION LABELS — hidden by default, toggled via Settings */
+.planogram-container .br-shelf-label,
+.planogram-container .br-bay-footer {
+    display: none;
+}
+.planogram-container.show-dimensions .br-shelf-label,
+.planogram-container.show-dimensions .br-bay-footer {
+    display: block;
+}
+
 /* PRODUCT BLOCKS */
 .product-block {
     display: flex;

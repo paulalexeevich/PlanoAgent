@@ -18,6 +18,8 @@ function renderPlanogram() {
 
     const bays   = BayRenderer.normalizeDashboard(planogramData.equipment);
 
+    container.classList.toggle('show-dimensions', showDimensions);
+
     BayRenderer.render({
         container,
         scale,
