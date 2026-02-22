@@ -26,6 +26,7 @@ function toggleConfig() {
 
 document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
+    fetchFullCatalog();
     fetchPlanogram();
     document.getElementById('scaleSlider').addEventListener('input', (e) => {
         scale = parseFloat(e.target.value);

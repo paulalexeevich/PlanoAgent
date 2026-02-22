@@ -116,11 +116,12 @@ function renderAssortmentDetail() {
         ${customAssortmentList ? '<button class="s-upload-btn" onclick="clearAssortmentList()" style="color:var(--accent-red);border-color:var(--accent-red);">Clear</button>' : ''}
     </div>`;
 
+    const catalog = fullCatalog.length > 0 ? fullCatalog : (planogramData ? planogramData.products || [] : []);
+    const prodMap = {};
+    catalog.forEach(p => { prodMap[p.id] = p; });
+
     let items = [];
     if (customAssortmentList && customAssortmentList.length > 0) {
-        const allProducts = planogramData ? planogramData.products || [] : [];
-        const prodMap = {};
-        allProducts.forEach(p => { prodMap[p.id] = p; });
         customAssortmentList.forEach(sku => {
             const p = prodMap[sku];
             items.push({
@@ -132,8 +133,7 @@ function renderAssortmentDetail() {
             });
         });
     } else {
-        const allProducts = planogramData ? planogramData.products || [] : [];
-        allProducts.forEach(p => {
+        catalog.forEach(p => {
             items.push({
                 id: p.id,
                 name: p.name,

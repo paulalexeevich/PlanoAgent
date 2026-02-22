@@ -3,6 +3,7 @@
 let planogramData = null;
 let summaryData = null;
 let productsMap = {};
+let fullCatalog = [];
 let scale = 5; // pixels per inch
 let currency = 'USD'; // active currency code
 let useMetric = false; // false = inches, true = cm

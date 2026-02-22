@@ -1,5 +1,14 @@
 /* API — Backend communication (fetch, generate equipment, fill products, reset) */
 
+async function fetchFullCatalog() {
+    try {
+        const res = await fetch('/api/products');
+        fullCatalog = await res.json();
+    } catch (err) {
+        console.error('Failed to load full catalog:', err);
+    }
+}
+
 async function fetchPlanogram() {
     showLoading(true);
     try {
