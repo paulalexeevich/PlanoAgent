@@ -919,6 +919,73 @@
             opacity: 0.7;
         }
         .error-toast .close-toast:hover { opacity: 1; }
+
+        /* LAYER TOOLBAR */
+        .layer-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 0 14px;
+            flex-wrap: wrap;
+        }
+        .layer-toolbar-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            flex-shrink: 0;
+        }
+        .layer-selector {
+            display: flex;
+            gap: 2px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 3px;
+            flex-shrink: 0;
+        }
+        .layer-btn {
+            padding: 4px 13px;
+            font-size: 11px;
+            font-weight: 600;
+            border: none;
+            border-radius: 5px;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+            letter-spacing: 0.3px;
+        }
+        .layer-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.06); }
+        .layer-btn.active { background: var(--accent); color: white; }
+        .layer-btn.dt-btn.active { background: var(--accent-orange); color: #0f1117; }
+
+        /* DT LEGEND */
+        .dt-legend {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        .legend-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -1009,6 +1076,15 @@
     <div class="app-layout">
         <!-- Full-width Visualization -->
         <div class="viz-area" id="vizArea">
+            <!-- LAYER TOOLBAR -->
+            <div class="layer-toolbar" id="layerToolbar">
+                <span class="layer-toolbar-label">View Layer:</span>
+                <div class="layer-selector" id="layerSelector">
+                    <button class="layer-btn active" data-layer="products" onclick="setLayer('products')">Products</button>
+                    <!-- DT level buttons injected dynamically when compliance data is available -->
+                </div>
+                <div class="dt-legend" id="dtLegend"></div>
+            </div>
             <div class="loading" id="loadingIndicator">
                 <div class="spinner"></div>
                 <span id="loadingText">Loading planogram...</span>
@@ -1102,8 +1178,34 @@
         let equipmentGenerated = false; // true after Step 1
         let decisionTreeData = null;   // decision tree definition
         let complianceData = null;     // compliance report from backend
+        let currentLayer = 'products'; // 'products' | 'dt-0' | 'dt-1' | ...
+        let dtPositionMap = {};        // product_id → {LevelName: groupValue, ...}
 
-        // Segment colors for group overlay
+        // Pre-defined palettes for known DT level names
+        const DT_KNOWN_PALETTES = {
+            'Segment': {
+                'Domestic':  '#4a9eff',
+                'Craft':     '#f59e0b',
+                'Import':    '#34d399',
+                'Specialty': '#a78bfa',
+                'Other':     '#9aa0a6',
+            },
+            'Package': {
+                'can':         '#4a9eff',
+                'bottle':      '#34d399',
+                'tallboy_can': '#f59e0b',
+                'tallboy':     '#e879f9',
+            },
+        };
+
+        // Color wheel for auto-generated palettes (Style, Brand, etc.)
+        const DT_AUTO_COLORS = [
+            '#4a9eff', '#f59e0b', '#34d399', '#a78bfa', '#ef4444',
+            '#06b6d4', '#f97316', '#84cc16', '#ec4899', '#14b8a6',
+            '#8b5cf6', '#facc15', '#fb923c', '#4ade80', '#38bdf8',
+        ];
+
+        // Segment colors — kept for the Products-mode group-band overlay
         const SEGMENT_COLORS = {
             'Domestic': '#4a9eff',
             'Craft':    '#f59e0b',
@@ -1433,9 +1535,97 @@
         }
 
         // ============================================================
+        // LAYER SYSTEM
+        // ============================================================
+
+        // Build product_id → groups map from compliance position data
+        function buildDtPositionMap() {
+            dtPositionMap = {};
+            if (!complianceData || !complianceData.position_groups) return;
+            complianceData.position_groups.forEach(pg => {
+                if (pg.product_id && pg.groups) {
+                    dtPositionMap[pg.product_id] = pg.groups;
+                }
+            });
+        }
+
+        // Return a color palette {groupValue: colorHex} for a DT level
+        function buildDtPaletteForLevel(levelName) {
+            if (DT_KNOWN_PALETTES[levelName]) return DT_KNOWN_PALETTES[levelName];
+            // Auto-generate from all unique values seen in position data
+            const groups = new Set();
+            Object.values(dtPositionMap).forEach(g => {
+                if (g && g[levelName]) groups.add(g[levelName]);
+            });
+            const palette = {};
+            [...groups].sort().forEach((g, i) => {
+                palette[g] = DT_AUTO_COLORS[i % DT_AUTO_COLORS.length];
+            });
+            return palette;
+        }
+
+        // Switch the active visualization layer
+        function setLayer(layer) {
+            currentLayer = layer;
+            document.querySelectorAll('.layer-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.layer === layer);
+            });
+            renderPlanogram();
+        }
+
+        // Rebuild the DT layer buttons whenever decision tree data changes
+        function updateLayerSelector() {
+            const selector = document.getElementById('layerSelector');
+            if (!selector) return;
+            // Remove old DT buttons
+            selector.querySelectorAll('.dt-btn').forEach(b => b.remove());
+
+            if (!decisionTreeData || !decisionTreeData.levels || decisionTreeData.levels.length === 0) {
+                if (currentLayer !== 'products') { currentLayer = 'products'; }
+                document.getElementById('dtLegend').innerHTML = '';
+                return;
+            }
+            // Add one button per DT level
+            decisionTreeData.levels.forEach((lvl, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'layer-btn dt-btn';
+                btn.dataset.layer = `dt-${i}`;
+                btn.textContent = lvl.name;
+                btn.onclick = () => setLayer(`dt-${i}`);
+                selector.appendChild(btn);
+            });
+            // Validate currentLayer (may have been invalidated by a new tree)
+            const validLayers = ['products', ...decisionTreeData.levels.map((_, i) => `dt-${i}`)];
+            if (!validLayers.includes(currentLayer)) { currentLayer = 'products'; }
+            // Sync active state
+            selector.querySelectorAll('.layer-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.layer === currentLayer);
+            });
+        }
+
+        // Render the color legend for the current DT layer
+        function renderLayerLegend(levelName, palette) {
+            const legendEl = document.getElementById('dtLegend');
+            if (!legendEl) return;
+            legendEl.innerHTML = '';
+            if (!levelName || !palette || Object.keys(palette).length === 0) return;
+            Object.entries(palette).forEach(([group, color]) => {
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = `
+                    <div class="legend-swatch" style="background:${color}"></div>
+                    <span class="legend-label">${group}</span>
+                `;
+                legendEl.appendChild(item);
+            });
+        }
+
+        // ============================================================
         // RENDER ALL
         // ============================================================
         function renderAll() {
+            buildDtPositionMap();
+            updateLayerSelector();
             renderPlanogram();
             renderSummary();
             renderDecisionTree();
@@ -1472,7 +1662,20 @@
             if (!planogramData || !planogramData.equipment) return;
 
             const equipment = planogramData.equipment;
-            const isEmpty = !planogramData.products || planogramData.products.length === 0;
+
+            // ── Determine rendering mode ─────────────────────────────
+            const isDtLayer = currentLayer.startsWith('dt-');
+            const dtLevelIdx = isDtLayer ? parseInt(currentLayer.split('-')[1]) : -1;
+            const dtLevel = isDtLayer && decisionTreeData && decisionTreeData.levels
+                ? decisionTreeData.levels[dtLevelIdx] : null;
+            const dtLevelName = dtLevel ? dtLevel.name : null;
+            const dtPalette = dtLevelName ? buildDtPaletteForLevel(dtLevelName) : {};
+
+            // Update the color legend
+            renderLayerLegend(dtLevelName, dtPalette);
+
+            // Segment map only needed for Products-mode overlay bands
+            const segMap = (!isDtLayer) ? buildSegmentMap() : {};
 
             equipment.bays.forEach(bay => {
                 const bayEl = document.createElement('div');
@@ -1492,7 +1695,7 @@
 
                 const sortedShelves = [...bay.shelves].sort((a, b) => a.y_position - b.y_position);
 
-                sortedShelves.forEach((shelf, idx) => {
+                sortedShelves.forEach((shelf) => {
                     const hasProducts = shelf.positions && shelf.positions.length > 0;
                     const shelfEl = document.createElement('div');
                     shelfEl.className = 'shelf-row' + (!hasProducts ? ' empty-shelf' : '');
@@ -1518,9 +1721,9 @@
                         shelfEl.appendChild(emptyLabel);
                     }
 
-                    // Products on shelf + segment group overlays
+                    // Products on shelf
                     if (hasProducts) {
-                        const segMap = buildSegmentMap();
+                        // Segment band tracking (Products mode only)
                         let currentSegment = null;
                         let segStartX = 0;
 
@@ -1528,45 +1731,54 @@
                             const product = productsMap[pos.product_id];
                             if (!product) return;
 
-                            const seg = segMap[pos.product_id] || null;
                             const blockWidth = product.width_in * pos.facings_wide * scale;
                             const blockHeight = Math.min(product.height_in * scale, shelfHeight - 4);
 
-                            // Track segment group bands
-                            if (seg && seg !== currentSegment) {
-                                // Close previous band
-                                if (currentSegment) {
-                                    _addGroupBand(shelfEl, segStartX, pos.x_position * scale - segStartX, currentSegment, shelfHeight);
+                            // ── Products mode: draw segment overlay bands ──
+                            if (!isDtLayer) {
+                                const seg = segMap[pos.product_id] || null;
+                                if (seg && seg !== currentSegment) {
+                                    if (currentSegment) {
+                                        _addGroupBand(shelfEl, segStartX, pos.x_position * scale - segStartX, currentSegment, shelfHeight);
+                                    }
+                                    currentSegment = seg;
+                                    segStartX = pos.x_position * scale;
                                 }
-                                currentSegment = seg;
-                                segStartX = pos.x_position * scale;
-                            }
-
-                            // Last position: close the band
-                            if (posIdx === shelf.positions.length - 1 && currentSegment) {
-                                const endX = pos.x_position * scale + blockWidth;
-                                _addGroupBand(shelfEl, segStartX, endX - segStartX, currentSegment, shelfHeight);
+                                if (posIdx === shelf.positions.length - 1 && currentSegment) {
+                                    const endX = pos.x_position * scale + blockWidth;
+                                    _addGroupBand(shelfEl, segStartX, endX - segStartX, currentSegment, shelfHeight);
+                                }
                             }
 
                             const block = document.createElement('div');
                             block.className = 'product-block';
-
                             block.style.width = blockWidth + 'px';
                             block.style.height = blockHeight + 'px';
                             block.style.left = (pos.x_position * scale) + 'px';
-                            block.style.backgroundColor = product.color_hex || '#666';
 
                             const labelEl = document.createElement('div');
                             labelEl.className = 'product-label';
-                            const shortName = product.brand + (product.pack_size > 1 ? ` ${product.pack_size}pk` : '');
-                            labelEl.textContent = shortName;
-                            block.appendChild(labelEl);
 
-                            if (blockHeight > 25) {
-                                const priceEl = document.createElement('div');
-                                priceEl.className = 'product-price';
-                                priceEl.textContent = '$' + product.price.toFixed(2);
-                                block.appendChild(priceEl);
+                            if (isDtLayer && dtLevelName) {
+                                // ── DT layer mode: color block by group value ──
+                                const groups = dtPositionMap[pos.product_id];
+                                const groupVal = groups ? (groups[dtLevelName] || '?') : '?';
+                                const color = dtPalette[groupVal] || '#666';
+                                block.style.backgroundColor = color;
+                                labelEl.textContent = groupVal;
+                                block.appendChild(labelEl);
+                            } else {
+                                // ── Products mode: color by product ──
+                                block.style.backgroundColor = product.color_hex || '#666';
+                                const shortName = product.brand + (product.pack_size > 1 ? ` ${product.pack_size}pk` : '');
+                                labelEl.textContent = shortName;
+                                block.appendChild(labelEl);
+                                if (blockHeight > 25) {
+                                    const priceEl = document.createElement('div');
+                                    priceEl.className = 'product-price';
+                                    priceEl.textContent = '$' + product.price.toFixed(2);
+                                    block.appendChild(priceEl);
+                                }
                             }
 
                             if (pos.facings_wide > 1) {
