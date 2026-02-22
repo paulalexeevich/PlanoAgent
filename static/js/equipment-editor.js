@@ -435,7 +435,6 @@ async function applyEquipmentEditor() {
         summaryData = data.summary;
         buildProductsMap();
         renderAll();
-        setSourceTag('equipment_only');
         equipmentGenerated = true;
         enableFillBtn(true);
         closeEquipmentEditor();
