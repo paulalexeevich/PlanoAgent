@@ -2,10 +2,10 @@
  *
  * Three-layer architecture:
  *   1. Equipment layer — bay borders, shelves, labels (BayRenderer)
- *   2. Product layer   — per-bay clip containers with overflow:hidden.
- *      Each product (including phantom cross-bay duplicates) renders at
- *      its own shelf's actual height.  Overflow is clipped at bay edges
- *      so misaligned shelves display correctly.
+ *   2. Product layer   — product blocks as absolute overlay, NOT clipped
+ *      by bay boundaries.  Cross-bay products visually span the border
+ *      ONLY when shelves are physically aligned.  Misaligned bay boundaries
+ *      never have cross-bay products (the algorithm prevents it).
  *   3. Bay border overlay — thin lines on top of products.
  *
  * Product positioning deferred to requestAnimationFrame so the browser
@@ -56,6 +56,10 @@ function renderPlanogram() {
 
     if (!layout || !layout.length) return;
 
+    const productLayer = document.createElement('div');
+    productLayer.className = 'product-layer';
+    container.appendChild(productLayer);
+
     const borderOverlay = document.createElement('div');
     borderOverlay.className = 'bay-border-overlay';
     container.appendChild(borderOverlay);
@@ -71,21 +75,7 @@ function renderPlanogram() {
             const bodyRect   = meta.bodyEl.getBoundingClientRect();
             const bodyLeftPx = bodyRect.left - containerRect.left;
             const bodyTopPx  = bodyRect.top  - containerRect.top;
-            const bodyWPx    = bodyRect.width;
             const bodyHPx    = bodyRect.height;
-
-            // Per-bay product clip container
-            const bayProductClip = document.createElement('div');
-            bayProductClip.className = 'bay-product-clip';
-            bayProductClip.style.position = 'absolute';
-            bayProductClip.style.left     = bodyLeftPx + 'px';
-            bayProductClip.style.top      = bodyTopPx + 'px';
-            bayProductClip.style.width    = bodyWPx + 'px';
-            bayProductClip.style.height   = bodyHPx + 'px';
-            bayProductClip.style.overflow = 'hidden';
-            bayProductClip.style.pointerEvents = 'none';
-            bayProductClip.style.zIndex   = '3';
-            container.appendChild(bayProductClip);
 
             bay.shelves.forEach((shelf) => {
                 const sMeta = meta.shelves.find(s => s.shelf_number === shelf.shelf_number);
@@ -95,10 +85,12 @@ function renderPlanogram() {
                 if (!positions.length) return;
 
                 const shelfRect   = sMeta.el.getBoundingClientRect();
-                const shelfTopPx  = shelfRect.top  - bodyRect.top;
+                const shelfTopPx  = shelfRect.top  - containerRect.top;
                 const shelfHeight = shelfRect.height;
 
                 positions.forEach((pos) => {
+                    if (pos._phantom) return;
+
                     const product = productsMap[pos.product_id];
                     if (!product) return;
 
@@ -111,7 +103,7 @@ function renderPlanogram() {
                         block.className = 'product-block';
                         if (f > 0) block.classList.add('facing-repeat');
 
-                        const leftPx  = baseLeft + f * singleWidth;
+                        const leftPx  = bodyLeftPx + baseLeft + f * singleWidth;
                         const widthPx = singleWidth;
 
                         block.style.width  = widthPx + 'px';
@@ -146,7 +138,7 @@ function renderPlanogram() {
                         block.addEventListener('mousemove',  (e) => moveTooltip(e));
                         block.addEventListener('mouseleave', hideTooltip);
 
-                        bayProductClip.appendChild(block);
+                        productLayer.appendChild(block);
                     }
                 });
             });

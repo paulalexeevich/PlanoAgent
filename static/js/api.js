@@ -11,7 +11,7 @@ async function fetchPlanogram() {
         complianceData = data.compliance || null;
         buildProductsMap();
         renderAll();
-        if (planogramData.products && planogramData.products.length > 0) {
+        if (planogramData.equipment && planogramData.equipment.bays && planogramData.equipment.bays.length > 0) {
             equipmentGenerated = true;
             enableFillBtn(true);
         }

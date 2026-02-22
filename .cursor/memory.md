@@ -135,15 +135,21 @@
 - **Unit toggle moved** from header and equipment editor toolbar into Settings page. Hidden `#unitIn`/`#unitCm`/`#edUnitIn`/`#edUnitCm` elements kept in DOM for `setUnit()` compatibility.
 - **Header gear icon** (&#9881;) opens settings overlay. Clicks outside card or X button close it.
 
-## Cross-Bay Algorithm (v0.34)
-- **New fill mode**: "Cross-Bay" merges shelves from glued bays that share the same y_position and height_in into virtual wide shelves. Products flow continuously across bay boundaries instead of resetting at each bay.
+## Cross-Bay Algorithm (v0.34 → v0.36)
+- **New fill mode**: "Cross-Bay" merges shelves from glued bays into virtual wide shelves. Products flow continuously across bay boundaries.
 - **Implementation**: `phase3_cross_bay_placement()` in `product_logic.py` — builds bay groups from `glued_right` flags, creates virtual merged shelves, places products on wide virtual surface, then splits positions back to physical shelves via `_split_positions_to_shelves()`.
-- **Width-aware split**: `_split_positions_to_shelves()` tracks remaining width per physical shelf. When a product near a bay boundary can't fit a single facing in the gap, remaining facings flow to the next bay without overflowing. Old approach (virtual x_position based) caused 7+ shelf overflows because boundary gaps "compressed" products into the next bay.
-- **CRITICAL BUG FIX**: Remove `+0.1` tolerance from cross-bay main placement and boost passes. On wide virtual shelves (192"+), the tolerance causes cumulative overfill (192.1") that maps to physical shelf overflow after splitting. Standard algorithm tolerates this because overflow fix catches it, but cross-bay split amplifies the problem.
-- **Tolerances**: `_YPOS_TOLERANCE=1.0in`, `_HEIGHT_TOLERANCE=0.5in` for matching shelves across bays.
-- **Visual rendering**: Glued bays render seamlessly (no border between them, gluedGap=0). Cross-bay products get `cross-bay-left`/`cross-bay-right` CSS classes with dashed border indicators.
+- **Width-aware split**: `_split_positions_to_shelves()` tracks remaining width per physical shelf. Facings flow to next bay at boundary without overflowing.
+- **CRITICAL BUG FIX**: Remove `+0.1` tolerance from cross-bay main placement and boost passes. On wide virtual shelves (192"+), the tolerance causes cumulative overfill.
+- **Alignment-aware virtual shelf merging (v0.36)**: `_build_virtual_shelves()` uses **sorted-index matching with alignment checks**. Each bay's shelves sorted bottom-to-top. Row i collects the i-th shelf from each bay. Within a row, a run of consecutive bays is merged ONLY if adjacent shelves are physically aligned (y_position within `_YPOS_TOLERANCE`). Misaligned boundaries BREAK the run. This prevents products from spanning across shelves at different heights.
+- **LESSON: Three failed approaches before success**:
+  1. Position-based matching with tolerance: fails when clearances differ (y-positions drift: 19.2 vs 22.5).
+  2. Pure index-based matching: merges ALL bays in a row regardless of height — creates phantom positions at different heights, rendering broken products.
+  3. Per-bay clipping (overflow:hidden): tried to fix rendering by clipping each bay — but shows products as cut-in-half pieces, which is physically impossible.
+  4. **CORRECT: Alignment-aware runs** — only merge when y_positions actually match. No phantoms at misaligned boundaries. No clipping needed.
+- **Height tolerance removed**: Only y_position matters for alignment, not shelf clearance (height_in). Clearance only affects what products fit vertically. Two shelves at the same board height (y_position) are physically aligned even with different clearances.
+- **Renderer**: Global product-layer (overflow visible). Phantoms skipped. Products overflow across aligned bay boundaries naturally (same shelf height → visually seamless).
 - **Fill mode dropdown**: Standard / Cross-Bay / AI / Compare. Backend mode strings: `algorithm`, `cross_bay`, `ai`, `compare`.
-- **Key result**: 9 cross-bay products, 47/50 products placed, 94.3% fill, zero shelf overflows.
+- **Fill button fix**: `enableFillBtn` now checks equipment.bays.length > 0 (not products.length) so button works after page reload with empty product list.
 
 ## Known Issues & TODOs
 - Fill target is 99% but achievable ~96% due to fractional inch gaps (product widths don't evenly divide shelf width).

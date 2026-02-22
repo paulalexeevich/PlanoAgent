@@ -430,25 +430,24 @@ def _build_bay_groups(bays: list) -> list:
 
 def _build_virtual_shelves(bay_groups: list) -> list:
     """
-    For each bay-group, merge shelves into virtual wide shelves so products
-    flow continuously across glued bays.
+    For each bay-group, merge **physically aligned** shelves into virtual
+    wide shelves so products flow continuously across glued bays.
 
-    **Matching strategy — sorted-index:**
+    **Matching strategy — alignment-aware runs:**
 
-    Each bay's shelves are sorted bottom-to-top.  Row *i* collects the *i*-th
-    shelf from every bay that has one.  When a bay has fewer shelves, it
-    simply doesn't contribute to higher rows.
+    Each bay's shelves are sorted bottom-to-top by y_position.  Row *i*
+    collects the *i*-th shelf from every bay that has one.  Within a row,
+    consecutive bays are merged into a single virtual shelf ONLY if their
+    shelves are physically aligned (y_position and height within tolerance).
 
-    Within each row, only **consecutive** bays that contribute form a single
-    virtual shelf.  A gap (a bay with no shelf at that index) splits the row
-    into independent virtual shelves so product coordinates stay continuous.
+    A run breaks when:
+      - A bay has no shelf at this row index (different shelf counts).
+      - Adjacent shelves are misaligned (y_position or height differ beyond
+        ``_YPOS_TOLERANCE`` / ``_HEIGHT_TOLERANCE``).
 
-    Example with 5 bays where Bay 2 has 4 shelves, others have 5:
-      Row 0-3 → one virtual shelf spanning all 5 bays
-      Row 4   → Bay 1 standalone + Bays 3-5 merged (Bay 2 has no shelf 5)
-
-    The virtual shelf ``height`` is the **minimum** clearance across all
-    merged physical shelves so that product height checks remain valid.
+    This guarantees that products placed on a virtual shelf can physically
+    sit on every constituent physical shelf.  Products NEVER span across
+    a misaligned bay boundary — no phantom splitting, no clipping.
 
     Returns a list of virtual shelf dicts:
         {
@@ -472,7 +471,6 @@ def _build_virtual_shelves(bay_groups: list) -> list:
                 })
             continue
 
-        # Sort each bay's shelves bottom-to-top
         bay_sorted_shelves: list = []
         for bay in group:
             bay_sorted_shelves.append(
@@ -483,24 +481,31 @@ def _build_virtual_shelves(bay_groups: list) -> list:
         max_rows = max(len(ss) for ss in bay_sorted_shelves)
 
         for row_idx in range(max_rows):
-            # Collect (bay, shelf) pairs — None if bay has no shelf at this row
-            row_entries: list = []
+            run: list = []
             for bi, bay in enumerate(group):
                 shelves = bay_sorted_shelves[bi]
-                if row_idx < len(shelves):
-                    row_entries.append((bay, shelves[row_idx]))
-                else:
-                    row_entries.append(None)
-
-            # Split into consecutive runs (break at None gaps)
-            run: list = []
-            for entry in row_entries:
-                if entry is not None:
-                    run.append(entry)
-                else:
+                if row_idx >= len(shelves):
+                    # Bay has no shelf at this row — break the run
                     if run:
                         _emit_virtual_shelf(virtual, run)
                         run = []
+                    continue
+
+                entry = (bay, shelves[row_idx])
+
+                if run:
+                    _, prev_shelf = run[-1]
+                    _, curr_shelf = entry
+                    py = prev_shelf.get("y_position", 0)
+                    cy = curr_shelf.get("y_position", 0)
+                    if abs(py - cy) > _YPOS_TOLERANCE:
+                        _emit_virtual_shelf(virtual, run)
+                        run = [entry]
+                    else:
+                        run.append(entry)
+                else:
+                    run.append(entry)
+
             if run:
                 _emit_virtual_shelf(virtual, run)
 
