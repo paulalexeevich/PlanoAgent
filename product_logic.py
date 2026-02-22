@@ -489,8 +489,8 @@ def _split_positions_to_shelves(
 ) -> None:
     """
     Distribute positions placed on virtual (merged) shelves back to their
-    physical source shelves.  Handles products that straddle bay boundaries
-    by splitting the facings across the two shelves.
+    physical source shelves.  Tracks remaining width on each shelf to prevent
+    overflow when products near bay boundaries can't be split evenly.
     """
     for vs, positions in zip(virtual_shelves, virtual_positions):
         sources = vs["sources"]
@@ -500,48 +500,48 @@ def _split_positions_to_shelves(
             shelf["positions"] = positions
             continue
 
-        # Build cumulative-width boundaries for each source shelf
-        boundaries: list = []
-        running = 0.0
+        # Per-shelf state: remaining width, accumulated positions, current x
+        shelf_state: list = []
         for bay, shelf in sources:
             w = shelf.get("width_in", 48)
-            boundaries.append((running, running + w, shelf))
-            running += w
+            shelf_state.append({
+                "shelf": shelf,
+                "width": w,
+                "remaining": w,
+                "x": 0.0,
+                "positions": [],
+            })
 
-        shelf_pos: dict = {id(shelf): [] for _, shelf in sources}
+        si = 0  # current shelf index
 
         for pos in positions:
             pid = pos["product_id"]
             pw = prod_map[pid]["width_in"]
-            total_facings = pos["facings_wide"]
-            cursor_x = pos["x_position"]
+            left = pos["facings_wide"]
 
-            for seg_start, seg_end, shelf in boundaries:
-                if total_facings <= 0:
-                    break
-                if cursor_x >= seg_end:
-                    continue
+            while left > 0 and si < len(shelf_state):
+                ss = shelf_state[si]
+                fit = int(ss["remaining"] / pw) if pw > 0 else 0
+                actual = min(fit, left)
 
-                avail = seg_end - max(cursor_x, seg_start)
-                fit = int((avail + 0.1) / pw) if pw > 0 else 0
-                actual = min(fit, total_facings)
-                if actual <= 0:
-                    continue
+                if actual > 0:
+                    ss["positions"].append({
+                        "product_id": pid,
+                        "x_position": round(ss["x"], 2),
+                        "facings_wide": actual,
+                        "facings_high": pos.get("facings_high", 1),
+                        "facings_deep": pos.get("facings_deep", 1),
+                        "orientation":  pos.get("orientation", "front"),
+                    })
+                    ss["x"] += pw * actual
+                    ss["remaining"] -= pw * actual
+                    left -= actual
+                else:
+                    # No room on this shelf — advance to next
+                    si += 1
 
-                local_x = max(cursor_x, seg_start) - seg_start
-                shelf_pos[id(shelf)].append({
-                    "product_id": pid,
-                    "x_position": round(local_x, 2),
-                    "facings_wide": actual,
-                    "facings_high": pos.get("facings_high", 1),
-                    "facings_deep": pos.get("facings_deep", 1),
-                    "orientation":  pos.get("orientation", "front"),
-                })
-                cursor_x += pw * actual
-                total_facings -= actual
-
-        for _, shelf in sources:
-            shelf["positions"] = shelf_pos[id(shelf)]
+        for ss in shelf_state:
+            ss["shelf"]["positions"] = ss["positions"]
 
 
 def phase3_cross_bay_placement(
@@ -621,7 +621,7 @@ def phase3_cross_bay_placement(
                 qi += 1
                 continue
 
-            max_fit = int((shelf_w - x_pos + 0.1) / pw) if pw > 0 else 0
+            max_fit = int((shelf_w - x_pos) / pw) if pw > 0 else 0
             if max_fit < 1:
                 break
 
@@ -684,7 +684,7 @@ def phase3_cross_bay_placement(
                 for sales, idx, prod in scorable:
                     pos = positions[idx]
                     pw = prod["width_in"]
-                    if pos["facings_wide"] < rules.max_facings and pw <= remaining + 0.1:
+                    if pos["facings_wide"] < rules.max_facings and pw <= remaining:
                         pos["facings_wide"] += 1
                         remaining -= pw
                         total_extra += 1

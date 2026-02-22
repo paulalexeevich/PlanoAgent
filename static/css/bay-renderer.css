@@ -22,10 +22,12 @@
 .br-bay-glued-left {
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
+    border-left: none;
 }
 .br-bay-glued-right {
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
+    border-right: none;
 }
 
 .br-bay-header {
