@@ -3092,14 +3092,25 @@
                 _edLiveWidth(_edDrag.bayIdx);
                 tooltip.textContent = dFmt(bay.width_in);
             } else {
-                // Drag UP = taller shelf; other shelves shift, none change size
+                // Move the shelf line = divider between shelfIdx (below) and shelfIdx-1 (above… wait, below in data)
+                // shelfIdx's bottom edge is the divider. Moving it up → shelfIdx-1 grows, shelfIdx shrinks
                 const deltaIn = Math.round((_edDrag.startY - e.clientY) / EDITOR_SCALE);
                 const bay = editorState.bays[_edDrag.bayIdx];
-                const newH = Math.max(MIN_SHELF, _edDrag.startValue + deltaIn);
-                bay.shelf_clearances[_edDrag.shelfIdx] = newH;
+                const si = _edDrag.shelfIdx;
+                const siBelow = si - 1; // shelf below this divider
+
+                // Clamp so neither shelf goes below MIN_SHELF
+                const maxUp   = _edDrag.startValue - MIN_SHELF;      // si can shrink by this much
+                const maxDown = _edDrag.startValueBelow - MIN_SHELF;  // siBelow can shrink by this much
+                const clamped = Math.max(-maxDown, Math.min(maxUp, deltaIn));
+
+                bay.shelf_clearances[si]      = _edDrag.startValue      - clamped;
+                bay.shelf_clearances[siBelow] = _edDrag.startValueBelow + clamped;
+
                 _edLiveShelfH(_edDrag.bayIdx);
-                tooltip.textContent = dFmt(newH);
-                if (_edDrag.handle) _edDrag.handle.dataset.dim = newH + '"';
+                const hBelow = bay.shelf_clearances[siBelow];
+                const hAbove = bay.shelf_clearances[si];
+                tooltip.textContent = dFmt(hBelow) + ' | ' + dFmt(hAbove);
             }
 
             tooltip.style.display = 'block';
@@ -3148,8 +3159,9 @@
             _edDrag = {
                 type: 'height',
                 bayIdx, shelfIdx,
-                startY:     e.clientY,
-                startValue: bay.shelf_clearances[shelfIdx],
+                startY:          e.clientY,
+                startValue:      bay.shelf_clearances[shelfIdx],
+                startValueBelow: bay.shelf_clearances[shelfIdx - 1],
                 handle
             };
             document.body.style.cursor = 'ns-resize';
@@ -3286,12 +3298,14 @@
                     lbl.textContent = `S${si + 1}`;
                     shelfEl.appendChild(lbl);
 
-                    // Drag line — sits on the shelf's border-bottom
-                    const dragLine = document.createElement('div');
-                    dragLine.className = 'shelf-drag-line';
-                    dragLine.dataset.dim = Math.round(shelfH) + '"';
-                    dragLine.addEventListener('mousedown', e => _edStartHeight(e, idx, si));
-                    shelfEl.appendChild(dragLine);
+                    // Drag line on bottom edge — skip S1 (si=0), its bottom is the locked floor
+                    if (si > 0) {
+                        const dragLine = document.createElement('div');
+                        dragLine.className = 'shelf-drag-line';
+                        dragLine.dataset.dim = Math.round(shelfH) + '"';
+                        dragLine.addEventListener('mousedown', e => _edStartHeight(e, idx, si));
+                        shelfEl.appendChild(dragLine);
+                    }
 
                     body.appendChild(shelfEl);
                 };
