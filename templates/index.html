@@ -3146,17 +3146,20 @@
         // Live DOM updates during drag (no full re-render)
         function _edLiveWidth(bayIdx) {
             const bay = editorState.bays[bayIdx];
-            const w = bay.width_in;
+            const w   = bay.width_in;
+            const wpx = w * EDITOR_SCALE;
             const heightIn = parseFloat(document.getElementById('edEqHeight').value) || 72;
             const wrapper = document.querySelector(`.eq-bay-wrapper[data-idx="${bayIdx}"]`);
             if (!wrapper) return;
+            // Set wrapper width explicitly so the flex layout doesn't touch sibling bays
+            wrapper.style.width = wpx + 'px';
             const bayEl = wrapper.querySelector('.eq-editor-bay');
             if (bayEl) {
-                bayEl.style.width = (w * EDITOR_SCALE) + 'px';
+                bayEl.style.width = wpx + 'px';
                 const title = bayEl.querySelector('.bay-hdr-title');
                 if (title) title.textContent = `Bay ${bayIdx + 1} — ${dFmt(w)} × ${dFmt(heightIn)}`;
                 const body = bayEl.querySelector('.eq-editor-bay-body');
-                if (body) body.style.width = (w * EDITOR_SCALE) + 'px';
+                if (body) body.style.width = wpx + 'px';
             }
         }
 
@@ -3203,10 +3206,11 @@
             editorState.bays.forEach((bay, idx) => {
                 const numShelves = bay.num_shelves || 5;
 
-                // Wrapper
+                // Wrapper — explicit width so sibling bays never shift during drag
                 const wrapper = document.createElement('div');
                 wrapper.className = 'eq-bay-wrapper';
                 wrapper.dataset.idx = idx;
+                wrapper.style.width = (bay.width_in * EDITOR_SCALE) + 'px';
 
                 // Bay card (position:relative so edge handle can be absolute)
                 const bayEl = document.createElement('div');
