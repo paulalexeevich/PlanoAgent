@@ -433,20 +433,22 @@ def _build_virtual_shelves(bay_groups: list) -> list:
     For each bay-group, merge shelves into virtual wide shelves so products
     flow continuously across glued bays.
 
-    **Matching strategy (hybrid):**
+    **Matching strategy — sorted-index:**
 
-    1. *Index-based* (preferred): When all bays in a group have the **same
-       number of shelves**, match by ``shelf_number``.  This correctly handles
-       bays whose shelves sit at different y-positions (different clearances)
-       — which is extremely common in real fixtures.
+    Each bay's shelves are sorted bottom-to-top.  Row *i* collects the *i*-th
+    shelf from every bay that has one.  When a bay has fewer shelves, it
+    simply doesn't contribute to higher rows.
 
-    2. *Position-based* (fallback): When bay shelf counts differ, fall back
-       to matching by ``(y_position ±_YPOS_TOLERANCE, height_in ±_HEIGHT_TOLERANCE)``.
-       Any still-unmatched shelves become standalone virtual shelves.
+    Within each row, only **consecutive** bays that contribute form a single
+    virtual shelf.  A gap (a bay with no shelf at that index) splits the row
+    into independent virtual shelves so product coordinates stay continuous.
+
+    Example with 5 bays where Bay 2 has 4 shelves, others have 5:
+      Row 0-3 → one virtual shelf spanning all 5 bays
+      Row 4   → Bay 1 standalone + Bays 3-5 merged (Bay 2 has no shelf 5)
 
     The virtual shelf ``height`` is the **minimum** clearance across all
-    merged physical shelves so that product height checks remain valid
-    everywhere.
+    merged physical shelves so that product height checks remain valid.
 
     Returns a list of virtual shelf dicts:
         {
@@ -468,64 +470,52 @@ def _build_virtual_shelves(bay_groups: list) -> list:
                     "height":  shelf.get("height_in", 12),
                     "sources": [(bay, shelf)],
                 })
-        else:
-            shelf_counts = [len(b.get("shelves", [])) for b in group]
-            all_same_count = len(set(shelf_counts)) == 1
+            continue
 
-            if all_same_count:
-                # ── Index-based matching ──
-                n_shelves = shelf_counts[0]
-                bay_sorted_shelves = []
-                for bay in group:
-                    bay_sorted_shelves.append(
-                        sorted(bay.get("shelves", []),
-                               key=lambda s: s.get("shelf_number", 0))
-                    )
+        # Sort each bay's shelves bottom-to-top
+        bay_sorted_shelves: list = []
+        for bay in group:
+            bay_sorted_shelves.append(
+                sorted(bay.get("shelves", []),
+                       key=lambda s: s.get("y_position", 0))
+            )
 
-                for si in range(n_shelves):
-                    sources = []
-                    min_h = float("inf")
-                    for bi, bay in enumerate(group):
-                        shelf = bay_sorted_shelves[bi][si]
-                        sources.append((bay, shelf))
-                        h = shelf.get("height_in", 12)
-                        if h < min_h:
-                            min_h = h
+        max_rows = max(len(ss) for ss in bay_sorted_shelves)
 
-                    total_w = sum(s.get("width_in", 48) for _, s in sources)
-                    virtual.append({
-                        "width":   total_w,
-                        "height":  min_h,
-                        "sources": sources,
-                    })
-            else:
-                # ── Position-based matching (different shelf counts) ──
-                rows: dict = OrderedDict()
-                for bay in group:
-                    for shelf in sorted(bay.get("shelves", []),
-                                        key=lambda s: s.get("shelf_number", 0)):
-                        y = shelf.get("y_position", 0)
-                        h = shelf.get("height_in", 12)
-                        matched = False
-                        for key in rows:
-                            ky, kh = key
-                            if abs(y - ky) <= _YPOS_TOLERANCE and abs(h - kh) <= _HEIGHT_TOLERANCE:
-                                rows[key].append((bay, shelf))
-                                matched = True
-                                break
-                        if not matched:
-                            rows[(y, h)] = [(bay, shelf)]
+        for row_idx in range(max_rows):
+            # Collect (bay, shelf) pairs — None if bay has no shelf at this row
+            row_entries: list = []
+            for bi, bay in enumerate(group):
+                shelves = bay_sorted_shelves[bi]
+                if row_idx < len(shelves):
+                    row_entries.append((bay, shelves[row_idx]))
+                else:
+                    row_entries.append(None)
 
-                for (y, h), sources in sorted(rows.items(), key=lambda kv: kv[0][0]):
-                    total_w = sum(s.get("width_in", 48) for _, s in sources)
-                    min_h = min(s.get("height_in", 12) for _, s in sources)
-                    virtual.append({
-                        "width":   total_w,
-                        "height":  min_h,
-                        "sources": sources,
-                    })
+            # Split into consecutive runs (break at None gaps)
+            run: list = []
+            for entry in row_entries:
+                if entry is not None:
+                    run.append(entry)
+                else:
+                    if run:
+                        _emit_virtual_shelf(virtual, run)
+                        run = []
+            if run:
+                _emit_virtual_shelf(virtual, run)
 
     return virtual
+
+
+def _emit_virtual_shelf(virtual: list, sources: list) -> None:
+    """Create one virtual shelf from a list of (bay, shelf) pairs."""
+    total_w = sum(s.get("width_in", 48) for _, s in sources)
+    min_h = min(s.get("height_in", 12) for _, s in sources)
+    virtual.append({
+        "width":   total_w,
+        "height":  min_h,
+        "sources": sources,
+    })
 
 
 def _split_positions_to_shelves(
