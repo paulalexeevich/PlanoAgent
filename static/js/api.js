@@ -164,6 +164,7 @@ async function loadDemoCsvPlanogram() {
         decisionTreeData = null;
         complianceData = null;
         buildProductsMap();
+        await fetchFullCatalog();
         renderAll();
         equipmentGenerated = true;
         enableFillBtn(true);
