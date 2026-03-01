@@ -1,0 +1,518 @@
+/* PHOTO VIEWER — Uses shared CSS variables from base.css */
+
+body.photo-viewer {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ============================================================
+   TOOLBAR — Matches main app header
+   ============================================================ */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 100;
+    flex-wrap: wrap;
+}
+
+.toolbar h1 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+.toolbar select,
+.toolbar button {
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.toolbar button:hover { background: var(--bg-shelf); }
+
+.toolbar button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.toolbar .sep {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+}
+
+.toolbar label {
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--text-secondary);
+}
+
+.toolbar input[type="checkbox"] { accent-color: var(--accent); }
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.main-area {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.photos-grid {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    overflow: scroll;
+    gap: 8px;
+    padding: 8px;
+    align-items: flex-start;
+    cursor: grab;
+}
+
+.photos-grid.dragging { cursor: grabbing; }
+
+/* ============================================================
+   PHOTO CARDS
+   ============================================================ */
+.photo-card {
+    position: relative;
+    background: #0a0c12;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: visible;
+    flex-shrink: 0;
+}
+
+.photo-card .photo-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.photo-card .photo-title {
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.photo-card .photo-stats {
+    color: var(--text-secondary);
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.photo-card .photo-stats strong { color: var(--text-primary); }
+
+/* ============================================================
+   CANVAS / IMAGE OVERLAY
+   ============================================================ */
+.canvas-inner {
+    position: relative;
+    display: inline-block;
+}
+
+.canvas-inner img {
+    display: block;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.canvas-inner svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+/* ============================================================
+   BOUNDING BOXES (SVG)
+   ============================================================ */
+.bbox-product {
+    pointer-events: all;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.bbox-product:hover { opacity: 1 !important; }
+
+.bbox-shelf {
+    pointer-events: all;
+    cursor: pointer;
+}
+
+.bbox-label {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 600;
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+}
+
+/* ============================================================
+   DETAIL PANEL (right sidebar)
+   ============================================================ */
+.detail-panel {
+    width: 320px;
+    background: var(--bg-card);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    flex-shrink: 0;
+    padding: 16px;
+    font-size: 12px;
+    transition: width 0.2s, padding 0.2s, opacity 0.2s;
+}
+
+.detail-panel.hidden {
+    width: 0;
+    padding: 0;
+    overflow: hidden;
+    opacity: 0;
+    border-left: none;
+}
+
+.detail-panel h2 {
+    font-size: 14px;
+    color: var(--accent);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.detail-panel .field { margin-bottom: 8px; }
+
+.detail-panel .field-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+}
+
+.detail-panel .field-value {
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+.detail-panel .empty-state {
+    color: var(--text-secondary);
+    font-style: italic;
+    text-align: center;
+    margin-top: 40px;
+}
+
+/* ============================================================
+   STATS BAR
+   ============================================================ */
+.stats-bar {
+    display: flex;
+    gap: 16px;
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.stats-bar span { white-space: nowrap; }
+.stats-bar strong { color: var(--text-primary); }
+
+/* ============================================================
+   ZOOM CONTROLS
+   ============================================================ */
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.zoom-controls button {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.zoom-controls .zoom-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    min-width: 40px;
+    text-align: center;
+}
+
+/* ============================================================
+   BACK LINK
+   ============================================================ */
+.back-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.back-link:hover { text-decoration: underline; }
+
+/* ============================================================
+   PRODUCT LIST
+   ============================================================ */
+.product-list {
+    margin-top: 16px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+}
+
+.product-list h3 {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.product-list-item {
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.1s;
+}
+
+.product-list-item:hover { background: rgba(74,158,255,0.1); }
+.product-list-item.selected { background: rgba(74,158,255,0.18); }
+
+.product-list-item .color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.product-list-item .thumb {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    border-radius: 3px;
+    background: var(--bg-shelf);
+    flex-shrink: 0;
+}
+
+.product-list-item.not-in-plano {
+    border-left: 3px solid var(--accent-red);
+}
+
+.product-list-item.out-of-shelf {
+    border-left: 3px solid var(--accent-orange);
+    opacity: 0.7;
+}
+
+/* ============================================================
+   SEARCH INPUT
+   ============================================================ */
+.search-input {
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    font-size: 12px;
+    margin-bottom: 8px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.search-input::placeholder { color: var(--text-secondary); }
+.search-input:focus { border-color: var(--accent); }
+
+/* ============================================================
+   DETAIL VIEW — Header, Thumb, Dims
+   ============================================================ */
+.detail-thumb {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    border-radius: 6px;
+    background: var(--bg-shelf);
+    border: 1px solid var(--border);
+}
+
+.detail-header {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.detail-header-info { flex: 1; }
+
+.dims-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 12px;
+    font-size: 11px;
+}
+
+.dims-grid .dim-label { color: var(--text-secondary); font-size: 10px; }
+.dims-grid .dim-value { color: var(--text-primary); font-family: monospace; }
+
+/* ============================================================
+   TAGS — Metadata labels
+   ============================================================ */
+.tag {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-right: 4px;
+    margin-bottom: 3px;
+}
+
+.tag-brand { background: rgba(74,158,255,0.15); color: var(--accent); }
+.tag-category { background: var(--bg-dark); color: var(--accent-green); border: 1px solid var(--border); }
+.tag-price { background: rgba(250,204,21,0.12); color: #facc15; }
+.tag-assortment { background: rgba(52,211,153,0.12); color: var(--accent-green); border: 1px solid var(--border); }
+.tag-support { background: rgba(239,68,68,0.12); color: var(--accent-red); }
+.tag-photo { background: rgba(74,158,255,0.15); color: #facc15; }
+
+/* ============================================================
+   STATUS TAGS — Planogram comparison
+   ============================================================ */
+.tag-plano {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    background: rgba(52,211,153,0.12);
+    color: var(--accent-green);
+    border: 1px solid rgba(52,211,153,0.25);
+    margin-right: 3px;
+}
+
+.tag-photo-f {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    background: rgba(74,158,255,0.15);
+    color: var(--accent);
+    margin-right: 3px;
+}
+
+.tag-alert {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    background: rgba(239,68,68,0.12);
+    color: var(--accent-red);
+    border: 1px solid rgba(239,68,68,0.25);
+    margin-right: 3px;
+}
+
+.tag-oos {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    background: rgba(245,158,11,0.12);
+    color: var(--accent-orange);
+    border: 1px solid rgba(245,158,11,0.25);
+    margin-right: 3px;
+}
+
+/* ============================================================
+   FILTER BAR
+   ============================================================ */
+.filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.filter-btn {
+    font-size: 10px;
+    padding: 3px 7px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg-dark);
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+}
+
+.filter-btn:hover { background: var(--bg-shelf); color: var(--text-primary); }
+
+.filter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.filter-counts {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+/* ============================================================
+   VIEW TOGGLE — Matches s-toggle from components.css
+   ============================================================ */
+.view-toggle {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.view-toggle button {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 5px 12px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.15s;
+}
+
+.view-toggle button.active {
+    background: var(--accent);
+    color: #fff;
+}
+
+.view-toggle button:not(.active):hover {
+    background: var(--bg-shelf);
+    color: var(--text-primary);
+}
