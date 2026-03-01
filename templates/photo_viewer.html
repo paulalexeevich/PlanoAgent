@@ -80,10 +80,11 @@
         .photos-grid {
             flex: 1;
             display: flex;
-            flex-direction: column;
-            overflow-y: auto;
+            flex-direction: row;
+            overflow: auto;
             gap: 8px;
             padding: 8px;
+            align-items: flex-start;
         }
 
         .photo-card {
@@ -95,31 +96,27 @@
             flex-shrink: 0;
         }
 
+        .photo-card .photo-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 8px;
+            background: #16213e;
+            border-bottom: 1px solid #0f3460;
+            flex-shrink: 0;
+        }
+
         .photo-card .photo-title {
-            position: absolute;
-            top: 8px;
-            left: 8px;
-            background: rgba(22, 33, 62, 0.9);
             color: #e94560;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
-            padding: 4px 10px;
-            border-radius: 4px;
-            z-index: 10;
-            pointer-events: none;
+            white-space: nowrap;
         }
 
         .photo-card .photo-stats {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            background: rgba(22, 33, 62, 0.9);
             color: #888;
-            font-size: 11px;
-            padding: 4px 8px;
-            border-radius: 4px;
-            z-index: 10;
-            pointer-events: none;
+            font-size: 10px;
+            white-space: nowrap;
         }
 
         .photo-card .photo-stats strong { color: #e0e0e0; }
@@ -486,14 +483,17 @@
     function buildGrid(photoNames) {
         const grid = document.getElementById('photosGrid');
         grid.innerHTML = '';
+        let loadedCount = 0;
 
         photoNames.forEach(name => {
             const card = document.createElement('div');
             card.className = 'photo-card';
             card.id = `card-${name}`;
             card.innerHTML = `
-                <div class="photo-title">${name}</div>
-                <div class="photo-stats" id="stats-${name}">Loading...</div>
+                <div class="photo-header">
+                    <span class="photo-title">${name}</span>
+                    <span class="photo-stats" id="stats-${name}">Loading...</span>
+                </div>
                 <div class="canvas-inner" id="canvas-${name}">
                     <img id="img-${name}" alt="${name}">
                     <svg id="svg-${name}" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -504,9 +504,11 @@
             const img = document.getElementById(`img-${name}`);
             img.onload = function() {
                 photoNaturalSizes[name] = { w: img.naturalWidth, h: img.naturalHeight };
-                fetchPhotoData(name).then(() => {
-                    zoomFitAll();
-                });
+                fetchPhotoData(name);
+                loadedCount++;
+                if (loadedCount === photoNames.length) {
+                    setTimeout(zoomFitAll, 50);
+                }
             };
             img.src = `/demo-images/${name}.jpg`;
         });
@@ -938,19 +940,30 @@
 
     function zoomFitAll() {
         const grid = document.getElementById('photosGrid');
-        const gridW = grid.clientWidth - 8;
+        const panel = document.getElementById('detailPanel');
+        const toolbar = document.querySelector('.toolbar');
         const visiblePhotos = PHOTOS.filter(n => document.getElementById(`card-${n}`));
+        const count = visiblePhotos.length || 1;
 
-        // Fit each photo to the grid width so they scroll vertically
+        // Compute available space: window minus detail panel, toolbar, padding, gaps, borders
+        const totalW = window.innerWidth - panel.offsetWidth - 1;
+        const totalH = window.innerHeight - toolbar.offsetHeight;
+        const headerH = 26; // photo-header height per card
+        const pad = 16;
+        const gaps = (count - 1) * 8;
+        const availW = (totalW - pad - gaps) / count;
+        const availH = totalH - pad - headerH;
+
         let fitScale = 1;
         visiblePhotos.forEach(name => {
             const size = photoNaturalSizes[name];
             if (!size) return;
-            const s = Math.min(gridW / size.w, 1);
-            fitScale = Math.min(fitScale, s);
+            const sw = availW / size.w;
+            const sh = availH / size.h;
+            fitScale = Math.min(fitScale, sw, sh);
         });
 
-        globalScale = fitScale;
+        globalScale = Math.max(0.02, fitScale);
         visiblePhotos.forEach(name => applyScaleToPhoto(name, globalScale));
         document.getElementById('zoomLabel').textContent = Math.round(globalScale * 100) + '%';
     }
