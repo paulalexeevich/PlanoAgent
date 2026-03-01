@@ -355,6 +355,45 @@
         .dims-grid .dim-label { color: #888; font-size: 10px; }
         .dims-grid .dim-value { color: #e0e0e0; font-family: monospace; }
 
+        .tag-plano {
+            display: inline-block;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: 600;
+            background: #1a3a1a;
+            color: #90be6d;
+            border: 1px solid #2a5a2a;
+            margin-right: 3px;
+        }
+
+        .tag-photo-f {
+            display: inline-block;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: 600;
+            background: #0f3460;
+            color: #4cc9f0;
+            margin-right: 3px;
+        }
+
+        .tag-alert {
+            display: inline-block;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: 600;
+            background: #4a1a1a;
+            color: #e94560;
+            border: 1px solid #7a2a2a;
+            margin-right: 3px;
+        }
+
+        .product-list-item.not-in-plano {
+            border-left: 3px solid #e94560;
+        }
+
         .view-toggle {
             display: flex;
             gap: 2px;
@@ -453,6 +492,7 @@
     const photoDataMap = {};   // photoName → {products, shelves, source}
     const photoScales = {};    // photoName → scale
     const photoNaturalSizes = {}; // photoName → {w, h}
+    let planogramFacings = {}; // tiny_name → {facings_wide, positions}
 
     let currentView = 'all';
     let selectedId = null;
@@ -882,19 +922,37 @@
         });
 
         const items = Object.entries(artCounts)
-            .sort((a, b) => b[1].count - a[1].count);
+            .sort((a, b) => {
+                const aIn = planogramFacings[a[0]] ? 1 : 0;
+                const bIn = planogramFacings[b[0]] ? 1 : 0;
+                if (aIn !== bIn) return bIn - aIn;
+                return b[1].count - a[1].count;
+            });
 
         const container = document.getElementById('productListItems');
         container.innerHTML = items.map(([art, info]) => {
             const thumb = info.miniature_url
                 ? `<img class="thumb" src="${info.miniature_url}" alt="" onerror="this.style.display='none'">`
                 : `<span class="color-dot" style="background:${getColorForArt(art)}"></span>`;
-            const photoCount = info.photos.size > 1 ? ` <span style="font-size:9px;color:#f9c74f">(${info.photos.size} photos)</span>` : '';
+            const pf = planogramFacings[art];
+            const inPlano = !!pf;
+            const planoFacings = pf ? pf.facings_wide : 0;
+            const photoFacings = info.count;
+
+            let badge = '';
+            if (inPlano) {
+                badge = `<span class="tag-plano">P:${planoFacings}</span><span class="tag-photo-f">S:${photoFacings}</span>`;
+            } else {
+                badge = `<span class="tag-alert">Not in plano</span><span class="tag-photo-f">S:${photoFacings}</span>`;
+            }
+
             return `
-                <div class="product-list-item" data-art="${art}" data-photo="${info.firstPhoto}" onclick="selectByArt('${art}')">
+                <div class="product-list-item${inPlano ? '' : ' not-in-plano'}" data-art="${art}" data-photo="${info.firstPhoto}" onclick="selectByArt('${art}')">
                     ${thumb}
-                    <span style="flex:1">${info.display_name}${info.brand_name ? `<br><span style="font-size:9px;color:#888">${info.brand_name}</span>` : ''}${photoCount}</span>
-                    <span style="color:#888">&times;${info.count}</span>
+                    <span style="flex:1">
+                        ${info.display_name}${info.brand_name ? `<br><span style="font-size:9px;color:#888">${info.brand_name}</span>` : ''}
+                        <br>${badge}
+                    </span>
                 </div>
             `;
         }).join('');
@@ -1049,10 +1107,14 @@
         }
     });
 
-    // Initial load
-    if (PHOTOS.length > 0) {
-        loadAllPhotos();
-    }
+    // Initial load: fetch planogram facings then load photos
+    fetch('/api/planogram-facings')
+        .then(r => r.json())
+        .then(data => { planogramFacings = data; })
+        .catch(() => { planogramFacings = {}; })
+        .finally(() => {
+            if (PHOTOS.length > 0) loadAllPhotos();
+        });
     </script>
 </body>
 </html>

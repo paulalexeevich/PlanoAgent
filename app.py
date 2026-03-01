@@ -117,7 +117,10 @@ def _load_products_json() -> list:
 
 
 def _full_catalog_size() -> int:
-    """Return total number of SKUs in the master product catalog."""
+    """Return total number of SKUs in the active catalog.
+    Uses the current planogram's own product list when it's not the beer default."""
+    if current_planogram and current_planogram.category != "Beer":
+        return len(current_planogram.products)
     return len(_load_products_json())
 
 
@@ -922,7 +925,11 @@ def get_decision_tree():
 
 @app.route("/api/products", methods=["GET"])
 def get_products():
-    """Return all available products."""
+    """Return products for the currently loaded planogram.
+    Falls back to the beer catalog if no planogram is loaded."""
+    if current_planogram and current_planogram.products:
+        from dataclasses import asdict
+        return jsonify([asdict(p) for p in current_planogram.products])
     return jsonify(_load_products_json())
 
 
@@ -1048,6 +1055,45 @@ def photo_data(photo_name):
         p["full_name"] = info.get("name") or ""
 
     return jsonify({"products": products, "shelves": shelves, "source": "raw"})
+
+
+@app.route("/api/planogram-facings")
+def planogram_facings():
+    """Return planogram facing counts keyed by tiny_name for cross-referencing with photos.
+
+    Builds a map: tiny_name → {facings_wide, positions, in_planogram}.
+    Uses product_code_external_id_map.csv to translate external_id → tiny_name.
+    """
+    global current_planogram
+    if current_planogram is None:
+        if not _load_saved_state():
+            init_default_planogram()
+
+    size_map = _load_product_sizes()
+    # external_id → tiny_name
+    ext_to_tiny = {eid: info["tiny_name"] for eid, info in size_map.items() if info.get("tiny_name")}
+
+    facings = {}  # tiny_name → {facings_wide, positions}
+    if current_planogram and current_planogram.equipment:
+        from dataclasses import asdict
+        eq = asdict(current_planogram.equipment)
+        for bay in eq.get("bays", []):
+            for shelf in bay.get("shelves", []):
+                for pos in shelf.get("positions", []):
+                    pid = pos.get("product_id", "")
+                    if pos.get("_phantom"):
+                        continue
+                    ext_id = pid.replace("CSV-", "") if pid.startswith("CSV-") else pid
+                    tiny = ext_to_tiny.get(ext_id, "")
+                    if not tiny:
+                        continue
+                    fw = pos.get("facings_wide", 1)
+                    if tiny not in facings:
+                        facings[tiny] = {"facings_wide": 0, "positions": 0}
+                    facings[tiny]["facings_wide"] += fw
+                    facings[tiny]["positions"] += 1
+
+    return jsonify(facings)
 
 
 @app.route("/demo-images/<path:filename>")
