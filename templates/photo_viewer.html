@@ -750,14 +750,13 @@
 
         let html = '';
 
-        // Header with thumbnail and name
-        const displayName = p.display_name || p.art;
+        const fullName = p.full_name || p.display_name || p.art;
         const thumbUrl = p.miniature_url || '';
         html += `
             <div class="detail-header">
-                ${thumbUrl ? `<img class="detail-thumb" src="${thumbUrl}" alt="${displayName}" onerror="this.style.display='none'">` : ''}
+                ${thumbUrl ? `<img class="detail-thumb" src="${thumbUrl}" alt="${fullName}" onerror="this.style.display='none'">` : ''}
                 <div class="detail-header-info">
-                    <div class="field-value" style="font-weight:600;font-size:13px;margin-bottom:4px">${displayName}</div>
+                    <div class="field-value" style="font-weight:600;font-size:12px;margin-bottom:4px;line-height:1.3">${fullName}</div>
                     <div style="margin-bottom:4px">
                         ${p.brand_name ? `<span class="tag tag-brand">${p.brand_name}</span>` : ''}
                         ${p.category_name ? `<span class="tag tag-category">${p.category_name}</span>` : ''}
@@ -796,10 +795,6 @@
             html += `</div>`;
         }
 
-        // Key product info
-        if (p.full_name) {
-            html += `<div class="field"><div class="field-label">Full Name</div><div class="field-value" style="font-size:11px">${p.full_name}</div></div>`;
-        }
         if (p.barcode) {
             html += `<div class="field"><div class="field-label">Barcode</div><div class="field-value" style="font-family:monospace;font-size:11px">${p.barcode}</div></div>`;
         }
