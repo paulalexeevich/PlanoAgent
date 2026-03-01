@@ -172,6 +172,15 @@
             flex-shrink: 0;
             padding: 16px;
             font-size: 12px;
+            transition: width 0.2s, padding 0.2s, opacity 0.2s;
+        }
+
+        .detail-panel.hidden {
+            width: 0;
+            padding: 0;
+            overflow: hidden;
+            opacity: 0;
+            border-left: none;
         }
 
         .detail-panel h2 {
@@ -416,6 +425,9 @@
             <span>Photos: <strong id="statPhotos">0</strong></span>
             <span>Total Products: <strong id="statProducts">0</strong></span>
         </div>
+
+        <div class="sep"></div>
+        <button id="togglePanelBtn" onclick="togglePanel()">Hide Details</button>
     </div>
 
     <div class="main-area">
@@ -969,6 +981,14 @@
         globalScale = Math.max(0.02, fitScale);
         visiblePhotos.forEach(name => applyScaleToPhoto(name, globalScale));
         document.getElementById('zoomLabel').textContent = Math.round(globalScale * 100) + '%';
+    }
+
+    function togglePanel() {
+        const panel = document.getElementById('detailPanel');
+        const btn = document.getElementById('togglePanelBtn');
+        panel.classList.toggle('hidden');
+        btn.textContent = panel.classList.contains('hidden') ? 'Show Details' : 'Hide Details';
+        setTimeout(zoomFitAll, 250);
     }
 
     // Mouse wheel zoom on grid
