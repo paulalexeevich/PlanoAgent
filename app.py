@@ -442,9 +442,14 @@ def index():
 def get_planogram():
     """Return current planogram data as JSON."""
     global current_planogram, current_summary, current_compliance, current_decision_tree
-    if current_planogram is None:
-        if not _load_saved_state():
-            init_default_planogram()
+    mode = request.args.get("mode", "beer").lower()
+    if mode == "coffee":
+        if current_planogram is None or current_planogram.category != "Coffee":
+            _load_coffee_planogram()
+    else:
+        if current_planogram is None:
+            if not _load_saved_state():
+                init_default_planogram()
     return jsonify({
         "planogram": current_planogram.to_dict(),
         "summary": current_summary,

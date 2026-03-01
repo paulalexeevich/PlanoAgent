@@ -12,7 +12,8 @@ async function fetchFullCatalog() {
 async function fetchPlanogram() {
     showLoading(true);
     try {
-        const res = await fetch('/api/planogram');
+        const mode = typeof APP_MODE !== 'undefined' ? APP_MODE : 'beer';
+        const res = await fetch('/api/planogram?mode=' + mode);
         const data = await res.json();
         planogramData = data.planogram;
         summaryData = data.summary;
