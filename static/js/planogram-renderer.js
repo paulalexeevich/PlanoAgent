@@ -121,10 +121,19 @@ function renderPlanogram() {
                             block.style.backgroundColor = color;
                             labelEl.textContent = groupVal;
                             block.appendChild(labelEl);
+                        } else if (product.image_url && blockHeight > 18 && widthPx > 14) {
+                            block.classList.add('product-block-image');
+                            const imgEl = document.createElement('img');
+                            imgEl.src = product.image_url;
+                            imgEl.className = 'product-image';
+                            imgEl.alt = product.name || '';
+                            imgEl.draggable = false;
+                            block.appendChild(imgEl);
+                            labelEl.textContent = product.name || product.brand;
+                            block.appendChild(labelEl);
                         } else {
                             block.style.backgroundColor = product.color_hex || '#666';
-                            const shortName = product.brand + (product.pack_size > 1 ? ' ' + product.pack_size + 'pk' : '');
-                            labelEl.textContent = shortName;
+                            labelEl.textContent = product.name || product.brand;
                             block.appendChild(labelEl);
                             if (blockHeight > 25) {
                                 const priceEl = document.createElement('div');

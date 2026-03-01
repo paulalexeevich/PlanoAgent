@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Viewer — Planogram Agent</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 16px;
+            background: #16213e;
+            border-bottom: 1px solid #0f3460;
+            flex-shrink: 0;
+            z-index: 100;
+        }
+
+        .toolbar h1 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #e94560;
+            white-space: nowrap;
+        }
+
+        .toolbar select, .toolbar button {
+            font-size: 12px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid #0f3460;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            cursor: pointer;
+        }
+
+        .toolbar button:hover { background: #0f3460; }
+
+        .toolbar button.active {
+            background: #e94560;
+            border-color: #e94560;
+            color: #fff;
+        }
+
+        .toolbar .sep {
+            width: 1px;
+            height: 24px;
+            background: #0f3460;
+        }
+
+        .toolbar label {
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .toolbar input[type="checkbox"] { accent-color: #e94560; }
+
+        .main-area {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .canvas-wrap {
+            flex: 1;
+            overflow: auto;
+            position: relative;
+            cursor: grab;
+        }
+
+        .canvas-wrap:active { cursor: grabbing; }
+
+        .canvas-inner {
+            position: relative;
+            display: inline-block;
+            transform-origin: 0 0;
+        }
+
+        .canvas-inner img {
+            display: block;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .canvas-inner svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+        .bbox-product {
+            pointer-events: all;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+
+        .bbox-product:hover { opacity: 1 !important; }
+
+        .bbox-shelf {
+            pointer-events: all;
+            cursor: pointer;
+        }
+
+        .bbox-label {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-weight: 600;
+            pointer-events: none;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+        }
+
+        .detail-panel {
+            width: 320px;
+            background: #16213e;
+            border-left: 1px solid #0f3460;
+            overflow-y: auto;
+            flex-shrink: 0;
+            padding: 16px;
+            font-size: 12px;
+        }
+
+        .detail-panel h2 {
+            font-size: 14px;
+            color: #e94560;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #0f3460;
+        }
+
+        .detail-panel .field {
+            margin-bottom: 8px;
+        }
+
+        .detail-panel .field-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #888;
+            margin-bottom: 2px;
+        }
+
+        .detail-panel .field-value {
+            color: #e0e0e0;
+            word-break: break-word;
+        }
+
+        .detail-panel .empty-state {
+            color: #666;
+            font-style: italic;
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .stats-bar {
+            display: flex;
+            gap: 16px;
+            margin-left: auto;
+            font-size: 11px;
+            color: #888;
+        }
+
+        .stats-bar span { white-space: nowrap; }
+        .stats-bar strong { color: #e0e0e0; }
+
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .zoom-controls button {
+            width: 28px;
+            height: 28px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .zoom-controls .zoom-label {
+            font-size: 11px;
+            color: #888;
+            min-width: 40px;
+            text-align: center;
+        }
+
+        .back-link {
+            color: #e94560;
+            text-decoration: none;
+            font-size: 12px;
+        }
+
+        .back-link:hover { text-decoration: underline; }
+
+        .product-list {
+            margin-top: 16px;
+            border-top: 1px solid #0f3460;
+            padding-top: 12px;
+        }
+
+        .product-list h3 {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .product-list-item {
+            padding: 6px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.1s;
+        }
+
+        .product-list-item:hover { background: rgba(233,69,96,0.15); }
+
+        .product-list-item.selected { background: rgba(233,69,96,0.25); }
+
+        .product-list-item .color-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+
+        .product-list-item .thumb {
+            width: 28px;
+            height: 28px;
+            object-fit: contain;
+            border-radius: 3px;
+            background: #222;
+            flex-shrink: 0;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 6px 8px;
+            border-radius: 4px;
+            border: 1px solid #0f3460;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+
+        .search-input::placeholder { color: #555; }
+
+        .detail-thumb {
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+            border-radius: 6px;
+            background: #222;
+            border: 1px solid #0f3460;
+        }
+
+        .detail-header {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .detail-header-info { flex: 1; }
+
+        .tag {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-right: 4px;
+            margin-bottom: 3px;
+        }
+
+        .tag-brand { background: #0f3460; color: #4cc9f0; }
+        .tag-category { background: #1a1a2e; color: #90be6d; border: 1px solid #333; }
+        .tag-price { background: #2d1b4e; color: #f9c74f; }
+        .tag-assortment { background: #1a2e1a; color: #90be6d; border: 1px solid #333; }
+        .tag-support { background: #4a1a1a; color: #e94560; }
+
+        .dims-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px 12px;
+            font-size: 11px;
+        }
+
+        .dims-grid .dim-label { color: #888; font-size: 10px; }
+        .dims-grid .dim-value { color: #e0e0e0; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <a href="/" class="back-link">&larr; Back</a>
+        <div class="sep"></div>
+        <h1>Photo Viewer</h1>
+        <div class="sep"></div>
+
+        <label>Photo:</label>
+        <select id="photoSelect" onchange="loadPhoto(this.value)">
+            {% for p in photos %}
+            <option value="{{ p }}">{{ p }}</option>
+            {% endfor %}
+        </select>
+
+        <div class="sep"></div>
+
+        <label>
+            <input type="checkbox" id="showProducts" checked onchange="toggleLayer('products')">
+            Products
+        </label>
+        <label>
+            <input type="checkbox" id="showShelves" checked onchange="toggleLayer('shelves')">
+            Shelves
+        </label>
+        <label>
+            <input type="checkbox" id="showLabels" checked onchange="toggleLayer('labels')">
+            Labels
+        </label>
+
+        <div class="sep"></div>
+
+        <div class="zoom-controls">
+            <button onclick="zoom(-0.1)" title="Zoom out">&minus;</button>
+            <span class="zoom-label" id="zoomLabel">50%</span>
+            <button onclick="zoom(0.1)" title="Zoom in">+</button>
+            <button onclick="zoomFit()" title="Fit to window">Fit</button>
+        </div>
+
+        <div class="stats-bar">
+            <span>Products: <strong id="statProducts">0</strong></span>
+            <span>Shelves: <strong id="statShelves">0</strong></span>
+            <span id="statSource" style="display:none">Source: <strong id="statSourceVal"></strong></span>
+        </div>
+    </div>
+
+    <div class="main-area">
+        <div class="canvas-wrap" id="canvasWrap">
+            <div class="canvas-inner" id="canvasInner">
+                <img id="photoImg" alt="Photo">
+                <svg id="overlaySvg" xmlns="http://www.w3.org/2000/svg"></svg>
+            </div>
+        </div>
+
+        <div class="detail-panel" id="detailPanel">
+            <h2>Details</h2>
+            <div id="detailContent">
+                <div class="empty-state">Click a bounding box to see details</div>
+            </div>
+
+            <div class="product-list" id="productList">
+                <h3>Products on photo</h3>
+                <input type="text" class="search-input" id="searchInput" placeholder="Search products..." oninput="filterProductList()">
+                <div id="productListItems"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let photoData = null;
+    let currentScale = 0.5;
+    let imgNaturalW = 0;
+    let imgNaturalH = 0;
+    let selectedId = null;
+
+    const PRODUCT_COLORS = {};
+    const COLOR_PALETTE = [
+        '#e94560','#00b4d8','#90be6d','#f9c74f','#f8961e',
+        '#43aa8b','#577590','#f3722c','#4cc9f0','#7209b7',
+        '#3a86a7','#fb5607','#ff006e','#8338ec','#06d6a0',
+        '#118ab2','#ef476f','#ffd166','#073b4c','#06aed5'
+    ];
+
+    function getColorForArt(art) {
+        if (!PRODUCT_COLORS[art]) {
+            const idx = Object.keys(PRODUCT_COLORS).length % COLOR_PALETTE.length;
+            PRODUCT_COLORS[art] = COLOR_PALETTE[idx];
+        }
+        return PRODUCT_COLORS[art];
+    }
+
+    function loadPhoto(name) {
+        const img = document.getElementById('photoImg');
+        img.onload = function() {
+            imgNaturalW = img.naturalWidth;
+            imgNaturalH = img.naturalHeight;
+            fetchData(name);
+            zoomFit();
+        };
+        img.src = `/demo-images/${name}.jpg`;
+    }
+
+    async function fetchData(name) {
+        const resp = await fetch(`/api/photo-data/${name}`);
+        photoData = await resp.json();
+
+        Object.keys(PRODUCT_COLORS).forEach(k => delete PRODUCT_COLORS[k]);
+
+        document.getElementById('statProducts').textContent = photoData.products.length;
+        document.getElementById('statShelves').textContent = photoData.shelves.length;
+
+        const srcEl = document.getElementById('statSource');
+        if (photoData.source === 'assortment') {
+            srcEl.style.display = '';
+            document.getElementById('statSourceVal').textContent = 'Assortment';
+        } else {
+            srcEl.style.display = 'none';
+        }
+
+        renderOverlay();
+        renderProductList();
+        clearSelection();
+    }
+
+    function renderOverlay() {
+        const svg = document.getElementById('overlaySvg');
+        svg.setAttribute('width', imgNaturalW);
+        svg.setAttribute('height', imgNaturalH);
+        svg.setAttribute('viewBox', `0 0 ${imgNaturalW} ${imgNaturalH}`);
+        svg.innerHTML = '';
+
+        const showProducts = document.getElementById('showProducts').checked;
+        const showShelves = document.getElementById('showShelves').checked;
+        const showLabels = document.getElementById('showLabels').checked;
+
+        // Shelves (horizontal bands)
+        if (showShelves) {
+            const gShelves = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            gShelves.id = 'layerShelves';
+            photoData.shelves.forEach((s, i) => {
+                const y = Math.min(s.y1, s.y2);
+                const h = Math.abs(s.y2 - s.y1) || 6;
+
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', s.x1);
+                rect.setAttribute('y', y - 3);
+                rect.setAttribute('width', s.x2 - s.x1);
+                rect.setAttribute('height', h + 6);
+                rect.setAttribute('fill', 'rgba(0,180,216,0.2)');
+                rect.setAttribute('stroke', '#00b4d8');
+                rect.setAttribute('stroke-width', '3');
+                rect.setAttribute('class', 'bbox-shelf');
+                rect.setAttribute('data-shelf-idx', i);
+                rect.onclick = () => selectShelf(i);
+                gShelves.appendChild(rect);
+
+                if (showLabels) {
+                    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    txt.setAttribute('x', s.x1 + 8);
+                    txt.setAttribute('y', y - 8);
+                    txt.setAttribute('fill', '#00b4d8');
+                    txt.setAttribute('font-size', '28');
+                    txt.setAttribute('class', 'bbox-label');
+                    txt.textContent = `Shelf ${i + 1}`;
+                    gShelves.appendChild(txt);
+                }
+            });
+            svg.appendChild(gShelves);
+        }
+
+        // Products
+        if (showProducts) {
+            const gProducts = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            gProducts.id = 'layerProducts';
+            photoData.products.forEach((p, i) => {
+                const color = getColorForArt(p.art);
+                const w = p.x2 - p.x1;
+                const h = p.y2 - p.y1;
+
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', p.x1);
+                rect.setAttribute('y', p.y1);
+                rect.setAttribute('width', w);
+                rect.setAttribute('height', h);
+                rect.setAttribute('fill', color + '22');
+                rect.setAttribute('stroke', color);
+                rect.setAttribute('stroke-width', '3');
+                rect.setAttribute('rx', '3');
+                rect.setAttribute('class', 'bbox-product');
+                rect.setAttribute('data-product-idx', i);
+                rect.setAttribute('data-product-id', p._id);
+                rect.style.opacity = selectedId === p._id ? '1' : '0.7';
+                rect.onclick = (e) => { e.stopPropagation(); selectProduct(i); };
+                gProducts.appendChild(rect);
+
+                if (showLabels) {
+                    const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    const displayName = p.display_name || p.art;
+                    const fontSize = Math.min(24, Math.max(11, w * 0.08));
+                    const labelW = Math.min(w, displayName.length * fontSize * 0.55 + 8);
+                    const labelH = fontSize + 6;
+                    labelBg.setAttribute('x', p.x1);
+                    labelBg.setAttribute('y', p.y1 - labelH);
+                    labelBg.setAttribute('width', labelW);
+                    labelBg.setAttribute('height', labelH);
+                    labelBg.setAttribute('fill', color);
+                    labelBg.setAttribute('rx', '3');
+                    labelBg.style.pointerEvents = 'none';
+                    gProducts.appendChild(labelBg);
+
+                    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    txt.setAttribute('x', p.x1 + 4);
+                    txt.setAttribute('y', p.y1 - 5);
+                    txt.setAttribute('fill', '#fff');
+                    txt.setAttribute('font-size', fontSize);
+                    txt.setAttribute('class', 'bbox-label');
+                    txt.textContent = displayName;
+                    gProducts.appendChild(txt);
+                }
+            });
+            svg.appendChild(gProducts);
+        }
+
+        highlightSelected();
+    }
+
+    function toggleLayer() {
+        renderOverlay();
+    }
+
+    function selectProduct(idx) {
+        const p = photoData.products[idx];
+        selectedId = p._id;
+        const isRich = !!p.brand_name;
+
+        let html = '';
+        if (isRich) {
+            html = `
+                <div class="detail-header">
+                    ${p.miniature_url ? `<img class="detail-thumb" src="${p.miniature_url}" alt="${p.display_name}" onerror="this.style.display='none'">` : ''}
+                    <div class="detail-header-info">
+                        <div class="field-value" style="font-weight:600;font-size:13px;margin-bottom:4px">${p.display_name || p.art}</div>
+                        <div style="margin-bottom:4px">
+                            <span class="tag tag-brand">${p.brand_name}</span>
+                            <span class="tag tag-category">${p.category_name}</span>
+                        </div>
+                        ${p.price ? `<span class="tag tag-price">${p.price} ₽</span>` : ''}
+                        ${p.is_support ? `<span class="tag tag-support">Support</span>` : ''}
+                    </div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Full Name</div>
+                    <div class="field-value">${p.full_name}</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Brand Owner</div>
+                    <div class="field-value">${p.brand_owner_name}</div>
+                </div>
+                ${p.sub_brand_name ? `<div class="field">
+                    <div class="field-label">Sub-brand</div>
+                    <div class="field-value">${p.sub_brand_name}</div>
+                </div>` : ''}
+                <div class="field">
+                    <div class="field-label">Dimensions (cm)</div>
+                    <div class="dims-grid">
+                        <span class="dim-label">Width</span><span class="dim-value">${p.facing_width_cm.toFixed(1)}</span>
+                        <span class="dim-label">Height</span><span class="dim-value">${p.facing_height_cm.toFixed(1)}</span>
+                    </div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Position</div>
+                    <div class="dims-grid">
+                        <span class="dim-label">Shelf (line)</span><span class="dim-value">${p.line}</span>
+                        <span class="dim-label">Group</span><span class="dim-value">${p.numgroup}</span>
+                    </div>
+                </div>
+                ${p.barcode ? `<div class="field">
+                    <div class="field-label">Barcode</div>
+                    <div class="field-value" style="font-family:monospace;font-size:11px">${p.barcode}</div>
+                </div>` : ''}
+                <div class="field">
+                    <div class="field-label">Bounding Box</div>
+                    <div class="field-value" style="font-family:monospace">
+                        (${p.x1}, ${p.y1}) &rarr; (${p.x2}, ${p.y2})
+                        <br>${p.x2 - p.x1} &times; ${p.y2 - p.y1} px
+                    </div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Assortment Group</div>
+                    <div class="field-value">${p.assortment_group}${p.start_group ? ' (start)' : ''}</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">ID</div>
+                    <div class="field-value" style="font-family:monospace;font-size:10px">${p._id}</div>
+                </div>
+            `;
+        } else {
+            html = `
+                <div class="field">
+                    <div class="field-label">Product Name</div>
+                    <div class="field-value">${p.display_name || p.art}</div>
+                </div>
+                ${p.full_name ? `<div class="field">
+                    <div class="field-label">Full Name</div>
+                    <div class="field-value">${p.full_name}</div>
+                </div>` : ''}
+                <div class="field">
+                    <div class="field-label">Article</div>
+                    <div class="field-value" style="font-family:monospace;font-size:11px">${p.art}</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Bounding Box</div>
+                    <div class="field-value" style="font-family:monospace">
+                        (${p.x1}, ${p.y1}) &rarr; (${p.x2}, ${p.y2})
+                        <br>${p.x2 - p.x1} &times; ${p.y2 - p.y1} px
+                    </div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Classification Score</div>
+                    <div class="field-value">${(p.classification_score * 100).toFixed(1)}%</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">Duplicated</div>
+                    <div class="field-value">${p.is_duplicated ? 'Yes' : 'No'}</div>
+                </div>
+                <div class="field">
+                    <div class="field-label">ID</div>
+                    <div class="field-value" style="font-family:monospace;font-size:10px">${p._id}</div>
+                </div>
+            `;
+        }
+        document.getElementById('detailContent').innerHTML = html;
+
+        highlightSelected();
+        highlightListItem();
+    }
+
+    function selectShelf(idx) {
+        const s = photoData.shelves[idx];
+        selectedId = s._id;
+
+        const html = `
+            <div class="field">
+                <div class="field-label">Type</div>
+                <div class="field-value">Shelf Line ${idx + 1}</div>
+            </div>
+            <div class="field">
+                <div class="field-label">Line Coordinates</div>
+                <div class="field-value" style="font-family:monospace">
+                    (${s.x1}, ${s.y1}) &rarr; (${s.x2}, ${s.y2})
+                    <br>Width: ${s.x2 - s.x1} px
+                </div>
+            </div>
+            <div class="field">
+                <div class="field-label">Line Type</div>
+                <div class="field-value">${s.line_type || 'raw'}</div>
+            </div>
+            <div class="field">
+                <div class="field-label">Approved</div>
+                <div class="field-value">${s.approved ? 'Yes' : 'No'}</div>
+            </div>
+            <div class="field">
+                <div class="field-label">ID</div>
+                <div class="field-value" style="font-family:monospace;font-size:10px">${s._id}</div>
+            </div>
+        `;
+        document.getElementById('detailContent').innerHTML = html;
+        highlightSelected();
+    }
+
+    function highlightSelected() {
+        document.querySelectorAll('.bbox-product').forEach(el => {
+            const id = el.getAttribute('data-product-id');
+            if (id === selectedId) {
+                el.setAttribute('stroke-width', '5');
+                el.style.opacity = '1';
+            } else {
+                el.setAttribute('stroke-width', '3');
+                el.style.opacity = '0.7';
+            }
+        });
+
+        document.querySelectorAll('.bbox-shelf').forEach(el => {
+            const idx = parseInt(el.getAttribute('data-shelf-idx'));
+            const s = photoData.shelves[idx];
+            if (s._id === selectedId) {
+                el.setAttribute('stroke-width', '5');
+                el.setAttribute('fill', 'rgba(0,180,216,0.35)');
+            } else {
+                el.setAttribute('stroke-width', '3');
+                el.setAttribute('fill', 'rgba(0,180,216,0.2)');
+            }
+        });
+    }
+
+    function clearSelection() {
+        selectedId = null;
+        document.getElementById('detailContent').innerHTML =
+            '<div class="empty-state">Click a bounding box to see details</div>';
+        highlightSelected();
+        highlightListItem();
+    }
+
+    function renderProductList() {
+        if (!photoData) return;
+        const artCounts = {};
+        photoData.products.forEach(p => {
+            if (!artCounts[p.art]) {
+                artCounts[p.art] = {
+                    count: 0, display_name: p.display_name,
+                    miniature_url: p.miniature_url || '', ids: [],
+                    brand_name: p.brand_name || '',
+                };
+            }
+            artCounts[p.art].count++;
+            artCounts[p.art].ids.push(p._id);
+        });
+
+        const items = Object.entries(artCounts)
+            .sort((a, b) => b[1].count - a[1].count);
+
+        const container = document.getElementById('productListItems');
+        container.innerHTML = items.map(([art, info]) => {
+            const thumb = info.miniature_url
+                ? `<img class="thumb" src="${info.miniature_url}" alt="" onerror="this.style.display='none'">`
+                : `<span class="color-dot" style="background:${getColorForArt(art)}"></span>`;
+            return `
+                <div class="product-list-item" data-art="${art}" onclick="selectByArt('${art}')">
+                    ${thumb}
+                    <span style="flex:1">${info.display_name}${info.brand_name ? `<br><span style="font-size:9px;color:#888">${info.brand_name}</span>` : ''}</span>
+                    <span style="color:#888">&times;${info.count}</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function selectByArt(art) {
+        const idx = photoData.products.findIndex(p => p.art === art);
+        if (idx >= 0) selectProduct(idx);
+    }
+
+    function highlightListItem() {
+        document.querySelectorAll('.product-list-item').forEach(el => {
+            el.classList.remove('selected');
+        });
+        if (selectedId) {
+            const p = photoData.products.find(pp => pp._id === selectedId);
+            if (p) {
+                const el = document.querySelector(`.product-list-item[data-art="${p.art}"]`);
+                if (el) el.classList.add('selected');
+            }
+        }
+    }
+
+    function filterProductList() {
+        const q = document.getElementById('searchInput').value.toLowerCase();
+        document.querySelectorAll('.product-list-item').forEach(el => {
+            const art = el.getAttribute('data-art');
+            const text = el.textContent.toLowerCase();
+            el.style.display = (!q || text.includes(q) || art.includes(q)) ? '' : 'none';
+        });
+    }
+
+    // Zoom
+    function applyScale() {
+        const inner = document.getElementById('canvasInner');
+        inner.style.transform = `scale(${currentScale})`;
+        document.getElementById('zoomLabel').textContent = Math.round(currentScale * 100) + '%';
+    }
+
+    function zoom(delta) {
+        currentScale = Math.max(0.1, Math.min(3, currentScale + delta));
+        applyScale();
+    }
+
+    function zoomFit() {
+        const wrap = document.getElementById('canvasWrap');
+        if (!imgNaturalW || !imgNaturalH) return;
+        const fitW = (wrap.clientWidth - 20) / imgNaturalW;
+        const fitH = (wrap.clientHeight - 20) / imgNaturalH;
+        currentScale = Math.min(fitW, fitH, 1);
+        applyScale();
+    }
+
+    // Mouse wheel zoom
+    document.getElementById('canvasWrap').addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.05 : 0.05;
+        zoom(delta);
+    }, { passive: false });
+
+    // Click on empty space to deselect
+    document.getElementById('canvasWrap').addEventListener('click', (e) => {
+        if (e.target === document.getElementById('photoImg') ||
+            e.target === document.getElementById('canvasWrap')) {
+            clearSelection();
+        }
+    });
+
+    // Initial load
+    const photos = {{ photos | tojson }};
+    if (photos.length > 0) {
+        loadPhoto(photos[0]);
+    }
+    </script>
+</body>
+</html>

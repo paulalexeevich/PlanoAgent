@@ -145,3 +145,31 @@ async function removeProducts() {
     }
     showLoading(false);
 }
+
+async function loadDemoCsvPlanogram() {
+    showLoading(true, 'Loading demo CSV planogram...');
+    hideError();
+    try {
+        const res = await fetch('/api/load-demo-csv', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const data = await res.json();
+        if (data.status === 'error') {
+            throw new Error(data.error || 'Demo CSV load failed');
+        }
+        planogramData = data.planogram;
+        summaryData = data.summary;
+        decisionTreeData = null;
+        complianceData = null;
+        buildProductsMap();
+        renderAll();
+        equipmentGenerated = true;
+        enableFillBtn(true);
+    } catch (err) {
+        console.error('Demo CSV load failed:', err);
+        showError('Demo CSV load failed: ' + err.message);
+    }
+    showLoading(false);
+}

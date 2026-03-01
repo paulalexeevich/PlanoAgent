@@ -57,6 +57,7 @@ class Product:
     abv: float
     color_hex: str = "#CCCCCC"
     weekly_units_sold: int = 0
+    image_url: str = ""   # miniature image URL (from assortment data)
 
     @property
     def margin(self) -> float:

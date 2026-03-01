@@ -10,6 +10,9 @@ from flask import Flask, render_template, jsonify, request
 import json
 import os
 import traceback
+import csv
+import hashlib
+from collections import defaultdict
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -116,6 +119,280 @@ def _load_products_json() -> list:
 def _full_catalog_size() -> int:
     """Return total number of SKUs in the master product catalog."""
     return len(_load_products_json())
+
+
+def _stable_color_from_text(text: str) -> str:
+    """Generate deterministic pastel-ish hex color for a product name/id."""
+    digest = hashlib.md5(text.encode("utf-8")).hexdigest()
+    r = int(digest[0:2], 16)
+    g = int(digest[2:4], 16)
+    b = int(digest[4:6], 16)
+    # Keep colors readable on dark labels
+    r = (r // 2) + 64
+    g = (g // 2) + 64
+    b = (b // 2) + 64
+    return f"#{r:02X}{g:02X}{b:02X}"
+
+
+def _load_product_sizes() -> dict:
+    """Load real product dimensions (cm) from product_code_external_id_map.csv.
+    Returns dict keyed by external_id → {width_cm, height_cm, name, tiny_name}."""
+    size_csv = os.path.join(os.path.dirname(__file__), "Demo data", "product_code_external_id_map.csv")
+    size_map = {}
+    if not os.path.exists(size_csv):
+        return size_map
+    with open(size_csv, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            eid = (row.get("external_id") or "").strip()
+            if not eid:
+                continue
+            try:
+                w = float(row.get("width") or 0)
+                h = float(row.get("height") or 0)
+            except ValueError:
+                continue
+            size_map[eid] = {
+                "width_cm": w,
+                "height_cm": h,
+                "name": (row.get("name") or "").strip(),
+                "tiny_name": (row.get("tiny_name") or "").strip(),
+            }
+    return size_map
+
+
+def _build_image_map() -> dict:
+    """Build external_product_id → miniature_url mapping.
+
+    Chain: external_id → tiny_name (product_code_external_id_map.csv)
+           tiny_name   → miniature_url (coffee_1/2/3_assortment.json)
+    Returns dict keyed by external_id → image URL string.
+    """
+    demo_dir = os.path.join(os.path.dirname(__file__), "Demo data")
+
+    # Step 1: tiny_name → miniature_url from all three assortment files
+    tiny_to_url: dict = {}
+    for i in (1, 2, 3):
+        assortment_path = os.path.join(demo_dir, f"coffee_{i}_assortment.json")
+        if not os.path.exists(assortment_path):
+            continue
+        with open(assortment_path, "r", encoding="utf-8") as f:
+            items = json.load(f)
+        for item in items:
+            prod = item.get("product", {})
+            tn = (prod.get("tiny_name") or "").strip()
+            url = (prod.get("miniature_url") or "").strip()
+            if tn and url and tn not in tiny_to_url:
+                tiny_to_url[tn] = url
+
+    # Step 2: external_id → tiny_name from CSV
+    size_csv = os.path.join(demo_dir, "product_code_external_id_map.csv")
+    ext_to_url: dict = {}
+    if not os.path.exists(size_csv):
+        return ext_to_url
+    with open(size_csv, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            eid = (row.get("external_id") or "").strip()
+            tn = (row.get("tiny_name") or "").strip()
+            if eid and tn and tn in tiny_to_url:
+                ext_to_url[eid] = tiny_to_url[tn]
+
+    return ext_to_url
+
+
+CM_TO_IN = 1.0 / 2.54
+
+
+def _build_planogram_from_demo_csv(csv_path: str) -> Planogram:
+    """
+    Build a planogram from demo CSV.
+
+    Mapping:
+      eq_num_in_scene_group -> bay_number
+      shelf_number          -> shelf_number  (1 = top, max = bottom)
+      on_shelf_position     -> left-to-right order on shelf
+
+    Real product dimensions loaded from product_code_external_id_map.csv (cm → in).
+    """
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"CSV not found: {csv_path}")
+
+    size_map = _load_product_sizes()
+    image_map = _build_image_map()
+
+    rows = []
+    with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if not row.get("external_product_id"):
+                continue
+            try:
+                bay_num = int(row.get("eq_num_in_scene_group") or 0)
+                shelf_num = int(row.get("shelf_number") or 0)
+                pos_num = int(row.get("on_shelf_position") or 0)
+            except ValueError:
+                continue
+            if bay_num <= 0 or shelf_num <= 0 or pos_num <= 0:
+                continue
+            rows.append(row)
+
+    if not rows:
+        raise ValueError("CSV has no usable rows")
+
+    # Build product catalog with real sizes
+    products = []
+    seen_ids = set()
+    prod_width_in = {}
+    for row in rows:
+        eid = row["external_product_id"]
+        pid = f"CSV-{eid}"
+        if pid in seen_ids:
+            continue
+        seen_ids.add(pid)
+        name = (row.get("external_product_name") or "").strip()
+        brand = name.split(" ")[0] if name else "Unknown"
+        dims = size_map.get(eid, {})
+        w_in = round(dims.get("width_cm", 7.5) * CM_TO_IN, 2)
+        h_in = round(dims.get("height_cm", 20.0) * CM_TO_IN, 2)
+        prod_width_in[pid] = w_in
+        prod_entry = {
+            "id": pid,
+            "upc": eid,
+            "name": dims.get("tiny_name") or name or pid,
+            "brand": brand,
+            "manufacturer": "Demo CSV",
+            "category": "Coffee",
+            "subcategory": "Demo Import",
+            "beer_type": "N/A",
+            "package_type": "pack_box",
+            "pack_size": 1,
+            "unit_size_oz": 0.0,
+            "width_in": w_in,
+            "height_in": h_in,
+            "depth_in": 4.0,
+            "price": 0.0,
+            "cost": 0.0,
+            "abv": 0.0,
+            "color_hex": _stable_color_from_text(pid),
+            "weekly_units_sold": 0,
+        }
+        if eid in image_map:
+            prod_entry["image_url"] = image_map[eid]
+        products.append(prod_entry)
+
+    # Group rows by bay/shelf and sort by on_shelf_position
+    grouped = defaultdict(list)
+    for row in rows:
+        key = (int(row["eq_num_in_scene_group"]), int(row["shelf_number"]))
+        grouped[key].append(row)
+    for key in grouped:
+        grouped[key].sort(key=lambda r: int(r.get("on_shelf_position") or 0))
+
+    bay_numbers = sorted({int(r["eq_num_in_scene_group"]) for r in rows})
+    shelf_numbers = sorted({int(r["shelf_number"]) for r in rows})
+    max_shelf = max(shelf_numbers)
+
+    bay_depth_in = 8.0
+
+    # Calculate bay widths from actual product widths on widest shelf per bay
+    bay_computed_widths = {}
+    for bay_num in bay_numbers:
+        max_w = 0.0
+        for shelf_num in range(1, max_shelf + 1):
+            shelf_rows = grouped.get((bay_num, shelf_num), [])
+            shelf_w = 0.0
+            for r in shelf_rows:
+                pid = f"CSV-{r['external_product_id']}"
+                fw = max(1, int(r.get("faces_width") or 1))
+                shelf_w += prod_width_in.get(pid, 3.0) * fw
+            max_w = max(max_w, shelf_w)
+        bay_computed_widths[bay_num] = round(max_w + 1.0, 1)  # 1in margin
+
+    # Compute shelf clearance from tallest product on each shelf tier
+    shelf_max_height = {}
+    for (bay_num, shelf_num), shelf_rows in grouped.items():
+        for r in shelf_rows:
+            pid = f"CSV-{r['external_product_id']}"
+            p = next((pp for pp in products if pp["id"] == pid), None)
+            h = p["height_in"] if p else 8.0
+            shelf_max_height[shelf_num] = max(shelf_max_height.get(shelf_num, 0), h)
+
+    bays = []
+    for bay_num in bay_numbers:
+        bay_width_in = bay_computed_widths[bay_num]
+
+        # Shelf #1 = top, shelf #max = bottom
+        # y_position counts up from floor; so shelf #max gets lowest y
+        shelf_defs = []
+        y_cursor = 2.0  # start 2in from floor for bottom shelf
+        for shelf_num in range(max_shelf, 0, -1):
+            clearance = shelf_max_height.get(shelf_num, 8.0) + 1.5
+            shelf_rows = grouped.get((bay_num, shelf_num), [])
+
+            # Calculate cumulative x_position from real widths
+            positions = []
+            x_cursor = 0.0
+            for r in shelf_rows:
+                pid = f"CSV-{r['external_product_id']}"
+                facings_wide = max(1, int(r.get("faces_width") or 1))
+                facings_high = max(1, int(r.get("faces_height") or 1))
+                facings_deep = max(1, int(r.get("faces_depth") or 1))
+                positions.append({
+                    "product_id": pid,
+                    "x_position": round(x_cursor, 2),
+                    "facings_wide": facings_wide,
+                    "facings_high": facings_high,
+                    "facings_deep": facings_deep,
+                    "orientation": "front",
+                })
+                x_cursor += prod_width_in.get(pid, 3.0) * facings_wide
+
+            shelf_defs.append({
+                "shelf_number": shelf_num,
+                "width_in": bay_width_in,
+                "height_in": round(clearance, 1),
+                "depth_in": bay_depth_in,
+                "y_position": round(y_cursor, 1),
+                "positions": positions,
+                "shelf_type": "standard",
+            })
+            y_cursor += clearance
+
+        # shelf_defs built bottom-up; keep as-is (renderer uses y_position)
+        bay_height_in = round(y_cursor + 2.0, 1)
+
+        bays.append({
+            "bay_number": bay_num,
+            "width_in": bay_width_in,
+            "height_in": bay_height_in,
+            "depth_in": bay_depth_in,
+            "shelves": shelf_defs,
+            "glued_right": False,
+        })
+
+    planogram_data = {
+        "id": "PLN-CSV-COFFEE-617533",
+        "name": "Coffee Demo Planogram (CSV Import)",
+        "category": "Coffee",
+        "store_type": "Demo Store",
+        "effective_date": "2026-02-18",
+        "metadata": {
+            "version": "1.0",
+            "generated_by": "CSV Demo Import",
+            "placement_strategy": "eq_num_in_scene_group/shelf_number/on_shelf_position mapping",
+            "source_file": os.path.basename(csv_path),
+        },
+        "equipment": {
+            "id": "EQ-CSV-001",
+            "name": "Coffee Equipment",
+            "equipment_type": "gondola",
+            "bays": bays,
+        },
+        "products": products,
+    }
+
+    return Planogram.from_dict(planogram_data)
 
 
 @app.route("/")
@@ -647,6 +924,177 @@ def get_decision_tree():
 def get_products():
     """Return all available products."""
     return jsonify(_load_products_json())
+
+
+# ── Photo Viewer ──────────────────────────────────────────────────────────────
+
+def _load_assortment_products(assortment_path: str) -> list:
+    """Transform assortment JSON into the product list format for the photo viewer.
+
+    Each assortment item contains rich product info (brand, category, miniature_url,
+    dimensions, price) which we flatten for the viewer."""
+    with open(assortment_path, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+
+    products = []
+    for item in raw:
+        prod = item.get("product", {})
+        facing = item.get("facing", {})
+        group = item.get("group", {})
+        products.append({
+            "_id": item.get("_id", ""),
+            "product_id": item.get("product_id", ""),
+            "art": prod.get("tiny_name", "") or item.get("product_id", ""),
+            "x1": item.get("x1", 0),
+            "y1": item.get("y1", 0),
+            "x2": item.get("x2", 0),
+            "y2": item.get("y2", 0),
+            "display_name": prod.get("tiny_name", ""),
+            "full_name": prod.get("name", ""),
+            "brand_name": prod.get("brand_name", ""),
+            "sub_brand_name": prod.get("sub_brand_name", ""),
+            "brand_owner_name": prod.get("brand_owner_name", ""),
+            "category_name": prod.get("category_name", ""),
+            "macro_category_name": prod.get("macro_category_name", ""),
+            "miniature_url": prod.get("miniature_url", ""),
+            "barcode": prod.get("barcode", ""),
+            "classification_score": item.get("kma", 0) / 100 if item.get("kma") else 0,
+            "is_duplicated": item.get("is_duplicated", False),
+            "line": item.get("line", 0),
+            "numgroup": item.get("numgroup", 0),
+            "facing_count": facing.get("fact", 1),
+            "facing_width_cm": facing.get("width_cm", 0),
+            "facing_height_cm": facing.get("height_cm", 0),
+            "group_count": group.get("fact", 1),
+            "group_width_cm": group.get("width_cm", 0),
+            "group_height_cm": group.get("height_cm", 0),
+            "price": item.get("price", 0),
+            "price_type": item.get("price_type", 0),
+            "price_status": item.get("price_status", ""),
+            "assortment_group": item.get("assortment_group", 0),
+            "start_group": item.get("start_group", False),
+            "is_support": item.get("is_support", False),
+        })
+    return products
+
+
+def _load_art_name_map() -> dict:
+    """Build art→tiny_name mapping from product_art_mapping.csv."""
+    csv_path = os.path.join(os.path.dirname(__file__), "Demo data", "product_art_mapping.csv")
+    mapping = {}
+    if not os.path.exists(csv_path):
+        return mapping
+    with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            art = (row.get("art") or "").strip()
+            if art:
+                mapping[art] = {
+                    "tiny_name": (row.get("tiny_name") or "").strip(),
+                    "name": (row.get("name") or "").strip(),
+                }
+    return mapping
+
+
+@app.route("/photo-viewer")
+def photo_viewer():
+    """Serve the interactive photo bounding-box viewer."""
+    demo_dir = os.path.join(os.path.dirname(__file__), "Demo data")
+    photos = []
+    for fname in sorted(os.listdir(demo_dir)):
+        if fname.endswith(".jpg") or fname.endswith(".png"):
+            base = fname.rsplit(".", 1)[0]
+            prod_file = os.path.join(demo_dir, f"{base}_raw_products.json")
+            shelf_file = os.path.join(demo_dir, f"{base}_raw_shelves.json")
+            if os.path.exists(prod_file) and os.path.exists(shelf_file):
+                photos.append(base)
+    return render_template("photo_viewer.html", photos=photos)
+
+
+@app.route("/api/photo-data/<photo_name>")
+def photo_data(photo_name):
+    """Return products + shelves JSON for a given photo base name.
+
+    Prefers assortment data (data/<name>_assortment.json) when available,
+    falling back to raw_products + art_mapping.
+    """
+    demo_dir = os.path.join(os.path.dirname(__file__), "Demo data")
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    shelf_file = os.path.join(demo_dir, f"{photo_name}_raw_shelves.json")
+
+    if not os.path.exists(shelf_file):
+        return jsonify({"error": "Photo data not found"}), 404
+
+    with open(shelf_file, "r", encoding="utf-8") as f:
+        shelves = json.load(f)
+
+    assortment_file = os.path.join(data_dir, f"{photo_name}_assortment.json")
+    if os.path.exists(assortment_file):
+        products = _load_assortment_products(assortment_file)
+        return jsonify({"products": products, "shelves": shelves, "source": "assortment"})
+
+    prod_file = os.path.join(demo_dir, f"{photo_name}_raw_products.json")
+    if not os.path.exists(prod_file):
+        return jsonify({"error": "Photo data not found"}), 404
+
+    with open(prod_file, "r", encoding="utf-8") as f:
+        products = json.load(f)
+
+    art_map = _load_art_name_map()
+    for p in products:
+        art = p.get("art", "")
+        info = art_map.get(art, {})
+        p["display_name"] = info.get("tiny_name") or art.replace("_", " ").title()
+        p["full_name"] = info.get("name") or ""
+
+    return jsonify({"products": products, "shelves": shelves, "source": "raw"})
+
+
+@app.route("/demo-images/<path:filename>")
+def demo_images(filename):
+    """Serve images from the Demo data folder."""
+    from flask import send_from_directory
+    demo_dir = os.path.join(os.path.dirname(__file__), "Demo data")
+    return send_from_directory(demo_dir, filename)
+
+
+@app.route("/api/load-demo-csv", methods=["POST"])
+def load_demo_csv():
+    """Load pre-built coffee planogram from data/coffee_default_planogram.json."""
+    global current_planogram, current_summary, current_compliance, current_decision_tree, current_equipment
+
+    coffee_json = os.path.join(os.path.dirname(__file__), "data", "coffee_default_planogram.json")
+
+    try:
+        with open(coffee_json, "r", encoding="utf-8") as f:
+            planogram_data = json.load(f)
+
+        # Enrich products with real product images
+        image_map = _build_image_map()
+        for prod in planogram_data.get("products", []):
+            upc = prod.get("upc", "")
+            if upc and upc in image_map:
+                prod["image_url"] = image_map[upc]
+
+        current_planogram = Planogram.from_dict(planogram_data)
+        current_summary = generate_summary(current_planogram, len(current_planogram.products))
+        current_compliance = None
+        current_decision_tree = None
+        from dataclasses import asdict
+        current_equipment = asdict(current_planogram.equipment) if current_planogram.equipment else None
+        _save_state()
+        return jsonify({
+            "status": "success",
+            "source": "coffee_default_planogram",
+            "planogram": current_planogram.to_dict(),
+            "summary": current_summary,
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "error": str(e),
+        }), 400
 
 
 # Load persisted state on startup; fall back to generating from defaults
