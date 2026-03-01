@@ -81,18 +81,21 @@
             flex: 1;
             display: flex;
             flex-direction: row;
-            overflow: auto;
+            overflow: scroll;
             gap: 8px;
             padding: 8px;
             align-items: flex-start;
+            cursor: grab;
         }
+
+        .photos-grid.dragging { cursor: grabbing; }
 
         .photo-card {
             position: relative;
             background: #111;
             border: 1px solid #0f3460;
             border-radius: 4px;
-            overflow: hidden;
+            overflow: visible;
             flex-shrink: 0;
         }
 
@@ -975,8 +978,45 @@
         zoomAll(delta);
     }, { passive: false });
 
-    // Click on empty space to deselect
-    document.getElementById('photosGrid').addEventListener('click', (e) => {
+    // Drag-to-pan
+    let isDragging = false;
+    let dragStartX = 0, dragStartY = 0;
+    let scrollStartX = 0, scrollStartY = 0;
+
+    const grid = document.getElementById('photosGrid');
+
+    grid.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.bbox-product') || e.target.closest('.bbox-shelf')) return;
+        isDragging = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        scrollStartX = grid.scrollLeft;
+        scrollStartY = grid.scrollTop;
+        grid.classList.add('dragging');
+        e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - dragStartX;
+        const dy = e.clientY - dragStartY;
+        grid.scrollLeft = scrollStartX - dx;
+        grid.scrollTop = scrollStartY - dy;
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            grid.classList.remove('dragging');
+        }
+    });
+
+    // Click on empty space to deselect (only if not dragging)
+    let dragDistance = 0;
+    grid.addEventListener('mousedown', (e) => { dragDistance = 0; });
+    grid.addEventListener('mousemove', () => { if (isDragging) dragDistance++; });
+    grid.addEventListener('click', (e) => {
+        if (dragDistance > 3) return;
         if (e.target.tagName === 'IMG' || e.target.classList.contains('photos-grid') ||
             e.target.classList.contains('photo-card')) {
             clearSelection();
