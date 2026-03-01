@@ -390,8 +390,57 @@
             margin-right: 3px;
         }
 
+        .tag-oos {
+            display: inline-block;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: 600;
+            background: #3a2e0a;
+            color: #f9c74f;
+            border: 1px solid #5a4e1a;
+            margin-right: 3px;
+        }
+
         .product-list-item.not-in-plano {
             border-left: 3px solid #e94560;
+        }
+
+        .product-list-item.out-of-shelf {
+            border-left: 3px solid #f9c74f;
+            opacity: 0.7;
+        }
+
+        .filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .filter-btn {
+            font-size: 10px;
+            padding: 3px 7px;
+            border-radius: 4px;
+            border: 1px solid #0f3460;
+            background: #1a1a2e;
+            color: #888;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .filter-btn:hover { background: #0f3460; color: #e0e0e0; }
+
+        .filter-btn.active {
+            background: #e94560;
+            border-color: #e94560;
+            color: #fff;
+        }
+
+        .filter-counts {
+            font-size: 10px;
+            color: #666;
+            margin-bottom: 6px;
         }
 
         .view-toggle {
@@ -482,6 +531,15 @@
             <div class="product-list" id="productList">
                 <h3>All products across photos</h3>
                 <input type="text" class="search-input" id="searchInput" placeholder="Search products..." oninput="filterProductList()">
+                <div class="filter-bar" id="filterBar">
+                    <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
+                    <button class="filter-btn" data-filter="not-in-plano" onclick="setFilter('not-in-plano')">Not in plano</button>
+                    <button class="filter-btn" data-filter="less" onclick="setFilter('less')">Less</button>
+                    <button class="filter-btn" data-filter="equal" onclick="setFilter('equal')">Equal</button>
+                    <button class="filter-btn" data-filter="more" onclick="setFilter('more')">More</button>
+                    <button class="filter-btn" data-filter="out-of-shelf" onclick="setFilter('out-of-shelf')">Out of shelf</button>
+                </div>
+                <div class="filter-counts" id="filterCounts"></div>
                 <div id="productListItems"></div>
             </div>
         </div>
@@ -498,6 +556,7 @@
     let selectedId = null;
     let selectedPhotoName = null;
     let selectedArt = null;
+    let activeFilter = 'all';
     let globalScale = null;    // will be computed on fit
 
     const PRODUCT_COLORS = {};
@@ -918,6 +977,16 @@
         highlightListItem();
     }
 
+    function getProductStatus(art, photoFacings) {
+        const pf = planogramFacings[art];
+        if (!pf) return 'not-in-plano';
+        if (photoFacings === 0) return 'out-of-shelf';
+        const plano = pf.facings_wide;
+        if (photoFacings < plano) return 'less';
+        if (photoFacings === plano) return 'equal';
+        return 'more';
+    }
+
     function renderProductList() {
         const artCounts = {};
         PHOTOS.forEach(name => {
@@ -941,33 +1010,67 @@
             });
         });
 
+        // Add out-of-shelf: products in planogram but not in any photo
+        Object.keys(planogramFacings).forEach(art => {
+            if (!artCounts[art]) {
+                artCounts[art] = {
+                    count: 0,
+                    display_name: art,
+                    miniature_url: '',
+                    brand_name: '',
+                    photos: new Set(),
+                    firstPhoto: '',
+                    firstIdx: -1,
+                };
+            }
+        });
+
+        const statusOrder = { 'not-in-plano': 0, 'out-of-shelf': 1, 'less': 2, 'more': 3, 'equal': 4 };
         const items = Object.entries(artCounts)
+            .map(([art, info]) => {
+                const status = getProductStatus(art, info.count);
+                return [art, info, status];
+            })
             .sort((a, b) => {
-                const aIn = planogramFacings[a[0]] ? 1 : 0;
-                const bIn = planogramFacings[b[0]] ? 1 : 0;
-                if (aIn !== bIn) return bIn - aIn;
+                const sa = statusOrder[a[2]] ?? 5;
+                const sb = statusOrder[b[2]] ?? 5;
+                if (sa !== sb) return sa - sb;
                 return b[1].count - a[1].count;
             });
 
+        // Count per status
+        const counts = { all: items.length };
+        items.forEach(([, , status]) => { counts[status] = (counts[status] || 0) + 1; });
+        document.getElementById('filterCounts').innerHTML =
+            `<span style="color:#e94560">${counts['not-in-plano']||0} not in plano</span> · ` +
+            `<span style="color:#f8961e">${counts['less']||0} less</span> · ` +
+            `<span style="color:#90be6d">${counts['equal']||0} equal</span> · ` +
+            `<span style="color:#4cc9f0">${counts['more']||0} more</span> · ` +
+            `<span style="color:#f9c74f">${counts['out-of-shelf']||0} out of shelf</span>`;
+
         const container = document.getElementById('productListItems');
-        container.innerHTML = items.map(([art, info]) => {
+        container.innerHTML = items.map(([art, info, status]) => {
             const thumb = info.miniature_url
                 ? `<img class="thumb" src="${info.miniature_url}" alt="" onerror="this.style.display='none'">`
                 : `<span class="color-dot" style="background:${getColorForArt(art)}"></span>`;
             const pf = planogramFacings[art];
-            const inPlano = !!pf;
             const planoFacings = pf ? pf.facings_wide : 0;
             const photoFacings = info.count;
 
             let badge = '';
-            if (inPlano) {
-                badge = `<span class="tag-plano">P:${planoFacings}</span><span class="tag-photo-f">S:${photoFacings}</span>`;
-            } else {
+            if (status === 'not-in-plano') {
                 badge = `<span class="tag-alert">Not in plano</span><span class="tag-photo-f">S:${photoFacings}</span>`;
+            } else if (status === 'out-of-shelf') {
+                badge = `<span class="tag-oos">Out of shelf</span><span class="tag-plano">P:${planoFacings}</span>`;
+            } else {
+                badge = `<span class="tag-plano">P:${planoFacings}</span><span class="tag-photo-f">S:${photoFacings}</span>`;
             }
 
+            const cssClass = status === 'not-in-plano' ? ' not-in-plano' : status === 'out-of-shelf' ? ' out-of-shelf' : '';
+            const clickHandler = info.firstPhoto ? `onclick="selectByArt('${art}')"` : '';
+
             return `
-                <div class="product-list-item${inPlano ? '' : ' not-in-plano'}" data-art="${art}" data-photo="${info.firstPhoto}" onclick="selectByArt('${art}')">
+                <div class="product-list-item${cssClass}" data-art="${art}" data-status="${status}" data-photo="${info.firstPhoto}" ${clickHandler}>
                     ${thumb}
                     <span style="flex:1">
                         ${info.display_name}${info.brand_name ? `<br><span style="font-size:9px;color:#888">${info.brand_name}</span>` : ''}
@@ -976,6 +1079,27 @@
                 </div>
             `;
         }).join('');
+
+        applyFilter();
+    }
+
+    function setFilter(filter) {
+        activeFilter = filter;
+        document.querySelectorAll('.filter-btn').forEach(b => {
+            b.classList.toggle('active', b.getAttribute('data-filter') === filter);
+        });
+        applyFilter();
+    }
+
+    function applyFilter() {
+        const q = document.getElementById('searchInput').value.toLowerCase();
+        document.querySelectorAll('.product-list-item').forEach(el => {
+            const status = el.getAttribute('data-status');
+            const text = el.textContent.toLowerCase();
+            const matchesFilter = activeFilter === 'all' || status === activeFilter;
+            const matchesSearch = !q || text.includes(q);
+            el.style.display = (matchesFilter && matchesSearch) ? '' : 'none';
+        });
     }
 
     function selectByArt(art) {
@@ -1007,11 +1131,7 @@
     }
 
     function filterProductList() {
-        const q = document.getElementById('searchInput').value.toLowerCase();
-        document.querySelectorAll('.product-list-item').forEach(el => {
-            const text = el.textContent.toLowerCase();
-            el.style.display = (!q || text.includes(q)) ? '' : 'none';
-        });
+        applyFilter();
     }
 
     // Zoom: set actual image width so layout reflows properly for scrolling
