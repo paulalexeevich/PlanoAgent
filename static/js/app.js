@@ -34,9 +34,12 @@ document.addEventListener('DOMContentLoaded', () => {
         saveSettings();
         if (planogramData) renderPlanogram();
     });
-    document.getElementById('eqBays').addEventListener('input', () => {
-        if (bayConfigVisible) buildBayConfigTable(true);
-    });
+    const eqBaysInput = document.getElementById('eqBays');
+    if (eqBaysInput) {
+        eqBaysInput.addEventListener('input', () => {
+            if (bayConfigVisible) buildBayConfigTable(true);
+        });
+    }
     document.addEventListener('click', (e) => {
         const popover = document.getElementById('allBaysPopover');
         const btn = document.getElementById('edAllBaysBtn');
@@ -44,6 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleAllBaysPopover(false);
         }
     });
-    initEditorDragHandlers();
-    initEditorScaleSlider();
+    if (typeof APP_MODE === 'undefined' || APP_MODE === 'beer') {
+        initEditorDragHandlers();
+        initEditorScaleSlider();
+    }
 });

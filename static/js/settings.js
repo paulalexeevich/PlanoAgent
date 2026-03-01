@@ -90,8 +90,10 @@ function loadSettings() {
         const s = JSON.parse(raw);
         if (s.useMetric !== undefined && s.useMetric !== useMetric) {
             useMetric = s.useMetric;
-            document.getElementById('unitIn').classList.toggle('active', !useMetric);
-            document.getElementById('unitCm').classList.toggle('active', useMetric);
+            const uIn = document.getElementById('unitIn');
+            const uCm = document.getElementById('unitCm');
+            if (uIn) uIn.classList.toggle('active', !useMetric);
+            if (uCm) uCm.classList.toggle('active', useMetric);
         }
         if (s.currency && CURRENCIES[s.currency]) {
             currency = s.currency;

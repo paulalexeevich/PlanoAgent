@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Planogram Agent</title>
+    <title>Planogram Agent — {{ mode|capitalize }}</title>
     <link rel="stylesheet" href="/static/css/base.css?v=46">
     <link rel="stylesheet" href="/static/css/components.css?v=46">
     <link rel="stylesheet" href="/static/css/controls.css?v=46">
@@ -17,8 +17,9 @@
 <body>
     <!-- HEADER -->
     <div class="header">
-        <h1>Planogram Agent</h1>
+        <h1>Planogram Agent — {{ mode|capitalize }}</h1>
         <div class="header-controls">
+            {% if mode == 'beer' %}
             <button class="config-toggle" id="configToggle" onclick="toggleConfig()">
                 <span>Equipment Config</span>
                 <span class="toggle-caret">&#9660;</span>
@@ -27,8 +28,12 @@
                 <span id="fillLabel">Fill Products</span>
                 <span id="fillSpinner" style="display:none" class="btn-spinner"></span>
             </button>
-            <button class="btn btn-secondary" onclick="loadDemoCsvPlanogram()">Load Demo CSV</button>
             <button class="btn btn-secondary" onclick="removeProducts()">Remove Products</button>
+            {% endif %}
+            {% if mode == 'coffee' %}
+            <a class="btn btn-secondary" href="/photo-viewer">Photo Viewer</a>
+            {% endif %}
+            <a class="btn btn-secondary" href="/?mode={{ 'coffee' if mode == 'beer' else 'beer' }}">Switch to {{ 'Coffee' if mode == 'beer' else 'Beer' }}</a>
         </div>
         <div class="header-actions">
             <div class="scale-control">
@@ -37,10 +42,13 @@
                 <span id="scaleValue">5px/in</span>
             </div>
             <button class="btn btn-secondary" onclick="toggleJSON()">View JSON</button>
+            {% if mode == 'beer' %}
             <button class="btn btn-secondary btn-settings" onclick="openSettings()" title="Settings">&#9881;</button>
+            {% endif %}
         </div>
     </div>
 
+    {% if mode == 'beer' %}
     <!-- EQUIPMENT CONFIG PANEL -->
     <div class="input-panel">
         <!-- Equipment Config (hidden by default) -->
@@ -120,6 +128,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- MAIN LAYOUT -->
     <div class="app-layout">
@@ -185,6 +194,7 @@
         <input type="file" id="assortmentFileInput" accept=".csv,.txt,.json" style="display:none" onchange="handleAssortmentUpload(event)">
     </div>
 
+    {% if mode == 'beer' %}
     <!-- EQUIPMENT EDITOR OVERLAY -->
     <div class="eq-editor-overlay" id="eqEditorOverlay">
         <!-- Header -->
@@ -274,7 +284,9 @@
     <button id="unitCm" style="display:none"></button>
     <button id="edUnitIn" class="active" style="display:none"></button>
     <button id="edUnitCm" style="display:none"></button>
+    {% endif %}
 
+    {% if mode == 'beer' %}
     <!-- SETTINGS OVERLAY -->
     <div class="settings-overlay" id="settingsOverlay" onclick="if(event.target===this)closeSettings()">
         <div class="settings-card">
@@ -339,8 +351,12 @@
         </div>
     </div>
 
+    {% endif %}
+
+    {% if mode == 'beer' %}
     <!-- Equipment editor drag dimension tooltip -->
     <div id="edDimTooltip"></div>
+    {% endif %}
 
     <!-- TOOLTIP -->
     <div class="tooltip" id="tooltip"></div>
@@ -351,6 +367,7 @@
         <span id="errorMsg"></span>
     </div>
 
+    {% if mode == 'beer' %}
     <!-- COMPARE MODAL -->
     <div class="compare-overlay" id="compareOverlay" onclick="if(event.target===this)closeCompare()">
         <div class="compare-card">
@@ -368,8 +385,10 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- JS: load order matters (state first, app.js last) -->
+    <script>const APP_MODE = '{{ mode }}';</script>
     <script src="/static/js/state.js?v=46"></script>
     <script src="/static/js/utils.js?v=46"></script>
     <script src="/static/js/tooltip.js?v=46"></script>

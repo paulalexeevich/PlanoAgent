@@ -16,8 +16,10 @@ function mFmt(inches) {
 function setUnit(unit) {
     const wasMetric = useMetric;
     useMetric = (unit === 'cm');
-    document.getElementById('unitIn').classList.toggle('active', !useMetric);
-    document.getElementById('unitCm').classList.toggle('active', useMetric);
+    const uIn = document.getElementById('unitIn');
+    const uCm = document.getElementById('unitCm');
+    if (uIn) uIn.classList.toggle('active', !useMetric);
+    if (uCm) uCm.classList.toggle('active', useMetric);
     const edIn = document.getElementById('edUnitIn');
     const edCm = document.getElementById('edUnitCm');
     if (edIn) edIn.classList.toggle('active', !useMetric);
@@ -54,6 +56,7 @@ function updateEditorToolbarUnits(wasMetric) {
 }
 
 function updateEquipConfigUnits(wasMetric) {
+    if (!document.getElementById('labelEqWidth')) return;
     const toIn = 1 / IN_TO_CM;
     const toCm = IN_TO_CM;
     const factor = useMetric ? toCm : toIn;
@@ -132,6 +135,7 @@ function showLoading(show, msg) {
 
 function setGenEquipLoading(loading) {
     const btn = document.getElementById('genEquipBtn');
+    if (!btn) return;
     const label = document.getElementById('genEquipLabel');
     const spinner = document.getElementById('genEquipSpinner');
     btn.disabled = loading;
@@ -141,6 +145,7 @@ function setGenEquipLoading(loading) {
 
 function setFillLoading(loading) {
     const btn = document.getElementById('fillBtn');
+    if (!btn) return;
     const label = document.getElementById('fillLabel');
     const spinner = document.getElementById('fillSpinner');
     btn.disabled = loading;
@@ -149,7 +154,8 @@ function setFillLoading(loading) {
 }
 
 function enableFillBtn(enabled) {
-    document.getElementById('fillBtn').disabled = !enabled;
+    const btn = document.getElementById('fillBtn');
+    if (btn) btn.disabled = !enabled;
 }
 
 

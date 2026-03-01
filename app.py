@@ -398,10 +398,44 @@ def _build_planogram_from_demo_csv(csv_path: str) -> Planogram:
     return Planogram.from_dict(planogram_data)
 
 
+def _load_coffee_planogram():
+    """Load coffee planogram into current state (non-HTTP helper)."""
+    global current_planogram, current_summary, current_compliance, current_decision_tree, current_equipment
+
+    coffee_json = os.path.join(os.path.dirname(__file__), "data", "coffee_default_planogram.json")
+    with open(coffee_json, "r", encoding="utf-8") as f:
+        planogram_data = json.load(f)
+
+    image_map = _build_image_map()
+    for prod in planogram_data.get("products", []):
+        upc = prod.get("upc", "")
+        if upc and upc in image_map:
+            prod["image_url"] = image_map[upc]
+
+    current_planogram = Planogram.from_dict(planogram_data)
+    current_summary = generate_summary(current_planogram, len(current_planogram.products))
+    current_compliance = None
+    current_decision_tree = None
+    from dataclasses import asdict
+    current_equipment = asdict(current_planogram.equipment) if current_planogram.equipment else None
+    _save_state()
+
+
 @app.route("/")
 def index():
-    """Serve the main visualization page."""
-    return render_template("index.html")
+    """Serve the main visualization page. ?mode=beer (default) or ?mode=coffee."""
+    mode = request.args.get("mode", "beer").lower()
+    if mode not in ("beer", "coffee"):
+        mode = "beer"
+
+    if mode == "coffee":
+        if current_planogram is None or current_planogram.category != "Coffee":
+            _load_coffee_planogram()
+    else:
+        if current_planogram is None or current_planogram.category == "Coffee":
+            init_default_planogram()
+
+    return render_template("index.html", mode=mode)
 
 
 @app.route("/api/planogram", methods=["GET"])
@@ -1107,28 +1141,8 @@ def demo_images(filename):
 @app.route("/api/load-demo-csv", methods=["POST"])
 def load_demo_csv():
     """Load pre-built coffee planogram from data/coffee_default_planogram.json."""
-    global current_planogram, current_summary, current_compliance, current_decision_tree, current_equipment
-
-    coffee_json = os.path.join(os.path.dirname(__file__), "data", "coffee_default_planogram.json")
-
     try:
-        with open(coffee_json, "r", encoding="utf-8") as f:
-            planogram_data = json.load(f)
-
-        # Enrich products with real product images
-        image_map = _build_image_map()
-        for prod in planogram_data.get("products", []):
-            upc = prod.get("upc", "")
-            if upc and upc in image_map:
-                prod["image_url"] = image_map[upc]
-
-        current_planogram = Planogram.from_dict(planogram_data)
-        current_summary = generate_summary(current_planogram, len(current_planogram.products))
-        current_compliance = None
-        current_decision_tree = None
-        from dataclasses import asdict
-        current_equipment = asdict(current_planogram.equipment) if current_planogram.equipment else None
-        _save_state()
+        _load_coffee_planogram()
         return jsonify({
             "status": "success",
             "source": "coffee_default_planogram",
