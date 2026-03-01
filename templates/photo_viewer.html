@@ -26,6 +26,7 @@
             border-bottom: 1px solid #0f3460;
             flex-shrink: 0;
             z-index: 100;
+            flex-wrap: wrap;
         }
 
         .toolbar h1 {
@@ -76,19 +77,56 @@
             overflow: hidden;
         }
 
-        .canvas-wrap {
+        .photos-grid {
             flex: 1;
-            overflow: auto;
-            position: relative;
-            cursor: grab;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            gap: 8px;
+            padding: 8px;
         }
 
-        .canvas-wrap:active { cursor: grabbing; }
+        .photo-card {
+            position: relative;
+            background: #111;
+            border: 1px solid #0f3460;
+            border-radius: 4px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .photo-card .photo-title {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: rgba(22, 33, 62, 0.9);
+            color: #e94560;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 4px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .photo-card .photo-stats {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(22, 33, 62, 0.9);
+            color: #888;
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .photo-card .photo-stats strong { color: #e0e0e0; }
 
         .canvas-inner {
             position: relative;
             display: inline-block;
-            transform-origin: 0 0;
         }
 
         .canvas-inner img {
@@ -101,6 +139,8 @@
             position: absolute;
             top: 0;
             left: 0;
+            width: 100%;
+            height: 100%;
             pointer-events: none;
         }
 
@@ -142,9 +182,7 @@
             border-bottom: 1px solid #0f3460;
         }
 
-        .detail-panel .field {
-            margin-bottom: 8px;
-        }
+        .detail-panel .field { margin-bottom: 8px; }
 
         .detail-panel .field-label {
             font-size: 10px;
@@ -232,7 +270,6 @@
         }
 
         .product-list-item:hover { background: rgba(233,69,96,0.15); }
-
         .product-list-item.selected { background: rgba(233,69,96,0.25); }
 
         .product-list-item .color-dot {
@@ -297,6 +334,7 @@
         .tag-price { background: #2d1b4e; color: #f9c74f; }
         .tag-assortment { background: #1a2e1a; color: #90be6d; border: 1px solid #333; }
         .tag-support { background: #4a1a1a; color: #e94560; }
+        .tag-photo { background: #0f3460; color: #f9c74f; }
 
         .dims-grid {
             display: grid;
@@ -307,6 +345,29 @@
 
         .dims-grid .dim-label { color: #888; font-size: 10px; }
         .dims-grid .dim-value { color: #e0e0e0; font-family: monospace; }
+
+        .view-toggle {
+            display: flex;
+            gap: 2px;
+            background: #111;
+            border-radius: 4px;
+            padding: 2px;
+        }
+
+        .view-toggle button {
+            border: none;
+            background: transparent;
+            color: #888;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .view-toggle button.active {
+            background: #e94560;
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -316,8 +377,12 @@
         <h1>Photo Viewer</h1>
         <div class="sep"></div>
 
-        <label>Photo:</label>
-        <select id="photoSelect" onchange="loadPhoto(this.value)">
+        <div class="view-toggle">
+            <button class="active" onclick="setView('all')">All Photos</button>
+            <button onclick="setView('single')">Single</button>
+        </div>
+
+        <select id="photoSelect" style="display:none" onchange="loadSinglePhoto(this.value)">
             {% for p in photos %}
             <option value="{{ p }}">{{ p }}</option>
             {% endfor %}
@@ -326,41 +391,35 @@
         <div class="sep"></div>
 
         <label>
-            <input type="checkbox" id="showProducts" checked onchange="toggleLayer('products')">
+            <input type="checkbox" id="showProducts" checked onchange="renderAllOverlays()">
             Products
         </label>
         <label>
-            <input type="checkbox" id="showShelves" checked onchange="toggleLayer('shelves')">
+            <input type="checkbox" id="showShelves" checked onchange="renderAllOverlays()">
             Shelves
         </label>
         <label>
-            <input type="checkbox" id="showLabels" checked onchange="toggleLayer('labels')">
+            <input type="checkbox" id="showLabels" checked onchange="renderAllOverlays()">
             Labels
         </label>
 
         <div class="sep"></div>
 
         <div class="zoom-controls">
-            <button onclick="zoom(-0.1)" title="Zoom out">&minus;</button>
-            <span class="zoom-label" id="zoomLabel">50%</span>
-            <button onclick="zoom(0.1)" title="Zoom in">+</button>
-            <button onclick="zoomFit()" title="Fit to window">Fit</button>
+            <button onclick="zoomAll(-0.05)" title="Zoom out">&minus;</button>
+            <span class="zoom-label" id="zoomLabel">fit</span>
+            <button onclick="zoomAll(0.05)" title="Zoom in">+</button>
+            <button onclick="zoomFitAll()" title="Fit to window">Fit</button>
         </div>
 
         <div class="stats-bar">
-            <span>Products: <strong id="statProducts">0</strong></span>
-            <span>Shelves: <strong id="statShelves">0</strong></span>
-            <span id="statSource" style="display:none">Source: <strong id="statSourceVal"></strong></span>
+            <span>Photos: <strong id="statPhotos">0</strong></span>
+            <span>Total Products: <strong id="statProducts">0</strong></span>
         </div>
     </div>
 
     <div class="main-area">
-        <div class="canvas-wrap" id="canvasWrap">
-            <div class="canvas-inner" id="canvasInner">
-                <img id="photoImg" alt="Photo">
-                <svg id="overlaySvg" xmlns="http://www.w3.org/2000/svg"></svg>
-            </div>
-        </div>
+        <div class="photos-grid" id="photosGrid"></div>
 
         <div class="detail-panel" id="detailPanel">
             <h2>Details</h2>
@@ -369,7 +428,7 @@
             </div>
 
             <div class="product-list" id="productList">
-                <h3>Products on photo</h3>
+                <h3>All products across photos</h3>
                 <input type="text" class="search-input" id="searchInput" placeholder="Search products..." oninput="filterProductList()">
                 <div id="productListItems"></div>
             </div>
@@ -377,11 +436,15 @@
     </div>
 
     <script>
-    let photoData = null;
-    let currentScale = 0.5;
-    let imgNaturalW = 0;
-    let imgNaturalH = 0;
+    const PHOTOS = {{ photos | tojson }};
+    const photoDataMap = {};   // photoName → {products, shelves, source}
+    const photoScales = {};    // photoName → scale
+    const photoNaturalSizes = {}; // photoName → {w, h}
+
+    let currentView = 'all';
     let selectedId = null;
+    let selectedPhotoName = null;
+    let globalScale = null;    // will be computed on fit
 
     const PRODUCT_COLORS = {};
     const COLOR_PALETTE = [
@@ -399,55 +462,114 @@
         return PRODUCT_COLORS[art];
     }
 
-    function loadPhoto(name) {
-        const img = document.getElementById('photoImg');
-        img.onload = function() {
-            imgNaturalW = img.naturalWidth;
-            imgNaturalH = img.naturalHeight;
-            fetchData(name);
-            zoomFit();
-        };
-        img.src = `/demo-images/${name}.jpg`;
-    }
-
-    async function fetchData(name) {
-        const resp = await fetch(`/api/photo-data/${name}`);
-        photoData = await resp.json();
-
-        Object.keys(PRODUCT_COLORS).forEach(k => delete PRODUCT_COLORS[k]);
-
-        document.getElementById('statProducts').textContent = photoData.products.length;
-        document.getElementById('statShelves').textContent = photoData.shelves.length;
-
-        const srcEl = document.getElementById('statSource');
-        if (photoData.source === 'assortment') {
-            srcEl.style.display = '';
-            document.getElementById('statSourceVal').textContent = 'Assortment';
+    function setView(mode) {
+        currentView = mode;
+        document.querySelectorAll('.view-toggle button').forEach(b => b.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById('photoSelect').style.display = mode === 'single' ? '' : 'none';
+        if (mode === 'single') {
+            const sel = document.getElementById('photoSelect').value;
+            loadSinglePhoto(sel);
         } else {
-            srcEl.style.display = 'none';
+            loadAllPhotos();
         }
-
-        renderOverlay();
-        renderProductList();
-        clearSelection();
     }
 
-    function renderOverlay() {
-        const svg = document.getElementById('overlaySvg');
-        svg.setAttribute('width', imgNaturalW);
-        svg.setAttribute('height', imgNaturalH);
-        svg.setAttribute('viewBox', `0 0 ${imgNaturalW} ${imgNaturalH}`);
+    function loadSinglePhoto(name) {
+        buildGrid([name]);
+    }
+
+    async function loadAllPhotos() {
+        buildGrid(PHOTOS);
+    }
+
+    function buildGrid(photoNames) {
+        const grid = document.getElementById('photosGrid');
+        grid.innerHTML = '';
+
+        photoNames.forEach(name => {
+            const card = document.createElement('div');
+            card.className = 'photo-card';
+            card.id = `card-${name}`;
+            card.innerHTML = `
+                <div class="photo-title">${name}</div>
+                <div class="photo-stats" id="stats-${name}">Loading...</div>
+                <div class="canvas-inner" id="canvas-${name}">
+                    <img id="img-${name}" alt="${name}">
+                    <svg id="svg-${name}" xmlns="http://www.w3.org/2000/svg"></svg>
+                </div>
+            `;
+            grid.appendChild(card);
+
+            const img = document.getElementById(`img-${name}`);
+            img.onload = function() {
+                photoNaturalSizes[name] = { w: img.naturalWidth, h: img.naturalHeight };
+                fetchPhotoData(name).then(() => {
+                    zoomFitAll();
+                });
+            };
+            img.src = `/demo-images/${name}.jpg`;
+        });
+    }
+
+    async function fetchPhotoData(name) {
+        if (photoDataMap[name]) {
+            renderOverlay(name);
+            updateStats();
+            return;
+        }
+        const resp = await fetch(`/api/photo-data/${name}`);
+        photoDataMap[name] = await resp.json();
+        renderOverlay(name);
+        updateStats();
+        renderProductList();
+    }
+
+    function updateStats() {
+        const activePhotos = Object.keys(photoDataMap).filter(n =>
+            document.getElementById(`card-${n}`)
+        );
+        let totalProducts = 0;
+        activePhotos.forEach(n => {
+            if (photoDataMap[n]) totalProducts += photoDataMap[n].products.length;
+        });
+        document.getElementById('statPhotos').textContent = activePhotos.length;
+        document.getElementById('statProducts').textContent = totalProducts;
+    }
+
+    function renderAllOverlays() {
+        PHOTOS.forEach(name => {
+            if (photoDataMap[name] && document.getElementById(`svg-${name}`)) {
+                renderOverlay(name);
+            }
+        });
+    }
+
+    function renderOverlay(name) {
+        const data = photoDataMap[name];
+        if (!data) return;
+        const size = photoNaturalSizes[name];
+        if (!size) return;
+
+        const svg = document.getElementById(`svg-${name}`);
+        svg.setAttribute('width', size.w);
+        svg.setAttribute('height', size.h);
+        svg.setAttribute('viewBox', `0 0 ${size.w} ${size.h}`);
         svg.innerHTML = '';
 
         const showProducts = document.getElementById('showProducts').checked;
         const showShelves = document.getElementById('showShelves').checked;
         const showLabels = document.getElementById('showLabels').checked;
 
-        // Shelves (horizontal bands)
+        const statsEl = document.getElementById(`stats-${name}`);
+        if (statsEl) {
+            const src = data.source === 'assortment' ? ' (assortment)' : '';
+            statsEl.innerHTML = `Products: <strong>${data.products.length}</strong> &nbsp; Shelves: <strong>${data.shelves.length}</strong>${src}`;
+        }
+
         if (showShelves) {
             const gShelves = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            gShelves.id = 'layerShelves';
-            photoData.shelves.forEach((s, i) => {
+            data.shelves.forEach((s, i) => {
                 const y = Math.min(s.y1, s.y2);
                 const h = Math.abs(s.y2 - s.y1) || 6;
 
@@ -458,10 +580,11 @@
                 rect.setAttribute('height', h + 6);
                 rect.setAttribute('fill', 'rgba(0,180,216,0.2)');
                 rect.setAttribute('stroke', '#00b4d8');
-                rect.setAttribute('stroke-width', '3');
+                rect.setAttribute('stroke-width', '8');
                 rect.setAttribute('class', 'bbox-shelf');
                 rect.setAttribute('data-shelf-idx', i);
-                rect.onclick = () => selectShelf(i);
+                rect.setAttribute('data-photo', name);
+                rect.onclick = () => selectShelf(name, i);
                 gShelves.appendChild(rect);
 
                 if (showLabels) {
@@ -469,7 +592,7 @@
                     txt.setAttribute('x', s.x1 + 8);
                     txt.setAttribute('y', y - 8);
                     txt.setAttribute('fill', '#00b4d8');
-                    txt.setAttribute('font-size', '28');
+                    txt.setAttribute('font-size', '40');
                     txt.setAttribute('class', 'bbox-label');
                     txt.textContent = `Shelf ${i + 1}`;
                     gShelves.appendChild(txt);
@@ -478,11 +601,9 @@
             svg.appendChild(gShelves);
         }
 
-        // Products
         if (showProducts) {
             const gProducts = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            gProducts.id = 'layerProducts';
-            photoData.products.forEach((p, i) => {
+            data.products.forEach((p, i) => {
                 const color = getColorForArt(p.art);
                 const w = p.x2 - p.x1;
                 const h = p.y2 - p.y1;
@@ -494,19 +615,20 @@
                 rect.setAttribute('height', h);
                 rect.setAttribute('fill', color + '22');
                 rect.setAttribute('stroke', color);
-                rect.setAttribute('stroke-width', '3');
-                rect.setAttribute('rx', '3');
+                rect.setAttribute('stroke-width', '6');
+                rect.setAttribute('rx', '4');
                 rect.setAttribute('class', 'bbox-product');
                 rect.setAttribute('data-product-idx', i);
                 rect.setAttribute('data-product-id', p._id);
-                rect.style.opacity = selectedId === p._id ? '1' : '0.7';
-                rect.onclick = (e) => { e.stopPropagation(); selectProduct(i); };
+                rect.setAttribute('data-photo', name);
+                rect.style.opacity = (selectedId === p._id && selectedPhotoName === name) ? '1' : '0.7';
+                rect.onclick = (e) => { e.stopPropagation(); selectProduct(name, i); };
                 gProducts.appendChild(rect);
 
                 if (showLabels) {
                     const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
                     const displayName = p.display_name || p.art;
-                    const fontSize = Math.min(24, Math.max(11, w * 0.08));
+                    const fontSize = Math.min(36, Math.max(16, w * 0.12));
                     const labelW = Math.min(w, displayName.length * fontSize * 0.55 + 8);
                     const labelH = fontSize + 6;
                     labelBg.setAttribute('x', p.x1);
@@ -534,18 +656,16 @@
         highlightSelected();
     }
 
-    function toggleLayer() {
-        renderOverlay();
-    }
-
-    function selectProduct(idx) {
-        const p = photoData.products[idx];
+    function selectProduct(photoName, idx) {
+        const data = photoDataMap[photoName];
+        const p = data.products[idx];
         selectedId = p._id;
+        selectedPhotoName = photoName;
         const isRich = !!p.brand_name;
 
-        let html = '';
+        let html = `<span class="tag tag-photo">${photoName}</span><br><br>`;
         if (isRich) {
-            html = `
+            html += `
                 <div class="detail-header">
                     ${p.miniature_url ? `<img class="detail-thumb" src="${p.miniature_url}" alt="${p.display_name}" onerror="this.style.display='none'">` : ''}
                     <div class="detail-header-info">
@@ -605,7 +725,7 @@
                 </div>
             `;
         } else {
-            html = `
+            html += `
                 <div class="field">
                     <div class="field-label">Product Name</div>
                     <div class="field-value">${p.display_name || p.art}</div>
@@ -630,26 +750,24 @@
                     <div class="field-value">${(p.classification_score * 100).toFixed(1)}%</div>
                 </div>
                 <div class="field">
-                    <div class="field-label">Duplicated</div>
-                    <div class="field-value">${p.is_duplicated ? 'Yes' : 'No'}</div>
-                </div>
-                <div class="field">
                     <div class="field-label">ID</div>
                     <div class="field-value" style="font-family:monospace;font-size:10px">${p._id}</div>
                 </div>
             `;
         }
         document.getElementById('detailContent').innerHTML = html;
-
         highlightSelected();
         highlightListItem();
     }
 
-    function selectShelf(idx) {
-        const s = photoData.shelves[idx];
+    function selectShelf(photoName, idx) {
+        const data = photoDataMap[photoName];
+        const s = data.shelves[idx];
         selectedId = s._id;
+        selectedPhotoName = photoName;
 
         const html = `
+            <span class="tag tag-photo">${photoName}</span><br><br>
             <div class="field">
                 <div class="field-label">Type</div>
                 <div class="field-value">Shelf Line ${idx + 1}</div>
@@ -681,30 +799,36 @@
     function highlightSelected() {
         document.querySelectorAll('.bbox-product').forEach(el => {
             const id = el.getAttribute('data-product-id');
-            if (id === selectedId) {
-                el.setAttribute('stroke-width', '5');
+            const photo = el.getAttribute('data-photo');
+            if (id === selectedId && photo === selectedPhotoName) {
+                el.setAttribute('stroke-width', '10');
                 el.style.opacity = '1';
             } else {
-                el.setAttribute('stroke-width', '3');
+                el.setAttribute('stroke-width', '6');
                 el.style.opacity = '0.7';
             }
         });
 
         document.querySelectorAll('.bbox-shelf').forEach(el => {
             const idx = parseInt(el.getAttribute('data-shelf-idx'));
-            const s = photoData.shelves[idx];
-            if (s._id === selectedId) {
-                el.setAttribute('stroke-width', '5');
-                el.setAttribute('fill', 'rgba(0,180,216,0.35)');
-            } else {
-                el.setAttribute('stroke-width', '3');
-                el.setAttribute('fill', 'rgba(0,180,216,0.2)');
+            const photo = el.getAttribute('data-photo');
+            const data = photoDataMap[photo];
+            if (data) {
+                const s = data.shelves[idx];
+                if (s._id === selectedId && photo === selectedPhotoName) {
+                    el.setAttribute('stroke-width', '12');
+                    el.setAttribute('fill', 'rgba(0,180,216,0.35)');
+                } else {
+                    el.setAttribute('stroke-width', '8');
+                    el.setAttribute('fill', 'rgba(0,180,216,0.2)');
+                }
             }
         });
     }
 
     function clearSelection() {
         selectedId = null;
+        selectedPhotoName = null;
         document.getElementById('detailContent').innerHTML =
             '<div class="empty-state">Click a bounding box to see details</div>';
         highlightSelected();
@@ -712,18 +836,26 @@
     }
 
     function renderProductList() {
-        if (!photoData) return;
         const artCounts = {};
-        photoData.products.forEach(p => {
-            if (!artCounts[p.art]) {
-                artCounts[p.art] = {
-                    count: 0, display_name: p.display_name,
-                    miniature_url: p.miniature_url || '', ids: [],
-                    brand_name: p.brand_name || '',
-                };
-            }
-            artCounts[p.art].count++;
-            artCounts[p.art].ids.push(p._id);
+        PHOTOS.forEach(name => {
+            const data = photoDataMap[name];
+            if (!data) return;
+            data.products.forEach(p => {
+                const key = p.art;
+                if (!artCounts[key]) {
+                    artCounts[key] = {
+                        count: 0,
+                        display_name: p.display_name,
+                        miniature_url: p.miniature_url || '',
+                        brand_name: p.brand_name || '',
+                        photos: new Set(),
+                        firstPhoto: name,
+                        firstIdx: data.products.indexOf(p),
+                    };
+                }
+                artCounts[key].count++;
+                artCounts[key].photos.add(name);
+            });
         });
 
         const items = Object.entries(artCounts)
@@ -734,10 +866,11 @@
             const thumb = info.miniature_url
                 ? `<img class="thumb" src="${info.miniature_url}" alt="" onerror="this.style.display='none'">`
                 : `<span class="color-dot" style="background:${getColorForArt(art)}"></span>`;
+            const photoCount = info.photos.size > 1 ? ` <span style="font-size:9px;color:#f9c74f">(${info.photos.size} photos)</span>` : '';
             return `
-                <div class="product-list-item" data-art="${art}" onclick="selectByArt('${art}')">
+                <div class="product-list-item" data-art="${art}" data-photo="${info.firstPhoto}" onclick="selectByArt('${art}')">
                     ${thumb}
-                    <span style="flex:1">${info.display_name}${info.brand_name ? `<br><span style="font-size:9px;color:#888">${info.brand_name}</span>` : ''}</span>
+                    <span style="flex:1">${info.display_name}${info.brand_name ? `<br><span style="font-size:9px;color:#888">${info.brand_name}</span>` : ''}${photoCount}</span>
                     <span style="color:#888">&times;${info.count}</span>
                 </div>
             `;
@@ -745,19 +878,29 @@
     }
 
     function selectByArt(art) {
-        const idx = photoData.products.findIndex(p => p.art === art);
-        if (idx >= 0) selectProduct(idx);
+        for (const name of PHOTOS) {
+            const data = photoDataMap[name];
+            if (!data) continue;
+            const idx = data.products.findIndex(p => p.art === art);
+            if (idx >= 0) {
+                selectProduct(name, idx);
+                return;
+            }
+        }
     }
 
     function highlightListItem() {
         document.querySelectorAll('.product-list-item').forEach(el => {
             el.classList.remove('selected');
         });
-        if (selectedId) {
-            const p = photoData.products.find(pp => pp._id === selectedId);
-            if (p) {
-                const el = document.querySelector(`.product-list-item[data-art="${p.art}"]`);
-                if (el) el.classList.add('selected');
+        if (selectedId && selectedPhotoName) {
+            const data = photoDataMap[selectedPhotoName];
+            if (data) {
+                const p = data.products.find(pp => pp._id === selectedId);
+                if (p) {
+                    const el = document.querySelector(`.product-list-item[data-art="${p.art}"]`);
+                    if (el) el.classList.add('selected');
+                }
             }
         }
     }
@@ -765,52 +908,71 @@
     function filterProductList() {
         const q = document.getElementById('searchInput').value.toLowerCase();
         document.querySelectorAll('.product-list-item').forEach(el => {
-            const art = el.getAttribute('data-art');
             const text = el.textContent.toLowerCase();
-            el.style.display = (!q || text.includes(q) || art.includes(q)) ? '' : 'none';
+            el.style.display = (!q || text.includes(q)) ? '' : 'none';
         });
     }
 
-    // Zoom
-    function applyScale() {
-        const inner = document.getElementById('canvasInner');
-        inner.style.transform = `scale(${currentScale})`;
-        document.getElementById('zoomLabel').textContent = Math.round(currentScale * 100) + '%';
+    // Zoom: set actual image width so layout reflows properly for scrolling
+    function applyScaleToPhoto(name, scale) {
+        const img = document.getElementById(`img-${name}`);
+        const size = photoNaturalSizes[name];
+        if (!img || !size) return;
+        const w = Math.round(size.w * scale);
+        const h = Math.round(size.h * scale);
+        img.style.width = w + 'px';
+        img.style.height = h + 'px';
+        photoScales[name] = scale;
     }
 
-    function zoom(delta) {
-        currentScale = Math.max(0.1, Math.min(3, currentScale + delta));
-        applyScale();
+    function zoomAll(delta) {
+        if (globalScale === null) globalScale = 0.3;
+        globalScale = Math.max(0.05, Math.min(2, globalScale + delta));
+        PHOTOS.forEach(name => {
+            if (document.getElementById(`canvas-${name}`)) {
+                applyScaleToPhoto(name, globalScale);
+            }
+        });
+        document.getElementById('zoomLabel').textContent = Math.round(globalScale * 100) + '%';
     }
 
-    function zoomFit() {
-        const wrap = document.getElementById('canvasWrap');
-        if (!imgNaturalW || !imgNaturalH) return;
-        const fitW = (wrap.clientWidth - 20) / imgNaturalW;
-        const fitH = (wrap.clientHeight - 20) / imgNaturalH;
-        currentScale = Math.min(fitW, fitH, 1);
-        applyScale();
+    function zoomFitAll() {
+        const grid = document.getElementById('photosGrid');
+        const gridW = grid.clientWidth - 8;
+        const visiblePhotos = PHOTOS.filter(n => document.getElementById(`card-${n}`));
+
+        // Fit each photo to the grid width so they scroll vertically
+        let fitScale = 1;
+        visiblePhotos.forEach(name => {
+            const size = photoNaturalSizes[name];
+            if (!size) return;
+            const s = Math.min(gridW / size.w, 1);
+            fitScale = Math.min(fitScale, s);
+        });
+
+        globalScale = fitScale;
+        visiblePhotos.forEach(name => applyScaleToPhoto(name, globalScale));
+        document.getElementById('zoomLabel').textContent = Math.round(globalScale * 100) + '%';
     }
 
-    // Mouse wheel zoom
-    document.getElementById('canvasWrap').addEventListener('wheel', (e) => {
+    // Mouse wheel zoom on grid
+    document.getElementById('photosGrid').addEventListener('wheel', (e) => {
         e.preventDefault();
-        const delta = e.deltaY > 0 ? -0.05 : 0.05;
-        zoom(delta);
+        const delta = e.deltaY > 0 ? -0.02 : 0.02;
+        zoomAll(delta);
     }, { passive: false });
 
     // Click on empty space to deselect
-    document.getElementById('canvasWrap').addEventListener('click', (e) => {
-        if (e.target === document.getElementById('photoImg') ||
-            e.target === document.getElementById('canvasWrap')) {
+    document.getElementById('photosGrid').addEventListener('click', (e) => {
+        if (e.target.tagName === 'IMG' || e.target.classList.contains('photos-grid') ||
+            e.target.classList.contains('photo-card')) {
             clearSelection();
         }
     });
 
     // Initial load
-    const photos = {{ photos | tojson }};
-    if (photos.length > 0) {
-        loadPhoto(photos[0]);
+    if (PHOTOS.length > 0) {
+        loadAllPhotos();
     }
     </script>
 </body>
