@@ -423,7 +423,8 @@
 
         <div class="stats-bar">
             <span>Photos: <strong id="statPhotos">0</strong></span>
-            <span>Total Products: <strong id="statProducts">0</strong></span>
+            <span>Unique SKUs: <strong id="statUnique">0</strong></span>
+            <span>Facings: <strong id="statProducts">0</strong></span>
         </div>
 
         <div class="sep"></div>
@@ -546,12 +547,17 @@
         const activePhotos = Object.keys(photoDataMap).filter(n =>
             document.getElementById(`card-${n}`)
         );
-        let totalProducts = 0;
+        let totalFacings = 0;
+        const uniqueArts = new Set();
         activePhotos.forEach(n => {
-            if (photoDataMap[n]) totalProducts += photoDataMap[n].products.length;
+            const data = photoDataMap[n];
+            if (!data) return;
+            totalFacings += data.products.length;
+            data.products.forEach(p => uniqueArts.add(p.art));
         });
         document.getElementById('statPhotos').textContent = activePhotos.length;
-        document.getElementById('statProducts').textContent = totalProducts;
+        document.getElementById('statUnique').textContent = uniqueArts.size;
+        document.getElementById('statProducts').textContent = totalFacings;
     }
 
     function renderAllOverlays() {
@@ -580,8 +586,8 @@
 
         const statsEl = document.getElementById(`stats-${name}`);
         if (statsEl) {
-            const src = data.source === 'assortment' ? ' (assortment)' : '';
-            statsEl.innerHTML = `Products: <strong>${data.products.length}</strong> &nbsp; Shelves: <strong>${data.shelves.length}</strong>${src}`;
+            const uniqueInPhoto = new Set(data.products.map(p => p.art)).size;
+            statsEl.innerHTML = `SKUs: <strong>${uniqueInPhoto}</strong> &nbsp; Facings: <strong>${data.products.length}</strong> &nbsp; Shelves: <strong>${data.shelves.length}</strong>`;
         }
 
         if (showShelves) {
