@@ -732,97 +732,79 @@
         selectedArt = p.art;
         const isRich = !!p.brand_name;
 
-        let html = `<span class="tag tag-photo">${photoName}</span><br><br>`;
-        if (isRich) {
-            html += `
-                <div class="detail-header">
-                    ${p.miniature_url ? `<img class="detail-thumb" src="${p.miniature_url}" alt="${p.display_name}" onerror="this.style.display='none'">` : ''}
-                    <div class="detail-header-info">
-                        <div class="field-value" style="font-weight:600;font-size:13px;margin-bottom:4px">${p.display_name || p.art}</div>
-                        <div style="margin-bottom:4px">
-                            <span class="tag tag-brand">${p.brand_name}</span>
-                            <span class="tag tag-category">${p.category_name}</span>
-                        </div>
-                        ${p.price ? `<span class="tag tag-price">${p.price} ₽</span>` : ''}
-                        ${p.is_support ? `<span class="tag tag-support">Support</span>` : ''}
+        // Count facings across all photos for this art
+        let totalPhotoFacings = 0;
+        const photoBreakdown = [];
+        PHOTOS.forEach(name => {
+            const d = photoDataMap[name];
+            if (!d) return;
+            const cnt = d.products.filter(pp => pp.art === p.art).length;
+            if (cnt > 0) {
+                totalPhotoFacings += cnt;
+                photoBreakdown.push({ name, count: cnt });
+            }
+        });
+        const pf = planogramFacings[p.art];
+        const inPlano = !!pf;
+        const planoFacings = pf ? pf.facings_wide : 0;
+
+        let html = '';
+
+        // Header with thumbnail and name
+        const displayName = p.display_name || p.art;
+        const thumbUrl = p.miniature_url || '';
+        html += `
+            <div class="detail-header">
+                ${thumbUrl ? `<img class="detail-thumb" src="${thumbUrl}" alt="${displayName}" onerror="this.style.display='none'">` : ''}
+                <div class="detail-header-info">
+                    <div class="field-value" style="font-weight:600;font-size:13px;margin-bottom:4px">${displayName}</div>
+                    <div style="margin-bottom:4px">
+                        ${p.brand_name ? `<span class="tag tag-brand">${p.brand_name}</span>` : ''}
+                        ${p.category_name ? `<span class="tag tag-category">${p.category_name}</span>` : ''}
                     </div>
+                    ${p.price ? `<span class="tag tag-price">${p.price} ₽</span>` : ''}
                 </div>
-                <div class="field">
-                    <div class="field-label">Full Name</div>
-                    <div class="field-value">${p.full_name}</div>
-                </div>
-                <div class="field">
-                    <div class="field-label">Brand Owner</div>
-                    <div class="field-value">${p.brand_owner_name}</div>
-                </div>
-                ${p.sub_brand_name ? `<div class="field">
-                    <div class="field-label">Sub-brand</div>
-                    <div class="field-value">${p.sub_brand_name}</div>
-                </div>` : ''}
-                <div class="field">
-                    <div class="field-label">Dimensions (cm)</div>
-                    <div class="dims-grid">
-                        <span class="dim-label">Width</span><span class="dim-value">${p.facing_width_cm.toFixed(1)}</span>
-                        <span class="dim-label">Height</span><span class="dim-value">${p.facing_height_cm.toFixed(1)}</span>
-                    </div>
-                </div>
-                <div class="field">
-                    <div class="field-label">Position</div>
-                    <div class="dims-grid">
-                        <span class="dim-label">Shelf (line)</span><span class="dim-value">${p.line}</span>
-                        <span class="dim-label">Group</span><span class="dim-value">${p.numgroup}</span>
-                    </div>
-                </div>
-                ${p.barcode ? `<div class="field">
-                    <div class="field-label">Barcode</div>
-                    <div class="field-value" style="font-family:monospace;font-size:11px">${p.barcode}</div>
-                </div>` : ''}
-                <div class="field">
-                    <div class="field-label">Bounding Box</div>
-                    <div class="field-value" style="font-family:monospace">
-                        (${p.x1}, ${p.y1}) &rarr; (${p.x2}, ${p.y2})
-                        <br>${p.x2 - p.x1} &times; ${p.y2 - p.y1} px
-                    </div>
-                </div>
-                <div class="field">
-                    <div class="field-label">Assortment Group</div>
-                    <div class="field-value">${p.assortment_group}${p.start_group ? ' (start)' : ''}</div>
-                </div>
-                <div class="field">
-                    <div class="field-label">ID</div>
-                    <div class="field-value" style="font-family:monospace;font-size:10px">${p._id}</div>
-                </div>
-            `;
+            </div>
+        `;
+
+        // Planogram status
+        html += `<div class="field" style="margin-bottom:12px">`;
+        if (inPlano) {
+            html += `<span class="tag-plano" style="font-size:11px;padding:3px 8px">In Planogram</span>`;
         } else {
-            html += `
-                <div class="field">
-                    <div class="field-label">Product Name</div>
-                    <div class="field-value">${p.display_name || p.art}</div>
+            html += `<span class="tag-alert" style="font-size:11px;padding:3px 8px">Not in Planogram</span>`;
+        }
+        html += `</div>`;
+
+        // Facings comparison
+        html += `
+            <div class="field">
+                <div class="field-label">Facings Comparison</div>
+                <div class="dims-grid" style="margin-top:4px">
+                    <span class="dim-label">Planogram</span><span class="dim-value">${inPlano ? planoFacings : '—'}</span>
+                    <span class="dim-label">On Shelf (photos)</span><span class="dim-value">${totalPhotoFacings}</span>
                 </div>
-                ${p.full_name ? `<div class="field">
-                    <div class="field-label">Full Name</div>
-                    <div class="field-value">${p.full_name}</div>
-                </div>` : ''}
-                <div class="field">
-                    <div class="field-label">Article</div>
-                    <div class="field-value" style="font-family:monospace;font-size:11px">${p.art}</div>
-                </div>
-                <div class="field">
-                    <div class="field-label">Bounding Box</div>
-                    <div class="field-value" style="font-family:monospace">
-                        (${p.x1}, ${p.y1}) &rarr; (${p.x2}, ${p.y2})
-                        <br>${p.x2 - p.x1} &times; ${p.y2 - p.y1} px
-                    </div>
-                </div>
-                <div class="field">
-                    <div class="field-label">Classification Score</div>
-                    <div class="field-value">${(p.classification_score * 100).toFixed(1)}%</div>
-                </div>
-                <div class="field">
-                    <div class="field-label">ID</div>
-                    <div class="field-value" style="font-family:monospace;font-size:10px">${p._id}</div>
-                </div>
-            `;
+            </div>
+        `;
+
+        // Per-photo breakdown
+        if (photoBreakdown.length > 0) {
+            html += `<div class="field"><div class="field-label">Per Photo</div>`;
+            photoBreakdown.forEach(pb => {
+                html += `<div style="font-size:11px;color:#ccc;margin-top:2px">${pb.name}: <strong>${pb.count}</strong> facing${pb.count > 1 ? 's' : ''}</div>`;
+            });
+            html += `</div>`;
+        }
+
+        // Key product info
+        if (p.full_name) {
+            html += `<div class="field"><div class="field-label">Full Name</div><div class="field-value" style="font-size:11px">${p.full_name}</div></div>`;
+        }
+        if (p.barcode) {
+            html += `<div class="field"><div class="field-label">Barcode</div><div class="field-value" style="font-family:monospace;font-size:11px">${p.barcode}</div></div>`;
+        }
+        if (p.facing_width_cm) {
+            html += `<div class="field"><div class="field-label">Size (cm)</div><div class="field-value" style="font-size:11px">${p.facing_width_cm.toFixed(1)} × ${p.facing_height_cm.toFixed(1)}</div></div>`;
         }
         document.getElementById('detailContent').innerHTML = html;
         highlightSelected();
