@@ -218,6 +218,163 @@
     color: var(--text);
 }
 
+/* CLOUD PLANOGRAM BROWSER */
+.cloud-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.65);
+    z-index: 1200;
+    justify-content: center;
+    align-items: center;
+}
+.cloud-overlay.open { display: flex; }
+
+.cloud-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: 640px;
+    max-width: 94vw;
+    max-height: 80vh;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.cloud-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+}
+.cloud-header h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.cloud-body {
+    padding: 16px 24px 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.cloud-loading, .cloud-empty {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+    padding: 32px 0;
+}
+
+.cloud-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cloud-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-dark, #1a1a2e);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    transition: border-color 0.15s;
+}
+.cloud-item:hover {
+    border-color: var(--accent);
+}
+
+.cloud-item-info { flex: 1; min-width: 0; }
+
+.cloud-item-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cloud-item-meta {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 3px;
+}
+
+.cloud-item-date {
+    font-size: 10px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    margin-top: 2px;
+}
+
+.cloud-item-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.btn-sm {
+    padding: 5px 14px !important;
+    font-size: 12px !important;
+    border-radius: 6px;
+}
+
+.btn-accent-green {
+    background: var(--accent-green, #34d399);
+    color: #fff;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.btn-accent-green:hover { opacity: 0.85; }
+
+.btn-danger {
+    background: var(--accent-red, #ef4444);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: opacity 0.15s;
+}
+.btn-danger:hover { opacity: 0.85; }
+
+/* SAVE SUCCESS TOAST */
+.save-toast {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(52, 211, 153, 0.15);
+    border: 1px solid var(--accent-green, #34d399);
+    color: var(--accent-green, #34d399);
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 2100;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    display: none;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.save-toast.active {
+    display: block;
+    opacity: 1;
+}
+
 /* ERROR TOAST */
 .error-toast {
     position: fixed;

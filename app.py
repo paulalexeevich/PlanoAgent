@@ -47,21 +47,34 @@ current_compliance = None     # Compliance report (for DT tracking)
 current_decision_tree = None  # Decision tree definition
 
 
-def _save_state():
-    """Persist current planogram + summary + decision tree + compliance to disk."""
+def _save_state(also_supabase: bool = False):
+    """Persist current planogram + summary + decision tree + compliance to disk.
+
+    When also_supabase=True, also push to the Supabase planograms table.
+    """
     if current_planogram is None:
         return
+    def _as_dict(obj):
+        if obj is None:
+            return None
+        return obj.to_dict() if hasattr(obj, "to_dict") else obj
+
     payload = {
         "planogram": current_planogram.to_dict(),
         "summary": current_summary,
-        "decision_tree": current_decision_tree.to_dict() if current_decision_tree else None,
-        "compliance": current_compliance.to_dict() if current_compliance else None,
+        "decision_tree": _as_dict(current_decision_tree),
+        "compliance": _as_dict(current_compliance),
     }
     try:
         with open(CURRENT_PLANOGRAM_FILE, 'w') as f:
             json.dump(payload, f, indent=2, default=str)
     except Exception as e:
         print(f"[save] Failed to write {CURRENT_PLANOGRAM_FILE}: {e}", flush=True)
+
+    if also_supabase:
+        _save_planogram_to_supabase(
+            current_planogram, current_summary, current_decision_tree, current_compliance
+        )
 
 
 def _load_saved_state() -> bool:
@@ -457,8 +470,8 @@ def get_planogram():
     return jsonify({
         "planogram": current_planogram.to_dict(),
         "summary": current_summary,
-        "decision_tree": current_decision_tree.to_dict() if current_decision_tree else None,
-        "compliance": current_compliance.to_dict() if current_compliance else None,
+        "decision_tree": current_decision_tree.to_dict() if hasattr(current_decision_tree, 'to_dict') and current_decision_tree else current_decision_tree,
+        "compliance": current_compliance.to_dict() if hasattr(current_compliance, 'to_dict') and current_compliance else current_compliance,
     })
 
 
@@ -516,7 +529,7 @@ def remove_products():
     return jsonify({
         "planogram": current_planogram.to_dict(),
         "summary": current_summary,
-        "decision_tree": current_decision_tree.to_dict() if current_decision_tree else None,
+        "decision_tree": current_decision_tree.to_dict() if hasattr(current_decision_tree, 'to_dict') and current_decision_tree else current_decision_tree,
         "compliance": None,
         "status": "success",
         "source": "equipment_only",
@@ -1002,6 +1015,125 @@ def _supabase_get(table: str, params: dict | None = None) -> list:
     return resp.json()
 
 
+def _supabase_post(table: str, data: dict) -> dict:
+    """POST a row to a Supabase table, returning the created row."""
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    headers = {**_SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "return=representation"}
+    resp = http_requests.post(url, headers=headers, json=data, timeout=15)
+    resp.raise_for_status()
+    rows = resp.json()
+    return rows[0] if rows else data
+
+
+def _supabase_patch(table: str, params: dict, data: dict) -> dict:
+    """PATCH (update) rows matching params in a Supabase table."""
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    headers = {**_SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "return=representation"}
+    resp = http_requests.patch(url, headers=headers, params=params, json=data, timeout=15)
+    resp.raise_for_status()
+    rows = resp.json()
+    return rows[0] if rows else data
+
+
+# ── Supabase Planogram Persistence ────────────────────────────────────────────
+
+
+def _save_planogram_to_supabase(
+    planogram_obj, summary=None, decision_tree=None, compliance=None
+) -> dict | None:
+    """Save (upsert) current planogram to the planograms table.
+
+    Uses planogram_id to decide insert vs update: if a row with matching
+    planogram_id already exists, it is updated; otherwise a new row is created.
+    """
+    if planogram_obj is None:
+        return None
+
+    plano = planogram_obj.to_dict()
+    eq = planogram_obj.equipment
+
+    row = {
+        "planogram_id": plano["id"],
+        "name": plano["name"],
+        "category": plano.get("category", ""),
+        "store_type": plano.get("store_type", ""),
+        "effective_date": plano.get("effective_date"),
+        "total_products": planogram_obj.total_products(),
+        "total_positions": planogram_obj.total_positions(),
+        "total_facings": planogram_obj.total_facings(),
+        "equipment_type": eq.equipment_type if eq else None,
+        "num_bays": len(eq.bays) if eq else 0,
+        "num_shelves": eq.total_shelves if eq else 0,
+        "planogram_data": plano,
+        "summary_data": summary,
+        "decision_tree_data": decision_tree.to_dict() if hasattr(decision_tree, "to_dict") and decision_tree else decision_tree,
+        "compliance_data": compliance.to_dict() if hasattr(compliance, "to_dict") and compliance else compliance,
+    }
+
+    from datetime import datetime, timezone
+    row["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    try:
+        existing = _supabase_get("planograms", {
+            "select": "id",
+            "planogram_id": f"eq.{plano['id']}",
+            "order": "created_at.desc",
+            "limit": "1",
+        })
+        if existing:
+            result = _supabase_patch("planograms", {"id": f"eq.{existing[0]['id']}"}, row)
+            print(f"[supabase] Updated planogram {plano['id']} (row {existing[0]['id']})", flush=True)
+        else:
+            result = _supabase_post("planograms", row)
+            print(f"[supabase] Saved new planogram {plano['id']}", flush=True)
+        return result
+    except Exception as e:
+        print(f"[supabase] Failed to save planogram: {e}", flush=True)
+        return None
+
+
+def _list_planograms_from_supabase(limit: int = 50) -> list:
+    """List saved planograms (metadata only, no full data)."""
+    try:
+        return _supabase_get("planograms", {
+            "select": "id,planogram_id,name,category,store_type,equipment_type,"
+                      "num_bays,num_shelves,total_products,total_positions,"
+                      "total_facings,created_at,updated_at",
+            "order": "updated_at.desc",
+            "limit": str(limit),
+        })
+    except Exception as e:
+        print(f"[supabase] Failed to list planograms: {e}", flush=True)
+        return []
+
+
+def _load_planogram_from_supabase(row_id: int) -> dict | None:
+    """Load a single planogram (full data) by row id."""
+    try:
+        rows = _supabase_get("planograms", {
+            "select": "*",
+            "id": f"eq.{row_id}",
+            "limit": "1",
+        })
+        return rows[0] if rows else None
+    except Exception as e:
+        print(f"[supabase] Failed to load planogram {row_id}: {e}", flush=True)
+        return None
+
+
+def _delete_planogram_from_supabase(row_id: int) -> bool:
+    """Delete a planogram row by id."""
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/planograms?id=eq.{row_id}"
+        resp = http_requests.delete(url, headers=_SUPABASE_HEADERS, timeout=10)
+        resp.raise_for_status()
+        print(f"[supabase] Deleted planogram row {row_id}", flush=True)
+        return True
+    except Exception as e:
+        print(f"[supabase] Failed to delete planogram {row_id}: {e}", flush=True)
+        return False
+
+
 def _supabase_photo_list() -> list[str]:
     """Return distinct photo_names stored in recognition_photos."""
     rows = _supabase_get("recognition_photos", {"select": "photo_name", "order": "photo_name"})
@@ -1285,6 +1417,83 @@ def load_demo_csv():
             "status": "error",
             "error": str(e),
         }), 400
+
+
+# ── Supabase Planogram API Endpoints ──────────────────────────────────────────
+
+
+@app.route("/api/planogram/save", methods=["POST"])
+def save_planogram_to_cloud():
+    """Save the current planogram to Supabase.
+
+    Optional JSON body: { "name": "custom name" }
+    """
+    global current_planogram
+
+    if current_planogram is None:
+        return jsonify({"status": "error", "error": "No planogram loaded"}), 400
+
+    data = request.json or {}
+    if "name" in data:
+        current_planogram = Planogram.from_dict({
+            **current_planogram.to_dict(),
+            "name": data["name"],
+        })
+
+    result = _save_planogram_to_supabase(
+        current_planogram, current_summary, current_decision_tree, current_compliance
+    )
+    if result:
+        return jsonify({"status": "success", "saved": result})
+    return jsonify({"status": "error", "error": "Failed to save to Supabase"}), 502
+
+
+@app.route("/api/planogram/list")
+def list_cloud_planograms():
+    """List all planograms saved in Supabase (metadata only)."""
+    limit = request.args.get("limit", 50, type=int)
+    rows = _list_planograms_from_supabase(limit)
+    return jsonify({"status": "success", "planograms": rows})
+
+
+@app.route("/api/planogram/load/<int:row_id>", methods=["POST"])
+def load_planogram_from_cloud(row_id):
+    """Load a planogram from Supabase by row id and set it as current."""
+    global current_planogram, current_summary, current_equipment
+    global current_compliance, current_decision_tree
+
+    row = _load_planogram_from_supabase(row_id)
+    if not row:
+        return jsonify({"status": "error", "error": f"Planogram {row_id} not found"}), 404
+
+    plano_data = row["planogram_data"]
+    current_planogram = Planogram.from_dict(plano_data)
+    current_summary = row.get("summary_data") or generate_summary(current_planogram, _full_catalog_size())
+
+    from dataclasses import asdict
+    current_equipment = asdict(current_planogram.equipment) if current_planogram.equipment else None
+
+    current_decision_tree = row.get("decision_tree_data")
+    current_compliance = row.get("compliance_data")
+
+    _save_state()
+
+    return jsonify({
+        "status": "success",
+        "planogram": current_planogram.to_dict(),
+        "summary": current_summary,
+        "decision_tree": current_decision_tree.to_dict() if hasattr(current_decision_tree, 'to_dict') and current_decision_tree else current_decision_tree,
+        "compliance": current_compliance.to_dict() if hasattr(current_compliance, 'to_dict') and current_compliance else current_compliance,
+    })
+
+
+@app.route("/api/planogram/delete/<int:row_id>", methods=["DELETE"])
+def delete_cloud_planogram(row_id):
+    """Delete a planogram from Supabase by row id."""
+    ok = _delete_planogram_from_supabase(row_id)
+    if ok:
+        return jsonify({"status": "success"})
+    return jsonify({"status": "error", "error": "Failed to delete"}), 502
 
 
 # Load persisted state on startup; fall back to generating from defaults

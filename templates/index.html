@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Planogram Agent — {{ mode|capitalize }}</title>
-    <link rel="stylesheet" href="/static/css/base.css?v=46">
-    <link rel="stylesheet" href="/static/css/components.css?v=46">
-    <link rel="stylesheet" href="/static/css/controls.css?v=46">
-    <link rel="stylesheet" href="/static/css/bay-renderer.css?v=46">
-    <link rel="stylesheet" href="/static/css/planogram.css?v=46">
-    <link rel="stylesheet" href="/static/css/dashboard.css?v=46">
-    <link rel="stylesheet" href="/static/css/modals.css?v=46">
-    <link rel="stylesheet" href="/static/css/layers.css?v=46">
-    <link rel="stylesheet" href="/static/css/equipment-editor.css?v=46">
+    <link rel="stylesheet" href="/static/css/base.css?v=47">
+    <link rel="stylesheet" href="/static/css/components.css?v=47">
+    <link rel="stylesheet" href="/static/css/controls.css?v=47">
+    <link rel="stylesheet" href="/static/css/bay-renderer.css?v=47">
+    <link rel="stylesheet" href="/static/css/planogram.css?v=47">
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=47">
+    <link rel="stylesheet" href="/static/css/modals.css?v=47">
+    <link rel="stylesheet" href="/static/css/layers.css?v=47">
+    <link rel="stylesheet" href="/static/css/equipment-editor.css?v=47">
 </head>
 <body>
     <!-- HEADER -->
@@ -42,6 +42,8 @@
                 <span id="scaleValue">5px/in</span>
             </div>
             <button class="btn btn-secondary" onclick="toggleJSON()">View JSON</button>
+            <button class="btn btn-accent-green" onclick="savePlanogramToCloud()" title="Save to Supabase">&#9729; Save</button>
+            <button class="btn btn-secondary" onclick="openCloudBrowser()" title="Load from Supabase">&#9729; Load</button>
             {% if mode == 'beer' %}
             <button class="btn btn-secondary btn-settings" onclick="openSettings()" title="Settings">&#9881;</button>
             {% endif %}
@@ -387,20 +389,35 @@
     </div>
     {% endif %}
 
+    <!-- CLOUD PLANOGRAM BROWSER MODAL -->
+    <div class="cloud-overlay" id="cloudOverlay" onclick="if(event.target===this)closeCloudBrowser()">
+        <div class="cloud-card">
+            <div class="cloud-header">
+                <h2>Saved Planograms</h2>
+                <button class="settings-close" onclick="closeCloudBrowser()">&times;</button>
+            </div>
+            <div class="cloud-body">
+                <div class="cloud-loading" id="cloudLoading">Loading...</div>
+                <div class="cloud-empty" id="cloudEmpty" style="display:none">No saved planograms yet.</div>
+                <div class="cloud-list" id="cloudList"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- JS: load order matters (state first, app.js last) -->
     <script>const APP_MODE = '{{ mode }}';</script>
-    <script src="/static/js/state.js?v=46"></script>
-    <script src="/static/js/utils.js?v=46"></script>
-    <script src="/static/js/tooltip.js?v=46"></script>
-    <script src="/static/js/layer-system.js?v=46"></script>
-    <script src="/static/js/bay-renderer.js?v=46"></script>
-    <script src="/static/js/planogram-renderer.js?v=46"></script>
-    <script src="/static/js/bay-config.js?v=46"></script>
-    <script src="/static/js/compare.js?v=46"></script>
-    <script src="/static/js/dashboard.js?v=46"></script>
-    <script src="/static/js/api.js?v=46"></script>
-    <script src="/static/js/settings.js?v=46"></script>
-    <script src="/static/js/equipment-editor.js?v=46"></script>
-    <script src="/static/js/app.js?v=46"></script>
+    <script src="/static/js/state.js?v=47"></script>
+    <script src="/static/js/utils.js?v=47"></script>
+    <script src="/static/js/tooltip.js?v=47"></script>
+    <script src="/static/js/layer-system.js?v=47"></script>
+    <script src="/static/js/bay-renderer.js?v=47"></script>
+    <script src="/static/js/planogram-renderer.js?v=47"></script>
+    <script src="/static/js/bay-config.js?v=47"></script>
+    <script src="/static/js/compare.js?v=47"></script>
+    <script src="/static/js/dashboard.js?v=47"></script>
+    <script src="/static/js/api.js?v=47"></script>
+    <script src="/static/js/settings.js?v=47"></script>
+    <script src="/static/js/equipment-editor.js?v=47"></script>
+    <script src="/static/js/app.js?v=47"></script>
 </body>
 </html>

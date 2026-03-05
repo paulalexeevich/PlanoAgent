@@ -147,6 +147,146 @@ async function removeProducts() {
     showLoading(false);
 }
 
+/* ── Cloud (Supabase) Save / Load ─────────────────────────────── */
+
+async function savePlanogramToCloud() {
+    if (!planogramData) {
+        showError('No planogram to save');
+        return;
+    }
+    showLoading(true, 'Saving planogram to cloud...');
+    hideError();
+    try {
+        const res = await fetch('/api/planogram/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: planogramData.name || 'Planogram' })
+        });
+        const data = await res.json();
+        if (data.status === 'error') throw new Error(data.error);
+        showSaveToast('Planogram saved to cloud');
+    } catch (err) {
+        console.error('Cloud save failed:', err);
+        showError('Cloud save failed: ' + err.message);
+    }
+    showLoading(false);
+}
+
+function showSaveToast(msg) {
+    let toast = document.getElementById('saveToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'saveToast';
+        toast.className = 'save-toast';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.classList.add('active');
+    setTimeout(() => toast.classList.remove('active'), 3000);
+}
+
+async function openCloudBrowser() {
+    const overlay = document.getElementById('cloudOverlay');
+    overlay.classList.add('open');
+    document.getElementById('cloudLoading').style.display = 'block';
+    document.getElementById('cloudEmpty').style.display = 'none';
+    document.getElementById('cloudList').innerHTML = '';
+
+    try {
+        const res = await fetch('/api/planogram/list');
+        const data = await res.json();
+        const rows = data.planograms || [];
+        document.getElementById('cloudLoading').style.display = 'none';
+
+        if (rows.length === 0) {
+            document.getElementById('cloudEmpty').style.display = 'block';
+            return;
+        }
+
+        const list = document.getElementById('cloudList');
+        rows.forEach(row => {
+            const card = document.createElement('div');
+            card.className = 'cloud-item';
+            const dateStr = new Date(row.updated_at).toLocaleString();
+            card.innerHTML = `
+                <div class="cloud-item-info">
+                    <div class="cloud-item-name">${esc(row.name)}</div>
+                    <div class="cloud-item-meta">
+                        ${esc(row.category || '')} &middot; ${esc(row.equipment_type || '')}
+                        &middot; ${row.num_bays || 0} bays &middot; ${row.num_shelves || 0} shelves
+                        &middot; ${row.total_products || 0} SKUs &middot; ${row.total_facings || 0} facings
+                    </div>
+                    <div class="cloud-item-date">${dateStr}</div>
+                </div>
+                <div class="cloud-item-actions">
+                    <button class="btn btn-primary btn-sm" onclick="loadFromCloud(${row.id})">Load</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteFromCloud(${row.id}, this)">Delete</button>
+                </div>
+            `;
+            list.appendChild(card);
+        });
+    } catch (err) {
+        document.getElementById('cloudLoading').textContent = 'Failed to load: ' + err.message;
+    }
+}
+
+function closeCloudBrowser() {
+    document.getElementById('cloudOverlay').classList.remove('open');
+}
+
+function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+async function loadFromCloud(rowId) {
+    closeCloudBrowser();
+    showLoading(true, 'Loading planogram from cloud...');
+    hideError();
+    try {
+        const res = await fetch(`/api/planogram/load/${rowId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        if (data.status === 'error') throw new Error(data.error);
+
+        planogramData = data.planogram;
+        summaryData = data.summary;
+        decisionTreeData = data.decision_tree || null;
+        complianceData = data.compliance || null;
+        buildProductsMap();
+        renderAll();
+
+        if (planogramData.equipment && planogramData.equipment.bays && planogramData.equipment.bays.length > 0) {
+            equipmentGenerated = true;
+            enableFillBtn(true);
+        }
+        showSaveToast('Planogram loaded from cloud');
+    } catch (err) {
+        console.error('Cloud load failed:', err);
+        showError('Cloud load failed: ' + err.message);
+    }
+    showLoading(false);
+}
+
+async function deleteFromCloud(rowId, btn) {
+    if (!confirm('Delete this planogram from cloud?')) return;
+    try {
+        const res = await fetch(`/api/planogram/delete/${rowId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.status === 'error') throw new Error(data.error);
+        const item = btn.closest('.cloud-item');
+        if (item) item.remove();
+        if (document.querySelectorAll('.cloud-item').length === 0) {
+            document.getElementById('cloudEmpty').style.display = 'block';
+        }
+    } catch (err) {
+        showError('Delete failed: ' + err.message);
+    }
+}
+
 async function loadDemoCsvPlanogram() {
     showLoading(true, 'Loading demo CSV planogram...');
     hideError();
