@@ -1369,7 +1369,15 @@ def planogram_facings():
     # external_id → tiny_name
     ext_to_tiny = {eid: info["tiny_name"] for eid, info in size_map.items() if info.get("tiny_name")}
 
-    facings = {}  # tiny_name → {facings_wide, positions}
+    # Build product metadata lookup: product_id → product dict
+    prod_lookup = {}
+    if current_planogram and current_planogram.products:
+        from dataclasses import asdict as _asdict
+        for p in current_planogram.products:
+            pd = _asdict(p) if hasattr(p, '__dataclass_fields__') else (p if isinstance(p, dict) else {})
+            prod_lookup[pd.get("id", "")] = pd
+
+    facings = {}  # tiny_name → {facings_wide, positions, ...metadata}
     if current_planogram and current_planogram.equipment:
         from dataclasses import asdict
         eq = asdict(current_planogram.equipment)
@@ -1385,11 +1393,84 @@ def planogram_facings():
                         continue
                     fw = pos.get("facings_wide", 1)
                     if tiny not in facings:
-                        facings[tiny] = {"facings_wide": 0, "positions": 0}
+                        prod = prod_lookup.get(pid, {})
+                        sz = size_map.get(ext_id, {})
+                        facings[tiny] = {
+                            "facings_wide": 0,
+                            "positions": 0,
+                            "name": prod.get("name", ""),
+                            "brand": prod.get("brand", ""),
+                            "image_url": prod.get("image_url", ""),
+                            "width_cm": sz.get("width_cm", 0),
+                            "height_cm": sz.get("height_cm", 0),
+                        }
                     facings[tiny]["facings_wide"] += fw
                     facings[tiny]["positions"] += 1
 
     return jsonify(facings)
+
+
+@app.route("/api/sales-data")
+def sales_data():
+    """Return avg weekly sale_amount per product from source_data_617533.
+
+    Joins via recognition_product_id to map back to tiny_name so the photo
+    viewer can look up sales by the same key used for planogram facings.
+    """
+    size_map = _load_product_sizes()
+    ext_to_tiny = {eid: info["tiny_name"] for eid, info in size_map.items() if info.get("tiny_name")}
+
+    try:
+        rows = _supabase_get("source_data_617533", {
+            "select": "product_code,product_name,recognition_product_id,"
+                      "sale_amount,sale_qty,stock_qty,on_planogram,"
+                      "face_width_planogram,in_target_assortment",
+        })
+    except Exception as e:
+        print(f"[sales-data] Failed: {e}", flush=True)
+        return jsonify({})
+
+    from collections import defaultdict
+    agg = defaultdict(lambda: {"amounts": [], "qty": [], "stock": [],
+                               "product_name": "", "product_code": "",
+                               "on_planogram": 0, "in_target_assortment": 0,
+                               "face_width_planogram": 0})
+    for r in rows:
+        pid = r.get("recognition_product_id") or ""
+        tiny = ext_to_tiny.get(r.get("product_code", ""), "")
+        if not tiny and not pid:
+            continue
+        key = tiny or pid
+        amt = r.get("sale_amount")
+        qty = r.get("sale_qty")
+        stk = r.get("stock_qty")
+        if amt is not None:
+            agg[key]["amounts"].append(float(amt))
+        if qty is not None:
+            agg[key]["qty"].append(float(qty))
+        if stk is not None:
+            agg[key]["stock"].append(float(stk))
+        agg[key]["product_name"] = r.get("product_name", "")
+        agg[key]["product_code"] = r.get("product_code", "")
+        agg[key]["on_planogram"] = r.get("on_planogram", 0)
+        agg[key]["in_target_assortment"] = r.get("in_target_assortment", 0)
+        agg[key]["face_width_planogram"] = r.get("face_width_planogram") or 0
+
+    result = {}
+    for key, v in agg.items():
+        result[key] = {
+            "avg_sale_amount": round(sum(v["amounts"]) / len(v["amounts"]), 2) if v["amounts"] else 0,
+            "total_sale_amount": round(sum(v["amounts"]), 2),
+            "avg_sale_qty": round(sum(v["qty"]) / len(v["qty"]), 2) if v["qty"] else 0,
+            "avg_stock_qty": round(sum(v["stock"]) / len(v["stock"]), 2) if v["stock"] else 0,
+            "weeks": len(v["amounts"]),
+            "product_name": v["product_name"],
+            "product_code": v["product_code"],
+            "on_planogram": v["on_planogram"],
+            "in_target_assortment": v["in_target_assortment"],
+            "face_width_planogram": v["face_width_planogram"],
+        }
+    return jsonify(result)
 
 
 @app.route("/demo-images/<path:filename>")

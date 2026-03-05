@@ -98,6 +98,7 @@
     const photoScales = {};    // photoName → scale
     const photoNaturalSizes = {}; // photoName → {w, h}
     let planogramFacings = {}; // tiny_name → {facings_wide, positions}
+    let salesData = {};        // tiny_name → {avg_sale_amount, avg_sale_qty, ...}
 
     let currentView = 'all';
     let currentSource = 'json'; // 'json' or 'supabase'
@@ -458,8 +459,86 @@
         if (p.facing_width_cm) {
             html += `<div class="field"><div class="field-label">Size (cm)</div><div class="field-value" style="font-size:11px">${p.facing_width_cm.toFixed(1)} × ${p.facing_height_cm.toFixed(1)}</div></div>`;
         }
+
+        const sd = salesData[p.art] || salesData[p.product_id];
+        if (sd) {
+            html += `
+                <div class="field">
+                    <div class="field-label">Sales Data (weekly avg)</div>
+                    <div class="dims-grid" style="margin-top:4px">
+                        <span class="dim-label">Avg Sale ₽</span><span class="dim-value" style="color:#4ecdc4;font-weight:600">${sd.avg_sale_amount.toLocaleString('ru-RU', {minimumFractionDigits: 0, maximumFractionDigits: 0})} ₽</span>
+                        <span class="dim-label">Avg Qty</span><span class="dim-value">${sd.avg_sale_qty.toFixed(1)}</span>
+                        <span class="dim-label">Avg Stock</span><span class="dim-value">${sd.avg_stock_qty.toFixed(1)}</span>
+                        <span class="dim-label">Weeks</span><span class="dim-value">${sd.weeks}</span>
+                    </div>
+                </div>
+            `;
+        }
+
         document.getElementById('detailContent').innerHTML = html;
         highlightSelected();
+        highlightListItem();
+    }
+
+    function selectOutOfShelfProduct(art) {
+        selectedId = null;
+        selectedPhotoName = null;
+        selectedArt = art;
+
+        const pf = planogramFacings[art];
+        if (!pf) return;
+        const planoFacings = pf.facings_wide;
+
+        const fullName = pf.name || art;
+        const thumbUrl = pf.image_url || '';
+        const brand = pf.brand || '';
+
+        let html = `
+            <div class="detail-header">
+                ${thumbUrl ? `<img class="detail-thumb" src="${thumbUrl}" alt="${fullName}" onerror="this.style.display='none'">` : ''}
+                <div class="detail-header-info">
+                    <div class="field-value" style="font-weight:600;font-size:12px;margin-bottom:4px;line-height:1.3">${fullName}</div>
+                    <div style="margin-bottom:4px">
+                        ${brand ? `<span class="tag tag-brand">${brand}</span>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        html += `<div class="field" style="margin-bottom:12px">
+            <span class="tag-oos" style="font-size:11px;padding:3px 8px">Out of Shelf</span>
+        </div>`;
+
+        html += `
+            <div class="field">
+                <div class="field-label">Facings Comparison</div>
+                <div class="dims-grid" style="margin-top:4px">
+                    <span class="dim-label">Planogram</span><span class="dim-value">${planoFacings}</span>
+                    <span class="dim-label">On Shelf (photos)</span><span class="dim-value" style="color:#ef4444">0</span>
+                </div>
+            </div>
+        `;
+
+        if (pf.width_cm) {
+            html += `<div class="field"><div class="field-label">Size (cm)</div><div class="field-value" style="font-size:11px">${pf.width_cm.toFixed(1)} × ${pf.height_cm.toFixed(1)}</div></div>`;
+        }
+
+        const sd = salesData[art];
+        if (sd) {
+            html += `
+                <div class="field">
+                    <div class="field-label">Sales Data (weekly avg)</div>
+                    <div class="dims-grid" style="margin-top:4px">
+                        <span class="dim-label">Avg Sale ₽</span><span class="dim-value" style="color:#4ecdc4;font-weight:600">${sd.avg_sale_amount.toLocaleString('ru-RU', {minimumFractionDigits: 0, maximumFractionDigits: 0})} ₽</span>
+                        <span class="dim-label">Avg Qty</span><span class="dim-value">${sd.avg_sale_qty.toFixed(1)}</span>
+                        <span class="dim-label">Avg Stock</span><span class="dim-value">${sd.avg_stock_qty.toFixed(1)}</span>
+                        <span class="dim-label">Weeks</span><span class="dim-value">${sd.weeks}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        document.getElementById('detailContent').innerHTML = html;
         highlightListItem();
     }
 
@@ -611,14 +690,16 @@
         // Add out-of-shelf: products in planogram but not in any photo
         Object.keys(planogramFacings).forEach(art => {
             if (!artCounts[art]) {
+                const pf = planogramFacings[art];
                 artCounts[art] = {
                     count: 0,
-                    display_name: art,
-                    miniature_url: '',
-                    brand_name: '',
+                    display_name: pf.name || art,
+                    miniature_url: pf.image_url || '',
+                    brand_name: pf.brand || '',
                     photos: new Set(),
                     firstPhoto: '',
                     firstIdx: -1,
+                    isOutOfShelf: true,
                 };
             }
         });
@@ -665,7 +746,11 @@
             }
 
             const cssClass = status === 'not-in-plano' ? ' not-in-plano' : status === 'out-of-shelf' ? ' out-of-shelf' : '';
-            const clickHandler = info.firstPhoto ? `onclick="selectByArt('${art}')"` : '';
+            const clickHandler = info.firstPhoto
+                ? `onclick="selectByArt('${art}')"`
+                : info.isOutOfShelf
+                    ? `onclick="selectOutOfShelfProduct('${art}')"`
+                    : '';
 
             return `
                 <div class="product-list-item${cssClass}" data-art="${art}" data-status="${status}" data-photo="${info.firstPhoto}" ${clickHandler}>
@@ -716,7 +801,10 @@
         document.querySelectorAll('.product-list-item').forEach(el => {
             el.classList.remove('selected');
         });
-        if (selectedId && selectedPhotoName) {
+        if (selectedArt && !selectedId) {
+            const el = document.querySelector(`.product-list-item[data-art="${selectedArt}"]`);
+            if (el) el.classList.add('selected');
+        } else if (selectedId && selectedPhotoName) {
             const data = photoDataMap[selectedPhotoName];
             if (data) {
                 const p = data.products.find(pp => pp._id === selectedId);
@@ -845,14 +933,16 @@
         }
     });
 
-    // Initial load: fetch planogram facings then load photos
-    fetch('/api/planogram-facings')
-        .then(r => r.json())
-        .then(data => { planogramFacings = data; })
-        .catch(() => { planogramFacings = {}; })
-        .finally(() => {
-            if (PHOTOS.length > 0) loadAllPhotos();
-        });
+    // Initial load: fetch planogram facings + sales data then load photos
+    Promise.all([
+        fetch('/api/planogram-facings').then(r => r.json()).catch(() => ({})),
+        fetch('/api/sales-data').then(r => r.json()).catch(() => ({})),
+    ]).then(([facings, sales]) => {
+        planogramFacings = facings;
+        salesData = sales;
+    }).finally(() => {
+        if (PHOTOS.length > 0) loadAllPhotos();
+    });
     </script>
 </body>
 </html>
