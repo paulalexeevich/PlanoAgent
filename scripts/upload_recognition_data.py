@@ -6,12 +6,12 @@ import sys
 import time
 import requests
 
-SUPABASE_URL = "https://mrbevgewrtgalaahcjog.supabase.co"
+SUPABASE_URL = "https://zcciroutarcpkwpnynyh.supabase.co"
 SUPABASE_KEY = (
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yYmV2Z2V3cnRnYWxhYWhjam9nIiwi"
-    "cm9sZSI6ImFub24iLCJpYXQiOjE3NzIzOTgwMTQsImV4cCI6MjA4Nzk3NDAxNH0."
-    "3kpL6Sen3X9bCFledYobgahOj3te5ZZmY6AJygdPvdc"
+    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjY2lyb3V0YXJjcGt3cG55bnloIiwi"
+    "cm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjIzMTAsImV4cCI6MjA4ODI5ODMxMH0."
+    "LFnJ8WoxlNhZ06MBQm-1mmJK4mtkBLZAPd4UoPtGrkE"
 )
 HEADERS = {
     "apikey": SUPABASE_KEY,
