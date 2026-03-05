@@ -516,3 +516,192 @@ body.photo-viewer {
     background: var(--bg-shelf);
     color: var(--text-primary);
 }
+
+/* ============================================================
+   ACTIONS PANEL — Slide-in from left
+   ============================================================ */
+.actions-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 199;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+}
+
+.actions-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.actions-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 420px;
+    height: 100vh;
+    background: var(--bg-card);
+    border-right: 1px solid var(--border);
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+}
+
+.actions-panel.open {
+    transform: translateX(0);
+}
+
+.actions-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.actions-header h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #f59e0b;
+    margin: 0;
+}
+
+.actions-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.actions-close:hover { color: var(--text-primary); }
+
+.actions-summary {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.actions-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.actions-stat-row strong { color: var(--text-primary); }
+
+.actions-filters {
+    padding: 10px 20px;
+    display: flex;
+    gap: 6px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.actions-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+}
+
+.action-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    transition: background 0.15s;
+}
+
+.action-card:hover { background: rgba(74,158,255,0.06); }
+
+.action-card.apri-high { border-left: 3px solid #ef4444; }
+.action-card.apri-med { border-left: 3px solid #f59e0b; }
+.action-card.apri-low { border-left: 3px solid var(--text-secondary); }
+
+.action-rank {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    min-width: 20px;
+    text-align: center;
+    padding-top: 2px;
+}
+
+.action-body { flex: 1; min-width: 0; }
+
+.action-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    line-height: 1.3;
+}
+
+.action-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+.action-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.action-stats strong { color: var(--text-primary); }
+
+.action-size {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.action-priority {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.action-priority.apri-high { background: rgba(239,68,68,0.15); color: #ef4444; }
+.action-priority.apri-med { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.action-priority.apri-low { background: rgba(148,163,184,0.15); color: #94a3b8; }
+
+.apri-high { color: #ef4444; }
+.apri-med { color: #f59e0b; }
+.apri-low { color: #94a3b8; }
+
+#actionsBadge {
+    display: inline-block;
+    background: rgba(245,158,11,0.3);
+    color: #f59e0b;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 8px;
+    margin-left: 4px;
+    min-width: 16px;
+    text-align: center;
+}
