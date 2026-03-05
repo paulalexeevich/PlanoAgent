@@ -14,6 +14,13 @@
         <h1>Photo Viewer</h1>
         <div class="sep"></div>
 
+        <div class="view-toggle" id="sourceToggle">
+            <button class="active" data-source="json" onclick="setSource('json')">JSON</button>
+            <button data-source="supabase" onclick="setSource('supabase')">Supabase</button>
+        </div>
+
+        <div class="sep"></div>
+
         <div class="view-toggle">
             <button class="active" onclick="setView('all')">All Photos</button>
             <button onclick="setView('single')">Single</button>
@@ -86,13 +93,14 @@
     </div>
 
     <script>
-    const PHOTOS = {{ photos | tojson }};
+    let PHOTOS = {{ photos | tojson }};
     const photoDataMap = {};   // photoName → {products, shelves, source}
     const photoScales = {};    // photoName → scale
     const photoNaturalSizes = {}; // photoName → {w, h}
     let planogramFacings = {}; // tiny_name → {facings_wide, positions}
 
     let currentView = 'all';
+    let currentSource = 'json'; // 'json' or 'supabase'
     let selectedId = null;
     let selectedPhotoName = null;
     let selectedArt = null;
@@ -115,9 +123,58 @@
         return PRODUCT_COLORS[art];
     }
 
+    function setSource(source) {
+        currentSource = source;
+        document.querySelectorAll('#sourceToggle button').forEach(b => {
+            b.classList.toggle('active', b.getAttribute('data-source') === source);
+        });
+        // Clear cached data so we re-fetch from the new source
+        Object.keys(photoDataMap).forEach(k => delete photoDataMap[k]);
+
+        if (source === 'supabase') {
+            // Fetch photo list from Supabase and rebuild
+            fetch('/api/photo-list?source=supabase')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.photos) {
+                        PHOTOS = data.photos;
+                        rebuildPhotoSelect();
+                    }
+                    reloadCurrentView();
+                })
+                .catch(() => reloadCurrentView());
+        } else {
+            fetch('/api/photo-list?source=json')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.photos) {
+                        PHOTOS = data.photos;
+                        rebuildPhotoSelect();
+                    }
+                    reloadCurrentView();
+                })
+                .catch(() => reloadCurrentView());
+        }
+    }
+
+    function rebuildPhotoSelect() {
+        const sel = document.getElementById('photoSelect');
+        sel.innerHTML = PHOTOS.map(p => `<option value="${p}">${p}</option>`).join('');
+    }
+
+    function reloadCurrentView() {
+        if (currentView === 'single') {
+            const sel = document.getElementById('photoSelect').value || PHOTOS[0];
+            loadSinglePhoto(sel);
+        } else {
+            loadAllPhotos();
+        }
+    }
+
     function setView(mode) {
         currentView = mode;
-        document.querySelectorAll('.view-toggle button').forEach(b => b.classList.remove('active'));
+        const btns = event.target.closest('.view-toggle').querySelectorAll('button');
+        btns.forEach(b => b.classList.remove('active'));
         event.target.classList.add('active');
         document.getElementById('photoSelect').style.display = mode === 'single' ? '' : 'none';
         if (mode === 'single') {
@@ -176,7 +233,8 @@
             updateStats();
             return;
         }
-        const resp = await fetch(`/api/photo-data/${name}`);
+        const qs = currentSource === 'supabase' ? '?source=supabase' : '';
+        const resp = await fetch(`/api/photo-data/${name}${qs}`);
         photoDataMap[name] = await resp.json();
         renderOverlay(name);
         updateStats();

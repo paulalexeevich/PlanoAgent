@@ -12,6 +12,7 @@ import os
 import traceback
 import csv
 import hashlib
+import requests as http_requests
 from collections import defaultdict
 
 from dotenv import load_dotenv
@@ -975,6 +976,97 @@ def get_products():
     return jsonify(_load_products_json())
 
 
+# ── Supabase Recognition Data ─────────────────────────────────────────────────
+
+SUPABASE_URL = os.environ.get(
+    "SUPABASE_URL", "https://mrbevgewrtgalaahcjog.supabase.co"
+)
+SUPABASE_KEY = os.environ.get(
+    "SUPABASE_KEY",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yYmV2Z2V3cnRnYWxhYWhjam9nIiwi"
+    "cm9sZSI6ImFub24iLCJpYXQiOjE3NzIzOTgwMTQsImV4cCI6MjA4Nzk3NDAxNH0."
+    "3kpL6Sen3X9bCFledYobgahOj3te5ZZmY6AJygdPvdc"
+)
+_SUPABASE_HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+}
+
+
+def _supabase_get(table: str, params: dict | None = None) -> list:
+    """GET rows from a Supabase table via REST API."""
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    resp = http_requests.get(url, headers=_SUPABASE_HEADERS, params=params, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _supabase_photo_list() -> list[str]:
+    """Return distinct photo_names stored in recognition_photos."""
+    rows = _supabase_get("recognition_photos", {"select": "photo_name", "order": "photo_name"})
+    return [r["photo_name"] for r in rows]
+
+
+def _supabase_shelves(photo_name: str) -> list:
+    """Fetch raw shelf detections from Supabase for a photo_name."""
+    rows = _supabase_get("recognition_raw_shelves", {
+        "select": "external_id,photo_id,x1,y1,x2,y2,line_type,approved,shelf_idx,internal_idx,is_hook,photo_recognized_version",
+        "photo_name": f"eq.{photo_name}",
+        "order": "y1",
+    })
+    return [{"_id": r["external_id"], **{k: r[k] for k in r if k != "external_id"}} for r in rows]
+
+
+def _supabase_assortment_products(photo_name: str) -> list:
+    """Fetch assortment data from Supabase and transform to photo-viewer format."""
+    rows = _supabase_get("recognition_assortment", {
+        "select": "*",
+        "photo_name": f"eq.{photo_name}",
+        "order": "line,numgroup",
+    })
+    products = []
+    for item in rows:
+        prod = item.get("product_info") or {}
+        facing = item.get("facing") or {}
+        group = item.get("group_data") or {}
+        products.append({
+            "_id": item.get("external_id", ""),
+            "product_id": item.get("product_id", ""),
+            "art": prod.get("tiny_name", "") or item.get("product_id", ""),
+            "x1": item.get("x1", 0),
+            "y1": item.get("y1", 0),
+            "x2": item.get("x2", 0),
+            "y2": item.get("y2", 0),
+            "display_name": prod.get("tiny_name", ""),
+            "full_name": prod.get("name", ""),
+            "brand_name": prod.get("brand_name", ""),
+            "sub_brand_name": prod.get("sub_brand_name", ""),
+            "brand_owner_name": prod.get("brand_owner_name", ""),
+            "category_name": prod.get("category_name", ""),
+            "macro_category_name": prod.get("macro_category_name", ""),
+            "miniature_url": prod.get("miniature_url", ""),
+            "barcode": prod.get("barcode", ""),
+            "classification_score": item.get("kma", 0) / 100 if item.get("kma") else 0,
+            "is_duplicated": item.get("is_duplicated", False),
+            "line": item.get("line", 0),
+            "numgroup": item.get("numgroup", 0),
+            "facing_count": facing.get("fact", 1),
+            "facing_width_cm": facing.get("width_cm", 0),
+            "facing_height_cm": facing.get("height_cm", 0),
+            "group_count": group.get("fact", 1),
+            "group_width_cm": group.get("width_cm", 0),
+            "group_height_cm": group.get("height_cm", 0),
+            "price": item.get("price", 0),
+            "price_type": item.get("price_type", 0),
+            "price_status": item.get("price_status", ""),
+            "assortment_group": item.get("assortment_group", 0),
+            "start_group": item.get("start_group", False),
+            "is_support": item.get("is_support", False),
+        })
+    return products
+
+
 # ── Photo Viewer ──────────────────────────────────────────────────────────────
 
 def _load_assortment_products(assortment_path: str) -> list:
@@ -1060,13 +1152,43 @@ def photo_viewer():
     return render_template("photo_viewer.html", photos=photos)
 
 
+@app.route("/api/photo-list")
+def photo_list():
+    """Return list of available photo names. ?source=supabase fetches from DB."""
+    source = request.args.get("source", "json")
+    if source == "supabase":
+        try:
+            names = _supabase_photo_list()
+            return jsonify({"photos": names, "source": "supabase"})
+        except Exception as e:
+            return jsonify({"error": str(e), "source": "supabase"}), 502
+    demo_dir = os.path.join(os.path.dirname(__file__), "Demo data")
+    photos = []
+    for fname in sorted(os.listdir(demo_dir)):
+        if fname.endswith(".jpg") or fname.endswith(".png"):
+            base = fname.rsplit(".", 1)[0]
+            if os.path.exists(os.path.join(demo_dir, f"{base}_raw_products.json")):
+                photos.append(base)
+    return jsonify({"photos": photos, "source": "json"})
+
+
 @app.route("/api/photo-data/<photo_name>")
 def photo_data(photo_name):
     """Return products + shelves JSON for a given photo base name.
 
-    Prefers assortment data (data/<name>_assortment.json) when available,
-    falling back to raw_products + art_mapping.
+    ?source=supabase  → fetch from Supabase recognition tables.
+    Otherwise prefers assortment JSON, falling back to raw_products + art_mapping.
     """
+    source = request.args.get("source", "json")
+
+    if source == "supabase":
+        try:
+            products = _supabase_assortment_products(photo_name)
+            shelves = _supabase_shelves(photo_name)
+            return jsonify({"products": products, "shelves": shelves, "source": "supabase"})
+        except Exception as e:
+            return jsonify({"error": str(e), "source": "supabase"}), 502
+
     demo_dir = os.path.join(os.path.dirname(__file__), "Demo data")
     data_dir = os.path.join(os.path.dirname(__file__), "data")
     shelf_file = os.path.join(demo_dir, f"{photo_name}_raw_shelves.json")
