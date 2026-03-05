@@ -1040,17 +1040,21 @@
                     <div class="action-rank">${i + 1}</div>
                     <div class="action-body">
                         <div class="action-name">${a.product_name || a.tiny_name}</div>
+                        <div class="action-lost-sales">
+                            ${sale > 0
+                                ? `Lost: <strong>${sale.toLocaleString('ru-RU', {maximumFractionDigits:0})} ₽/wk</strong>`
+                                : `<span style="color:var(--text-secondary)">No sales data</span>`}
+                        </div>
                         <div class="action-meta">
                             ${a.brand ? `<span class="tag-brand">${a.brand}</span>` : ''}
                             <span class="tag-plano">P:${a.planogram_facings}</span>
                             <span class="tag-oos">Out of shelf</span>
                         </div>
                         <div class="action-stats">
-                            <span>Sale: <strong>${sale > 0 ? sale.toLocaleString('ru-RU', {maximumFractionDigits:0}) + ' ₽' : '—'}</strong></span>
-                            <span>Qty: <strong>${parseFloat(a.avg_sale_qty || 0).toFixed(1)}</strong></span>
+                            <span>Qty: <strong>${parseFloat(a.avg_sale_qty || 0).toFixed(1)}</strong>/wk</span>
                             <span>Stock: <strong>${parseFloat(a.avg_stock_qty || 0).toFixed(1)}</strong></span>
+                            <span>${a.width_cm}×${a.height_cm} cm</span>
                         </div>
-                        <div class="action-size">Size: ${a.width_cm}×${a.height_cm} cm</div>
                     </div>
                     <div class="action-priority ${priClass}">${a.priority}</div>
                 </div>

@@ -651,6 +651,17 @@ body.photo-viewer {
     line-height: 1.3;
 }
 
+.action-lost-sales {
+    font-size: 13px;
+    color: #f59e0b;
+    margin-bottom: 5px;
+}
+
+.action-lost-sales strong {
+    color: #fbbf24;
+    font-weight: 700;
+}
+
 .action-meta {
     display: flex;
     flex-wrap: wrap;
