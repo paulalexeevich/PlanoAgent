@@ -1577,6 +1577,38 @@ def delete_cloud_planogram(row_id):
     return jsonify({"status": "error", "error": "Failed to delete"}), 502
 
 
+# ── Planogram Actions API ─────────────────────────────────────────────────────
+
+
+@app.route("/api/actions")
+def list_actions():
+    """Return all planogram actions, ordered by avg_sale_amount desc."""
+    try:
+        rows = _supabase_get("planogram_actions", {
+            "select": "*",
+            "order": "avg_sale_amount.desc.nullslast",
+        })
+        return jsonify({"status": "success", "actions": rows})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/actions/<int:action_id>", methods=["PATCH"])
+def update_action(action_id):
+    """Update an action (status, target_facings, notes, etc.)."""
+    data = request.json
+    allowed = {"status", "target_facings", "target_shelf", "target_position",
+               "priority", "notes", "resolved_at"}
+    update = {k: v for k, v in data.items() if k in allowed}
+    if not update:
+        return jsonify({"status": "error", "error": "No valid fields to update"}), 400
+    try:
+        result = _supabase_patch("planogram_actions", {"id": f"eq.{action_id}"}, update)
+        return jsonify({"status": "success", "action": result})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 # Load persisted state on startup; fall back to generating from defaults
 if not _load_saved_state():
     init_default_planogram()
