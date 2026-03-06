@@ -1010,7 +1010,7 @@ _SUPABASE_HEADERS = {
 def _supabase_get(table: str, params: dict | None = None) -> list:
     """GET rows from a Supabase table via REST API."""
     url = f"{SUPABASE_URL}/rest/v1/{table}"
-    resp = http_requests.get(url, headers=_SUPABASE_HEADERS, params=params, timeout=10)
+    resp = http_requests.get(url, headers=_SUPABASE_HEADERS, params=params, timeout=5)
     resp.raise_for_status()
     return resp.json()
 
@@ -1601,12 +1601,24 @@ def delete_cloud_planogram(row_id):
 def list_actions():
     """Return all planogram actions, ordered by avg_sale_amount desc."""
     try:
+        # Check if Supabase is configured
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return jsonify({
+                "status": "error",
+                "error": "Supabase not configured. Set SUPABASE_URL and SUPABASE_KEY environment variables."
+            }), 503
+        
+        limit = request.args.get("limit", 100, type=int)
         rows = _supabase_get("planogram_actions", {
             "select": "*",
             "order": "avg_sale_amount.desc.nullslast",
+            "limit": str(min(limit, 500)),  # Cap at 500 for performance
         })
         return jsonify({"status": "success", "actions": rows})
     except Exception as e:
+        print(f"[actions] Error: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         return jsonify({"status": "error", "error": str(e)}), 500
 
 

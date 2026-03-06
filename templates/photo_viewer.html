@@ -1135,22 +1135,51 @@
     }
 
     function loadActions() {
-        fetch('/api/actions').then(r => r.json()).then(data => {
-            if (data.status === 'success') {
-                actionsData = data.actions;
-                actionsLoaded = true;
-                renderActions();
-                const badge = document.getElementById('actionsBadge');
-                badge.textContent = actionsData.length;
-            } else {
-                throw new Error(data.error || 'Unknown error');
+        const loadingTimeout = setTimeout(() => {
+            if (!actionsLoaded) {
+                document.getElementById('actionsList').innerHTML =
+                    `<div class="empty-state">⏱️ Loading is taking longer than expected...<br>
+                    <button onclick="loadActions()" style="margin-top:12px;padding:8px 16px;border:1px solid #444;background:#2a2a2a;color:#fff;border-radius:6px;cursor:pointer">Retry</button></div>`;
             }
-        }).catch(err => {
-            console.error('[photo_viewer] Failed to load actions:', err);
-            actionsLoaded = false;
-            document.getElementById('actionsList').innerHTML =
-                `<div class="empty-state">Failed to load actions: ${err.message}</div>`;
-        });
+        }, 8000);
+
+        // Fetch with AbortController for timeout
+        const controller = new AbortController();
+        const fetchTimeout = setTimeout(() => controller.abort(), 15000);
+
+        fetch('/api/actions', { signal: controller.signal })
+            .then(r => {
+                clearTimeout(fetchTimeout);
+                if (!r.ok) {
+                    throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+                }
+                return r.json();
+            })
+            .then(data => {
+                clearTimeout(loadingTimeout);
+                if (data.status === 'success') {
+                    actionsData = data.actions;
+                    actionsLoaded = true;
+                    renderActions();
+                    const badge = document.getElementById('actionsBadge');
+                    badge.textContent = actionsData.length;
+                } else {
+                    throw new Error(data.error || 'Unknown error');
+                }
+            })
+            .catch(err => {
+                clearTimeout(loadingTimeout);
+                clearTimeout(fetchTimeout);
+                console.error('[photo_viewer] Failed to load actions:', err);
+                actionsLoaded = false;
+                const errMsg = err.name === 'AbortError' 
+                    ? 'Request timed out (>15s). Server might be slow or unavailable.'
+                    : err.message;
+                document.getElementById('actionsList').innerHTML =
+                    `<div class="empty-state">❌ Failed to load actions<br>
+                    <span style="color:#888;font-size:11px">${errMsg}</span><br>
+                    <button onclick="loadActions()" style="margin-top:12px;padding:8px 16px;border:1px solid #444;background:#2a2a2a;color:#fff;border-radius:6px;cursor:pointer">Retry</button></div>`;
+            });
     }
 
     function setActionFilter(f) {

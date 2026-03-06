@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Photo Viewer Debug Test</title>
+</head>
+<body>
+    <h1>Photo Viewer Debug</h1>
+    <div id="status">Loading...</div>
+    <div id="results"></div>
+    
+    <script>
+        async function testPhotoViewer() {
+            const status = document.getElementById('status');
+            const results = document.getElementById('results');
+            
+            try {
+                // Test 1: Photo list API
+                status.textContent = 'Testing photo list API...';
+                const listResp = await fetch('/api/photo-list');
+                const listData = await listResp.json();
+                results.innerHTML += `<h3>✅ Photo List API</h3><pre>${JSON.stringify(listData, null, 2)}</pre>`;
+                
+                // Test 2: Photo data for coffee_1
+                status.textContent = 'Testing photo data API for coffee_1...';
+                const dataResp = await fetch('/api/photo-data/coffee_1');
+                const photoData = await dataResp.json();
+                results.innerHTML += `<h3>✅ Photo Data API (coffee_1)</h3>`;
+                results.innerHTML += `<p>Products: ${photoData.products.length}, Shelves: ${photoData.shelves.length}</p>`;
+                
+                // Test 3: Image URL
+                status.textContent = 'Testing image loading...';
+                const imgTest = new Image();
+                imgTest.onload = () => {
+                    results.innerHTML += `<h3>✅ Image Loading</h3><p>coffee_1.jpg loaded successfully (${imgTest.naturalWidth}x${imgTest.naturalHeight})</p>`;
+                    results.innerHTML += `<img src="/demo-images/coffee_1.jpg" style="max-width:400px"><br>`;
+                };
+                imgTest.onerror = () => {
+                    results.innerHTML += `<h3>❌ Image Loading Failed</h3><p>Could not load coffee_1.jpg</p>`;
+                };
+                imgTest.src = '/demo-images/coffee_1.jpg';
+                
+                status.textContent = '✅ All tests complete!';
+                
+            } catch (error) {
+                status.textContent = '❌ Error occurred';
+                results.innerHTML += `<h3>❌ Error</h3><pre>${error.message}\n${error.stack}</pre>`;
+            }
+        }
+        
+        testPhotoViewer();
+    </script>
+</body>
+</html>

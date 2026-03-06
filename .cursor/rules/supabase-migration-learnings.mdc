@@ -1,0 +1,15 @@
+---
+description: Learnings from Supabase project migrations
+alwaysApply: false
+---
+
+# Supabase Migration Learnings
+
+- **Free project limits**: paulalexeevich@gmail.com has a 2 active free project limit across ALL orgs. Must pause/delete before creating new ones.
+- **REST API for bulk data**: Use Supabase REST API (not SQL INSERT generation) for migrating data between projects. MCP execute_sql is good for schema but impractical for large data (long SQL strings).
+- **Batch sizes**: Use 200 rows per write batch, 1000 per read batch. Larger batches cause connection drops on free tier (~120K rows before timeout).
+- **Always add retry + resume**: Network errors are common with large migrations. Always include retry with exponential backoff and resume-from-offset capability.
+- **Delete source LAST**: Never delete the source project until migration is fully verified. We lost ~96K rows of source_data because source was deleted mid-migration.
+- **Sequence reset**: After bulk INSERT with explicit IDs, always reset sequences: `SELECT setval(pg_get_serial_sequence('table', 'id'), (SELECT max(id) FROM table));`
+- **Migration order**: Insert parent tables first (recognition_photos before recognition_raw_products/shelves/assortment due to FK constraints).
+- **New project ID**: PlanoAgent MM Data is now at `zcciroutarcpkwpnynyh` in org Ailet (`ilvdzfpgxjrlpxkohcyr`).
