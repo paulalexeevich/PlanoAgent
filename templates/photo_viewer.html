@@ -613,6 +613,15 @@
         }
 
         document.getElementById('detailContent').innerHTML = html;
+        
+        // Show the detail panel if it's hidden
+        const panel = document.getElementById('detailPanel');
+        const fab = document.getElementById('panelToggleFab');
+        if (panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            fab.style.display = 'none';
+        }
+        
         highlightSelected();
         highlightListItem();
     }
@@ -676,6 +685,15 @@
         }
 
         document.getElementById('detailContent').innerHTML = html;
+        
+        // Show the detail panel if it's hidden
+        const panel = document.getElementById('detailPanel');
+        const fab = document.getElementById('panelToggleFab');
+        if (panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            fab.style.display = 'none';
+        }
+        
         highlightListItem();
     }
 
@@ -712,6 +730,15 @@
             </div>
         `;
         document.getElementById('detailContent').innerHTML = html;
+        
+        // Show the detail panel if it's hidden
+        const panel = document.getElementById('detailPanel');
+        const fab = document.getElementById('panelToggleFab');
+        if (panel.classList.contains('hidden')) {
+            panel.classList.remove('hidden');
+            fab.style.display = 'none';
+        }
+        
         highlightSelected();
     }
 
