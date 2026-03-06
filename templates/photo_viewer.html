@@ -14,54 +14,63 @@
         <h1>Photo Viewer</h1>
         <div class="sep"></div>
 
-        <div class="view-toggle" id="sourceToggle">
-            <button class="active" data-source="json" onclick="setSource('json')">JSON</button>
-            <button data-source="supabase" onclick="setSource('supabase')">Supabase</button>
+        <div class="settings-dropdown">
+            <button class="settings-btn" onclick="toggleSettings(event)">⚙️ Settings</button>
+            <div class="settings-menu" id="settingsMenu">
+                <div class="settings-section">
+                    <div class="settings-label">View Mode</div>
+                    <div class="view-toggle">
+                        <button class="active" onclick="setView('all')">All Photos</button>
+                        <button onclick="setView('single')">Single</button>
+                    </div>
+                    <select id="photoSelect" style="display:none;margin-top:8px;width:100%;font-size:11px;padding:5px 8px" onchange="loadSinglePhoto(this.value)">
+                        {% for p in photos %}
+                        <option value="{{ p }}">{{ p }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-label">Zoom</div>
+                    <div class="zoom-controls">
+                        <button onclick="zoomAll(-0.05)" title="Zoom out">&minus;</button>
+                        <span class="zoom-label" id="zoomLabel">fit</span>
+                        <button onclick="zoomAll(0.05)" title="Zoom in">+</button>
+                        <button onclick="zoomFitAll()" title="Fit to window">Fit</button>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-label">Data Source</div>
+                    <div class="view-toggle" id="sourceToggle">
+                        <button class="active" data-source="json" onclick="setSource('json')">JSON</button>
+                        <button data-source="supabase" onclick="setSource('supabase')">Supabase</button>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-label">Display Layers</div>
+                    <label>
+                        <input type="checkbox" id="showProducts" checked onchange="renderAllOverlays()">
+                        Products
+                    </label>
+                    <label>
+                        <input type="checkbox" id="showShelves" checked onchange="renderAllOverlays()">
+                        Shelves
+                    </label>
+                    <label>
+                        <input type="checkbox" id="showLabels" checked onchange="renderAllOverlays()">
+                        Labels
+                    </label>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-label">Color Mode</div>
+                    <div class="view-toggle" id="colorModeToggle">
+                        <button class="active" data-mode="default" onclick="setColorMode('default')">Colors</button>
+                        <button data-mode="salesPerMeter" onclick="setColorMode('salesPerMeter')">₽/meter</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="sep"></div>
-
-        <div class="view-toggle">
-            <button class="active" onclick="setView('all')">All Photos</button>
-            <button onclick="setView('single')">Single</button>
-        </div>
-
-        <select id="photoSelect" style="display:none" onchange="loadSinglePhoto(this.value)">
-            {% for p in photos %}
-            <option value="{{ p }}">{{ p }}</option>
-            {% endfor %}
-        </select>
-
-        <div class="sep"></div>
-
-        <label>
-            <input type="checkbox" id="showProducts" checked onchange="renderAllOverlays()">
-            Products
-        </label>
-        <label>
-            <input type="checkbox" id="showShelves" checked onchange="renderAllOverlays()">
-            Shelves
-        </label>
-        <label>
-            <input type="checkbox" id="showLabels" checked onchange="renderAllOverlays()">
-            Labels
-        </label>
-
-        <div class="sep"></div>
-
-        <div class="view-toggle" id="colorModeToggle">
-            <button class="active" data-mode="default" onclick="setColorMode('default')">Colors</button>
-            <button data-mode="salesPerMeter" onclick="setColorMode('salesPerMeter')">₽/meter</button>
-        </div>
-
-        <div class="sep"></div>
-
-        <div class="zoom-controls">
-            <button onclick="zoomAll(-0.05)" title="Zoom out">&minus;</button>
-            <span class="zoom-label" id="zoomLabel">fit</span>
-            <button onclick="zoomAll(0.05)" title="Zoom in">+</button>
-            <button onclick="zoomFitAll()" title="Fit to window">Fit</button>
-        </div>
 
         <div class="stats-bar">
             <span>Photos: <strong id="statPhotos">0</strong></span>
@@ -292,10 +301,11 @@
 
     function setView(mode) {
         currentView = mode;
-        const btns = event.target.closest('.view-toggle').querySelectorAll('button');
+        const viewToggle = event.target.closest('.settings-section').querySelector('.view-toggle');
+        const btns = viewToggle.querySelectorAll('button');
         btns.forEach(b => b.classList.remove('active'));
         event.target.classList.add('active');
-        document.getElementById('photoSelect').style.display = mode === 'single' ? '' : 'none';
+        document.getElementById('photoSelect').style.display = mode === 'single' ? 'block' : 'none';
         if (mode === 'single') {
             const sel = document.getElementById('photoSelect').value;
             loadSinglePhoto(sel);
@@ -1167,6 +1177,8 @@
     ]).then(([facings, sales]) => {
         planogramFacings = facings;
         salesData = sales;
+        console.log('[photo_viewer] Loaded planogram facings:', Object.keys(facings).length, 'products');
+        console.log('[photo_viewer] Sample facings:', Object.keys(facings).slice(0, 5));
     }).finally(() => {
         if (PHOTOS.length > 0) loadAllPhotos();
     });
@@ -1180,6 +1192,22 @@
             badge.textContent = data.actions.length;
         }
     }).catch(() => {});
+
+    // Settings dropdown toggle
+    function toggleSettings(event) {
+        event.stopPropagation();
+        const menu = document.getElementById('settingsMenu');
+        menu.classList.toggle('open');
+    }
+
+    // Close settings menu when clicking outside
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('settingsMenu');
+        const settingsBtn = document.querySelector('.settings-btn');
+        if (menu.classList.contains('open') && !e.target.closest('.settings-dropdown')) {
+            menu.classList.remove('open');
+        }
+    });
     </script>
 </body>
 </html>

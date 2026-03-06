@@ -740,3 +740,112 @@ body.photo-viewer {
     border-radius: 2px;
     flex-shrink: 0;
 }
+
+/* ============================================================
+   SETTINGS DROPDOWN
+   ============================================================ */
+.settings-dropdown {
+    position: relative;
+}
+
+.settings-btn {
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.settings-btn:hover {
+    background: var(--bg-shelf);
+    border-color: var(--accent);
+}
+
+.settings-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    padding: 12px;
+    min-width: 280px;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-4px);
+    transition: all 0.2s ease;
+}
+
+.settings-menu.open {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateY(0);
+}
+
+.settings-section {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.settings-section:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.settings-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.settings-section label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.settings-section label:hover {
+    color: var(--accent);
+}
+
+.settings-section input[type="checkbox"] {
+    accent-color: var(--accent);
+}
+
+.settings-section .view-toggle {
+    margin-top: 6px;
+}
+
+.settings-section .zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.settings-section .zoom-controls button {
+    flex: 1;
+}
+
+.settings-section .zoom-controls .zoom-label {
+    flex: 0 0 auto;
+}
+
