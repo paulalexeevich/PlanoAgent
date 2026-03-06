@@ -1,0 +1,17 @@
+__pycache__
+*.pyc
+.DS_Store
+*.egg-info
+dist
+build
+venv
+.venv
+.env.local
+.git
+*.png
+*.jpg
+*.jpeg
+.cursor
+node_modules
+.vercel
+.playwright-mcp

@@ -1,10 +1,14 @@
 {
   "version": 2,
-  "functions": {
-    "api/index.py": {
-      "includeFiles": "{Demo data/**,templates/**,data/**}"
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python",
+      "config": {
+        "includeFiles": "{Demo data/**,templates/**,data/**,static/**}"
+      }
     }
-  },
+  ],
   "routes": [
     {
       "src": "/static/(.*)",
