@@ -1284,6 +1284,23 @@ def photo_viewer():
     return render_template("photo_viewer.html", photos=photos)
 
 
+@app.route("/api/debug/files")
+def debug_files():
+    """Debug endpoint to list files in Demo data folder."""
+    demo_dir = os.path.join(os.path.dirname(__file__), "Demo data")
+    try:
+        files = sorted(os.listdir(demo_dir)) if os.path.exists(demo_dir) else []
+        return jsonify({
+            "demo_dir": demo_dir,
+            "exists": os.path.exists(demo_dir),
+            "files": files,
+            "pwd": os.getcwd(),
+            "__file__": __file__,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e), "pwd": os.getcwd()}), 500
+
+
 @app.route("/api/photo-list")
 def photo_list():
     """Return list of available photo names. ?source=supabase fetches from DB."""
