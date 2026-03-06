@@ -75,58 +75,55 @@
         <button id="actionsBtn" onclick="openPanelTab('actions')" style="background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4);color:#f59e0b;font-weight:600">Actions <span id="actionsBadge"></span></button>
     </div>
 
-    <!-- Overlay for side panel -->
-    <div class="side-panel-overlay" id="sidePanelOverlay" onclick="closeSidePanel()"></div>
-
-    <!-- Combined Side Panel (slides from right) -->
-    <div class="side-panel" id="sidePanel">
-        <div class="side-panel-header">
-            <div class="side-panel-tabs">
-                <button class="side-panel-tab active" data-tab="actions" onclick="switchTab('actions')">Actions <span id="actionsBadgeTab" class="tab-badge"></span></button>
-                <button class="side-panel-tab" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
-            </div>
-            <button class="side-panel-close" onclick="closeSidePanel()">&times;</button>
-        </div>
-
-        <!-- Actions Tab Content -->
-        <div class="side-panel-body tab-content" id="tabActions">
-            <div class="actions-summary" id="actionsSummary"></div>
-            <div class="actions-filters" id="actionsFilters">
-                <button class="filter-btn active" data-apri="all" onclick="setActionFilter('all')">All</button>
-                <button class="filter-btn" data-apri="high" onclick="setActionFilter('high')">High</button>
-                <button class="filter-btn" data-apri="medium" onclick="setActionFilter('medium')">Medium</button>
-                <button class="filter-btn" data-apri="low" onclick="setActionFilter('low')">Low</button>
-            </div>
-            <div class="actions-list" id="actionsList">
-                <div class="empty-state">Loading actions...</div>
-            </div>
-        </div>
-
-        <!-- Analytics Tab Content -->
-        <div class="side-panel-body tab-content" id="tabAnalytics" style="display:none">
-            <div id="detailContent">
-                <div class="empty-state">Click a bounding box to see details</div>
-            </div>
-
-            <div class="product-list" id="productList">
-                <h3>All products across photos</h3>
-                <input type="text" class="search-input" id="searchInput" placeholder="Search products..." oninput="filterProductList()">
-                <div class="filter-bar" id="filterBar">
-                    <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
-                    <button class="filter-btn" data-filter="not-in-plano" onclick="setFilter('not-in-plano')">Not in plano</button>
-                    <button class="filter-btn" data-filter="less" onclick="setFilter('less')">Less</button>
-                    <button class="filter-btn" data-filter="equal" onclick="setFilter('equal')">Equal</button>
-                    <button class="filter-btn" data-filter="more" onclick="setFilter('more')">More</button>
-                    <button class="filter-btn" data-filter="out-of-shelf" onclick="setFilter('out-of-shelf')">Out of shelf</button>
-                </div>
-                <div class="filter-counts" id="filterCounts"></div>
-                <div id="productListItems"></div>
-            </div>
-        </div>
-    </div>
-
     <div class="main-area">
         <div class="photos-grid" id="photosGrid"></div>
+
+        <!-- Combined Side Panel (inline, pushes photos) -->
+        <div class="side-panel" id="sidePanel">
+            <div class="side-panel-header">
+                <div class="side-panel-tabs">
+                    <button class="side-panel-tab active" data-tab="actions" onclick="switchTab('actions')">Actions <span id="actionsBadgeTab" class="tab-badge"></span></button>
+                    <button class="side-panel-tab" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
+                </div>
+                <button class="side-panel-close" onclick="closeSidePanel()">&times;</button>
+            </div>
+
+            <!-- Actions Tab Content -->
+            <div class="side-panel-body tab-content" id="tabActions">
+                <div class="actions-summary" id="actionsSummary"></div>
+                <div class="actions-filters" id="actionsFilters">
+                    <button class="filter-btn active" data-apri="all" onclick="setActionFilter('all')">All</button>
+                    <button class="filter-btn" data-apri="high" onclick="setActionFilter('high')">High</button>
+                    <button class="filter-btn" data-apri="medium" onclick="setActionFilter('medium')">Medium</button>
+                    <button class="filter-btn" data-apri="low" onclick="setActionFilter('low')">Low</button>
+                </div>
+                <div class="actions-list" id="actionsList">
+                    <div class="empty-state">Loading actions...</div>
+                </div>
+            </div>
+
+            <!-- Analytics Tab Content -->
+            <div class="side-panel-body tab-content" id="tabAnalytics" style="display:none">
+                <div id="detailContent">
+                    <div class="empty-state">Click a bounding box to see details</div>
+                </div>
+
+                <div class="product-list" id="productList">
+                    <h3>All products across photos</h3>
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search products..." oninput="filterProductList()">
+                    <div class="filter-bar" id="filterBar">
+                        <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
+                        <button class="filter-btn" data-filter="not-in-plano" onclick="setFilter('not-in-plano')">Not in plano</button>
+                        <button class="filter-btn" data-filter="less" onclick="setFilter('less')">Less</button>
+                        <button class="filter-btn" data-filter="equal" onclick="setFilter('equal')">Equal</button>
+                        <button class="filter-btn" data-filter="more" onclick="setFilter('more')">More</button>
+                        <button class="filter-btn" data-filter="out-of-shelf" onclick="setFilter('out-of-shelf')">Out of shelf</button>
+                    </div>
+                    <div class="filter-counts" id="filterCounts"></div>
+                    <div id="productListItems"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -684,39 +681,30 @@
                 el.style.opacity = '0.7';
             } else if (art === selectedArt) {
                 el.setAttribute('stroke', '#ffd166');
-                el.setAttribute('fill', 'rgba(255,209,102,0.25)');
+                el.setAttribute('fill', 'rgba(255,209,102,0.15)');
                 el.setAttribute('stroke-width', '10');
                 el.style.opacity = '1';
             } else {
-                el.setAttribute('stroke', '#666');
-                el.setAttribute('fill', 'rgba(100,100,100,0.15)');
-                el.setAttribute('stroke-width', '4');
-                el.style.opacity = '0.4';
+                el.setAttribute('stroke', origColor);
+                el.setAttribute('fill', origColor + '22');
+                el.setAttribute('stroke-width', '6');
+                el.style.opacity = '0.7';
             }
         });
 
         document.querySelectorAll('.bbox-label-bg').forEach(el => {
             const art = el.getAttribute('data-art');
             const origColor = getBoxColor(art);
-            if (!hasSelection) {
-                el.setAttribute('fill', origColor);
-                el.style.opacity = '1';
-            } else if (art === selectedArt) {
+            if (hasSelection && art === selectedArt) {
                 el.setAttribute('fill', '#ffd166');
-                el.style.opacity = '1';
             } else {
-                el.setAttribute('fill', '#555');
-                el.style.opacity = '0.4';
+                el.setAttribute('fill', origColor);
             }
+            el.style.opacity = '1';
         });
 
         document.querySelectorAll('.bbox-label').forEach(el => {
-            const art = el.getAttribute('data-art');
-            if (!hasSelection || art === selectedArt) {
-                el.style.opacity = '1';
-            } else {
-                el.style.opacity = '0.3';
-            }
+            el.style.opacity = '1';
         });
 
         document.querySelectorAll('.bbox-shelf').forEach(el => {
@@ -937,11 +925,13 @@
 
     function zoomFitAll() {
         const grid = document.getElementById('photosGrid');
+        const panel = document.getElementById('sidePanel');
         const toolbar = document.querySelector('.toolbar');
         const visiblePhotos = PHOTOS.filter(n => document.getElementById(`card-${n}`));
         const count = visiblePhotos.length || 1;
 
-        const totalW = window.innerWidth - 1;
+        const panelW = panel.classList.contains('open') ? panel.offsetWidth : 0;
+        const totalW = window.innerWidth - panelW - 1;
         const totalH = window.innerHeight - toolbar.offsetHeight;
         const headerH = 26; // photo-header height per card
         const pad = 16;
@@ -967,18 +957,17 @@
 
     function openPanelTab(tab) {
         const panel = document.getElementById('sidePanel');
-        const overlay = document.getElementById('sidePanelOverlay');
         activeTab = tab;
         panel.classList.add('open');
-        overlay.classList.add('open');
         switchTab(tab);
         if (tab === 'actions' && !actionsLoaded) loadActions();
         else if (tab === 'actions') renderActions();
+        setTimeout(zoomFitAll, 280);
     }
 
     function closeSidePanel() {
         document.getElementById('sidePanel').classList.remove('open');
-        document.getElementById('sidePanelOverlay').classList.remove('open');
+        setTimeout(zoomFitAll, 280);
     }
 
     function switchTab(tab) {
