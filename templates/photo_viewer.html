@@ -320,6 +320,7 @@
         renderOverlay(name);
         updateStats();
         renderProductList();
+        calculateSalesPerMeter();
     }
 
     function updateStats() {
@@ -555,6 +556,24 @@
             `;
         }
 
+        const spmData = salesPerMeterMap[p.art] || salesPerMeterMap[p.product_id];
+        if (spmData && avgSalesPerMeter > 0) {
+            const spm = spmData.salesPerMeter;
+            const pctDiff = ((spm - avgSalesPerMeter) / avgSalesPerMeter) * 100;
+            const pctSign = pctDiff >= 0 ? '+' : '';
+            const pctColor = pctDiff >= 50 ? '#ef4444' : pctDiff <= -50 ? '#f59e0b' : '#22c55e';
+            html += `
+                <div class="field">
+                    <div class="field-label">₽ / Meter (shelf efficiency)</div>
+                    <div class="dims-grid" style="margin-top:4px">
+                        <span class="dim-label">₽/meter</span><span class="dim-value" style="color:${spmData.color};font-weight:600">${spm.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
+                        <span class="dim-label">Avg (all SKUs)</span><span class="dim-value">${avgSalesPerMeter.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
+                        <span class="dim-label">vs Average</span><span class="dim-value" style="color:${pctColor};font-weight:600">${pctSign}${pctDiff.toFixed(0)}%</span>
+                    </div>
+                </div>
+            `;
+        }
+
         document.getElementById('detailContent').innerHTML = html;
         
         openPanelTab('analytics');
@@ -616,6 +635,24 @@
                         <span class="dim-label">Avg Qty</span><span class="dim-value">${sd.avg_sale_qty.toFixed(1)}</span>
                         <span class="dim-label">Avg Stock</span><span class="dim-value">${sd.avg_stock_qty.toFixed(1)}</span>
                         <span class="dim-label">Weeks</span><span class="dim-value">${sd.weeks}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        const spmData = salesPerMeterMap[art];
+        if (spmData && avgSalesPerMeter > 0) {
+            const spm = spmData.salesPerMeter;
+            const pctDiff = ((spm - avgSalesPerMeter) / avgSalesPerMeter) * 100;
+            const pctSign = pctDiff >= 0 ? '+' : '';
+            const pctColor = pctDiff >= 50 ? '#ef4444' : pctDiff <= -50 ? '#f59e0b' : '#22c55e';
+            html += `
+                <div class="field">
+                    <div class="field-label">₽ / Meter (shelf efficiency)</div>
+                    <div class="dims-grid" style="margin-top:4px">
+                        <span class="dim-label">₽/meter</span><span class="dim-value" style="color:${spmData.color};font-weight:600">${spm.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
+                        <span class="dim-label">Avg (all SKUs)</span><span class="dim-value">${avgSalesPerMeter.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
+                        <span class="dim-label">vs Average</span><span class="dim-value" style="color:${pctColor};font-weight:600">${pctSign}${pctDiff.toFixed(0)}%</span>
                     </div>
                 </div>
             `;
