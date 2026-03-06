@@ -178,23 +178,26 @@
             const data = photoDataMap[name];
             if (!data) return;
             data.products.forEach(p => {
-                if (!artInfo[p.art]) {
-                    artInfo[p.art] = { count: 0, width_cm: p.facing_width_cm || 0 };
+                const key = p.art;
+                if (!artInfo[key]) {
+                    artInfo[key] = { count: 0, width_cm: p.facing_width_cm || 0, product_id: p.product_id };
                 }
-                artInfo[p.art].count++;
-                if (!artInfo[p.art].width_cm && p.facing_width_cm) {
-                    artInfo[p.art].width_cm = p.facing_width_cm;
+                artInfo[key].count++;
+                if (!artInfo[key].width_cm && p.facing_width_cm) {
+                    artInfo[key].width_cm = p.facing_width_cm;
                 }
             });
         });
 
         const values = [];
         Object.entries(artInfo).forEach(([art, info]) => {
-            const sd = salesData[art];
+            const sd = salesData[art] || salesData[info.product_id];
             if (!sd || !info.width_cm || info.count === 0) return;
             const totalShelfMeters = info.count * info.width_cm / 100;
             const spm = sd.avg_sale_amount / totalShelfMeters;
-            salesPerMeterMap[art] = { salesPerMeter: spm, color: '#22c55e' };
+            const entry = { salesPerMeter: spm, color: '#22c55e' };
+            salesPerMeterMap[art] = entry;
+            if (info.product_id) salesPerMeterMap[info.product_id] = entry;
             values.push(spm);
         });
 
