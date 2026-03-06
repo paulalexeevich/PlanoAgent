@@ -152,8 +152,28 @@ def _stable_color_from_text(text: str) -> str:
 
 
 def _load_product_sizes() -> dict:
-    """Load real product dimensions (cm) from product_code_external_id_map.csv.
-    Returns dict keyed by external_id → {width_cm, height_cm, name, tiny_name}."""
+    """Load product dimensions from test_coffee_product_map in Supabase.
+    Returns dict keyed by product_code → {width_cm, height_cm, name, tiny_name}."""
+    try:
+        rows = _supabase_get("test_coffee_product_map", {
+            "select": "product_code,tiny_name,product_name,width_cm,height_cm",
+        })
+        return {
+            r["product_code"]: {
+                "width_cm": float(r["width_cm"] or 0),
+                "height_cm": float(r["height_cm"] or 0),
+                "name": r.get("product_name") or "",
+                "tiny_name": r.get("tiny_name") or "",
+            }
+            for r in rows if r.get("product_code")
+        }
+    except Exception as e:
+        print(f"[product_sizes] Supabase failed ({e}), falling back to CSV", flush=True)
+        return _load_product_sizes_csv()
+
+
+def _load_product_sizes_csv() -> dict:
+    """Fallback: load from CSV file."""
     size_csv = os.path.join(os.path.dirname(__file__), "Demo data", "product_code_external_id_map.csv")
     size_map = {}
     if not os.path.exists(size_csv):
@@ -179,15 +199,22 @@ def _load_product_sizes() -> dict:
 
 
 def _build_image_map() -> dict:
-    """Build external_product_id → miniature_url mapping.
+    """Build external_product_id → miniature_url from test_coffee_product_map."""
+    try:
+        rows = _supabase_get("test_coffee_product_map", {
+            "select": "product_code,miniature_url",
+            "miniature_url": "not.is.null",
+        })
+        return {r["product_code"]: r["miniature_url"]
+                for r in rows if r.get("product_code") and r.get("miniature_url")}
+    except Exception as e:
+        print(f"[image_map] Supabase failed ({e}), falling back to files", flush=True)
+        return _build_image_map_files()
 
-    Chain: external_id → tiny_name (product_code_external_id_map.csv)
-           tiny_name   → miniature_url (coffee_1/2/3_assortment.json)
-    Returns dict keyed by external_id → image URL string.
-    """
+
+def _build_image_map_files() -> dict:
+    """Fallback: build from assortment JSON + CSV files."""
     demo_dir = os.path.join(os.path.dirname(__file__), "Demo data")
-
-    # Step 1: tiny_name → miniature_url from all three assortment files
     tiny_to_url: dict = {}
     for i in (1, 2, 3):
         assortment_path = os.path.join(demo_dir, f"coffee_{i}_assortment.json")
@@ -202,7 +229,6 @@ def _build_image_map() -> dict:
             if tn and url and tn not in tiny_to_url:
                 tiny_to_url[tn] = url
 
-    # Step 2: external_id → tiny_name from CSV
     size_csv = os.path.join(demo_dir, "product_code_external_id_map.csv")
     ext_to_url: dict = {}
     if not os.path.exists(size_csv):
@@ -214,7 +240,6 @@ def _build_image_map() -> dict:
             tn = (row.get("tiny_name") or "").strip()
             if eid and tn and tn in tiny_to_url:
                 ext_to_url[eid] = tiny_to_url[tn]
-
     return ext_to_url
 
 
@@ -412,10 +437,180 @@ def _build_planogram_from_demo_csv(csv_path: str) -> Planogram:
     return Planogram.from_dict(planogram_data)
 
 
+def _build_planogram_from_supabase(store_id: str = "617533") -> Planogram:
+    """Build a planogram from test_coffee_planogram_positions + test_coffee_product_map."""
+    pos_rows = _supabase_get("test_coffee_planogram_positions", {
+        "select": "*",
+        "store_id": f"eq.{store_id}",
+        "order": "eq_num_in_scene_group,shelf_number,on_shelf_position",
+    })
+    if not pos_rows:
+        raise ValueError(f"No planogram positions for store {store_id}")
+
+    size_map = _load_product_sizes()
+    image_map = _build_image_map()
+
+    products = []
+    seen_ids = set()
+    prod_width_in = {}
+    for row in pos_rows:
+        eid = row["external_product_id"]
+        pid = f"CSV-{eid}"
+        if pid not in seen_ids:
+            seen_ids.add(pid)
+            name = (row.get("external_product_name") or "").strip()
+            brand = name.split(" ")[0] if name else "Unknown"
+            dims = size_map.get(eid, {})
+            w_in = round(float(dims.get("width_cm", 7.5)) * CM_TO_IN, 2)
+            h_in = round(float(dims.get("height_cm", 20.0)) * CM_TO_IN, 2)
+            prod_width_in[pid] = w_in
+            prod_entry = {
+                "id": pid, "upc": eid,
+                "name": dims.get("tiny_name") or name or pid,
+                "brand": brand, "manufacturer": "Demo CSV",
+                "category": "Coffee", "subcategory": "Demo Import",
+                "beer_type": "N/A", "package_type": "pack_box",
+                "pack_size": 1, "unit_size_oz": 0.0,
+                "width_in": w_in, "height_in": h_in, "depth_in": 4.0,
+                "price": 0.0, "cost": 0.0, "abv": 0.0,
+                "color_hex": _stable_color_from_text(pid),
+                "weekly_units_sold": 0,
+            }
+            if eid in image_map:
+                prod_entry["image_url"] = image_map[eid]
+            products.append(prod_entry)
+        else:
+            dims = size_map.get(eid, {})
+            w_in = round(float(dims.get("width_cm", 7.5)) * CM_TO_IN, 2)
+            prod_width_in[pid] = w_in
+
+    grouped = defaultdict(list)
+    for row in pos_rows:
+        key = (row["eq_num_in_scene_group"], row["shelf_number"])
+        grouped[key].append(row)
+
+    bay_numbers = sorted({r["eq_num_in_scene_group"] for r in pos_rows})
+    max_shelf = max(r["shelf_number"] for r in pos_rows)
+    bay_depth_in = 8.0
+
+    bay_computed_widths = {}
+    for bay_num in bay_numbers:
+        max_w = 0.0
+        for shelf_num in range(1, max_shelf + 1):
+            shelf_w = sum(
+                prod_width_in.get(f"CSV-{r['external_product_id']}", 3.0) * max(1, r.get("faces_width") or 1)
+                for r in grouped.get((bay_num, shelf_num), [])
+            )
+            max_w = max(max_w, shelf_w)
+        bay_computed_widths[bay_num] = round(max_w + 1.0, 1)
+
+    shelf_max_height = {}
+    for (_, shelf_num), shelf_rows in grouped.items():
+        for r in shelf_rows:
+            p = next((pp for pp in products if pp["id"] == f"CSV-{r['external_product_id']}"), None)
+            h = p["height_in"] if p else 8.0
+            shelf_max_height[shelf_num] = max(shelf_max_height.get(shelf_num, 0), h)
+
+    bays = []
+    for bay_num in bay_numbers:
+        bay_width_in = bay_computed_widths[bay_num]
+        shelf_defs = []
+        y_cursor = 2.0
+        for shelf_num in range(max_shelf, 0, -1):
+            clearance = shelf_max_height.get(shelf_num, 8.0) + 1.5
+            positions = []
+            x_cursor = 0.0
+            for r in grouped.get((bay_num, shelf_num), []):
+                pid = f"CSV-{r['external_product_id']}"
+                fw = max(1, r.get("faces_width") or 1)
+                fh = max(1, r.get("faces_height") or 1)
+                fd = max(1, r.get("faces_depth") or 1)
+                positions.append({
+                    "product_id": pid, "x_position": round(x_cursor, 2),
+                    "facings_wide": fw, "facings_high": fh, "facings_deep": fd,
+                    "orientation": "front",
+                })
+                x_cursor += prod_width_in.get(pid, 3.0) * fw
+            shelf_defs.append({
+                "shelf_number": shelf_num, "width_in": bay_width_in,
+                "height_in": round(clearance, 1), "depth_in": bay_depth_in,
+                "y_position": round(y_cursor, 1), "positions": positions,
+                "shelf_type": "standard",
+            })
+            y_cursor += clearance
+        bays.append({
+            "bay_number": bay_num, "width_in": bay_width_in,
+            "height_in": round(y_cursor + 2.0, 1), "depth_in": bay_depth_in,
+            "shelves": shelf_defs, "glued_right": False,
+        })
+
+    return Planogram.from_dict({
+        "id": "PLN-CSV-COFFEE-617533",
+        "name": "Coffee Demo Planogram (Supabase)",
+        "category": "Coffee", "store_type": "Demo Store",
+        "effective_date": "2026-02-18",
+        "metadata": {
+            "version": "1.0", "generated_by": "Supabase Import",
+            "placement_strategy": "test_coffee_planogram_positions",
+        },
+        "equipment": {
+            "id": "EQ-CSV-001", "name": "Coffee Equipment",
+            "equipment_type": "gondola", "bays": bays,
+        },
+        "products": products,
+    })
+
+
 def _load_coffee_planogram():
-    """Load coffee planogram into current state (non-HTTP helper)."""
+    """Load coffee planogram into current state.
+
+    Priority: 1) Supabase planograms table (pre-built)
+              2) Build from Supabase positions table
+              3) Fallback to local JSON file
+    """
     global current_planogram, current_summary, current_compliance, current_decision_tree, current_equipment
 
+    # Try loading pre-built planogram from Supabase
+    try:
+        rows = _supabase_get("planograms", {
+            "select": "planogram_data,summary_data",
+            "planogram_id": "eq.PLN-CSV-COFFEE-617533",
+            "limit": "1",
+        })
+        if rows:
+            planogram_data = rows[0]["planogram_data"]
+            image_map = _build_image_map()
+            for prod in planogram_data.get("products", []):
+                upc = prod.get("upc", "")
+                if upc and upc in image_map:
+                    prod["image_url"] = image_map[upc]
+            current_planogram = Planogram.from_dict(planogram_data)
+            current_summary = generate_summary(current_planogram, len(current_planogram.products))
+            current_compliance = None
+            current_decision_tree = None
+            from dataclasses import asdict
+            current_equipment = asdict(current_planogram.equipment) if current_planogram.equipment else None
+            _save_state()
+            print("[init] Loaded coffee planogram from Supabase planograms table", flush=True)
+            return
+    except Exception as e:
+        print(f"[init] Supabase planograms load failed: {e}", flush=True)
+
+    # Try building from Supabase positions table
+    try:
+        current_planogram = _build_planogram_from_supabase("617533")
+        current_summary = generate_summary(current_planogram, len(current_planogram.products))
+        current_compliance = None
+        current_decision_tree = None
+        from dataclasses import asdict
+        current_equipment = asdict(current_planogram.equipment) if current_planogram.equipment else None
+        _save_state()
+        print("[init] Built coffee planogram from Supabase positions", flush=True)
+        return
+    except Exception as e:
+        print(f"[init] Supabase positions build failed: {e}", flush=True)
+
+    # Fallback to local JSON file
     coffee_json = os.path.join(os.path.dirname(__file__), "data", "coffee_default_planogram.json")
     with open(coffee_json, "r", encoding="utf-8") as f:
         planogram_data = json.load(f)
@@ -433,6 +628,7 @@ def _load_coffee_planogram():
     from dataclasses import asdict
     current_equipment = asdict(current_planogram.equipment) if current_planogram.equipment else None
     _save_state()
+    print("[init] Loaded coffee planogram from local JSON (fallback)", flush=True)
 
 
 @app.route("/")
@@ -1252,7 +1448,27 @@ def _load_assortment_products(assortment_path: str) -> list:
 
 
 def _load_art_name_map() -> dict:
-    """Build art→tiny_name mapping from product_art_mapping.csv."""
+    """Build recognition_id → {tiny_name, name} mapping from Supabase product map."""
+    try:
+        rows = _supabase_get("test_coffee_product_map", {
+            "select": "recognition_id,tiny_name,product_name",
+        })
+        mapping = {}
+        for r in rows:
+            rid = r.get("recognition_id")
+            if rid:
+                mapping[rid] = {
+                    "tiny_name": r.get("tiny_name") or "",
+                    "name": r.get("product_name") or "",
+                }
+        return mapping
+    except Exception as e:
+        print(f"[art_name_map] Supabase failed ({e}), falling back to CSV", flush=True)
+        return _load_art_name_map_csv()
+
+
+def _load_art_name_map_csv() -> dict:
+    """Fallback: build from product_art_mapping.csv."""
     csv_path = os.path.join(os.path.dirname(__file__), "Demo data", "product_art_mapping.csv")
     mapping = {}
     if not os.path.exists(csv_path):
@@ -1304,7 +1520,7 @@ def debug_files():
 @app.route("/api/photo-list")
 def photo_list():
     """Return list of available photo names. ?source=supabase fetches from DB."""
-    source = request.args.get("source", "json")
+    source = request.args.get("source", "supabase")
     if source == "supabase":
         try:
             names = _supabase_photo_list()
@@ -1328,7 +1544,7 @@ def photo_data(photo_name):
     ?source=supabase  → fetch from Supabase recognition tables.
     Otherwise prefers assortment JSON, falling back to raw_products + art_mapping.
     """
-    source = request.args.get("source", "json")
+    source = request.args.get("source", "supabase")
 
     if source == "supabase":
         try:

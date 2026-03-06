@@ -6,7 +6,6 @@ Replicates the frontend logic: products in the planogram that have 0 photo facin
 are "out of shelf". For each, inserts a task into planogram_actions with sales data.
 """
 
-import csv
 import os
 import sys
 from collections import defaultdict
@@ -45,25 +44,21 @@ def supabase_post(table, data):
 
 
 def load_product_sizes():
-    csv_path = os.path.join(os.path.dirname(__file__), "..", "Demo data", "product_code_external_id_map.csv")
+    """Load product sizes from Supabase test_coffee_product_map."""
+    rows = supabase_get("test_coffee_product_map", {
+        "select": "product_code,tiny_name,product_name,width_cm,height_cm",
+    })
     size_map = {}
-    with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            eid = (row.get("external_id") or "").strip()
-            if not eid:
-                continue
-            try:
-                w = float(row.get("width") or 0)
-                h = float(row.get("height") or 0)
-            except ValueError:
-                continue
-            size_map[eid] = {
-                "width_cm": w,
-                "height_cm": h,
-                "name": (row.get("name") or "").strip(),
-                "tiny_name": (row.get("tiny_name") or "").strip(),
-            }
+    for r in rows:
+        pc = r.get("product_code")
+        if not pc:
+            continue
+        size_map[pc] = {
+            "width_cm": float(r.get("width_cm") or 0),
+            "height_cm": float(r.get("height_cm") or 0),
+            "name": r.get("product_name") or "",
+            "tiny_name": r.get("tiny_name") or "",
+        }
     return size_map
 
 
@@ -134,7 +129,7 @@ def get_photo_facings():
 
 
 def get_sales_data(size_map):
-    """Get sales data keyed by tiny_name."""
+    """Get sales data keyed by tiny_name using product map for mapping."""
     ext_to_tiny = {eid: info["tiny_name"] for eid, info in size_map.items() if info.get("tiny_name")}
 
     rows = supabase_get("source_data_617533", {
