@@ -39,13 +39,6 @@
                     </div>
                 </div>
                 <div class="settings-section">
-                    <div class="settings-label">Data Source</div>
-                    <div class="view-toggle" id="sourceToggle">
-                        <button class="active" data-source="json" onclick="setSource('json')">JSON</button>
-                        <button data-source="supabase" onclick="setSource('supabase')">Supabase</button>
-                    </div>
-                </div>
-                <div class="settings-section">
                     <div class="settings-label">Display Layers</div>
                     <label>
                         <input type="checkbox" id="showProducts" checked onchange="renderAllOverlays()">
@@ -147,7 +140,6 @@
     let salesData = {};        // tiny_name → {avg_sale_amount, avg_sale_qty, ...}
 
     let currentView = 'all';
-    let currentSource = 'json'; // 'json' or 'supabase'
     let selectedId = null;
     let selectedPhotoName = null;
     let selectedArt = null;
@@ -260,58 +252,9 @@
         `;
     }
 
-    function setSource(source) {
-        currentSource = source;
-        document.querySelectorAll('#sourceToggle button').forEach(b => {
-            b.classList.toggle('active', b.getAttribute('data-source') === source);
-        });
-        // Clear cached data so we re-fetch from the new source
-        Object.keys(photoDataMap).forEach(k => delete photoDataMap[k]);
-
-        if (source === 'supabase') {
-            // Fetch photo list from Supabase and rebuild
-            fetch('/api/photo-list?source=supabase')
-                .then(r => r.json())
-                .then(data => {
-                    if (data.photos) {
-                        PHOTOS = data.photos;
-                        rebuildPhotoSelect();
-                    }
-                    reloadCurrentView();
-                })
-                .catch(err => {
-                    console.error('[photo_viewer] Failed to load photos from Supabase:', err);
-                    reloadCurrentView();
-                });
-        } else {
-            fetch('/api/photo-list?source=json')
-                .then(r => r.json())
-                .then(data => {
-                    if (data.photos) {
-                        PHOTOS = data.photos;
-                        rebuildPhotoSelect();
-                    }
-                    reloadCurrentView();
-                })
-                .catch(err => {
-                    console.error('[photo_viewer] Failed to load photos from JSON:', err);
-                    reloadCurrentView();
-                });
-        }
-    }
-
     function rebuildPhotoSelect() {
         const sel = document.getElementById('photoSelect');
         sel.innerHTML = PHOTOS.map(p => `<option value="${p}">${p}</option>`).join('');
-    }
-
-    function reloadCurrentView() {
-        if (currentView === 'single') {
-            const sel = document.getElementById('photoSelect').value || PHOTOS[0];
-            loadSinglePhoto(sel);
-        } else {
-            loadAllPhotos();
-        }
     }
 
     function setView(mode) {
@@ -377,8 +320,7 @@
             updateStats();
             return;
         }
-        const qs = currentSource === 'supabase' ? '?source=supabase' : '';
-        const resp = await fetch(`/api/photo-data/${name}${qs}`);
+        const resp = await fetch(`/api/photo-data/${name}`);
         photoDataMap[name] = await resp.json();
         renderOverlay(name);
         updateStats();
