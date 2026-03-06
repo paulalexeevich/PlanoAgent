@@ -1208,12 +1208,14 @@ def planogram_facings():
     Uses Supabase product map to translate external_id → tiny_name.
     """
     global current_planogram
-    if current_planogram is None:
-        if not _load_saved_state():
+    mode = request.args.get("mode", "coffee").lower()
+    if current_planogram is None or (mode == "coffee" and getattr(current_planogram, "category", "") != "Coffee"):
+        if mode == "coffee":
+            _load_coffee_planogram()
+        elif not _load_saved_state():
             init_default_planogram()
 
     size_map = _load_product_sizes()
-    # external_id → tiny_name
     ext_to_tiny = {eid: info["tiny_name"] for eid, info in size_map.items() if info.get("tiny_name")}
 
     # Build product metadata lookup: product_id → product dict
