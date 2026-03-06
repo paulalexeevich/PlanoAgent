@@ -202,6 +202,43 @@ body.photo-viewer {
     border-bottom: 1px solid var(--border);
 }
 
+.detail-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.detail-panel-header h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+.panel-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: all 0.15s;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+.panel-close-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-dark);
+}
+
 .detail-panel .field { margin-bottom: 8px; }
 
 .detail-panel .field-label {

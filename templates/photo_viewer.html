@@ -80,8 +80,6 @@
 
         <div class="sep"></div>
         <button id="actionsBtn" onclick="toggleActionsPanel()" style="background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4);color:#f59e0b;font-weight:600">Actions <span id="actionsBadge"></span></button>
-        <div class="sep"></div>
-        <button id="togglePanelBtn" onclick="togglePanel()">Hide Details</button>
     </div>
 
     <!-- Actions Panel (slides from left) -->
@@ -107,7 +105,10 @@
         <div class="photos-grid" id="photosGrid"></div>
 
         <div class="detail-panel" id="detailPanel">
-            <h2>Details</h2>
+            <div class="detail-panel-header">
+                <h2>Details</h2>
+                <button class="panel-close-btn" onclick="togglePanel()" title="Close details panel">&times;</button>
+            </div>
             <div id="detailContent">
                 <div class="empty-state">Click a bounding box to see details</div>
             </div>
@@ -1003,9 +1004,7 @@
 
     function togglePanel() {
         const panel = document.getElementById('detailPanel');
-        const btn = document.getElementById('togglePanelBtn');
         panel.classList.toggle('hidden');
-        btn.textContent = panel.classList.contains('hidden') ? 'Show Details' : 'Hide Details';
         setTimeout(zoomFitAll, 250);
     }
 
