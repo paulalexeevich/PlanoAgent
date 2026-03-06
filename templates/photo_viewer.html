@@ -685,26 +685,35 @@
                 el.setAttribute('stroke-width', '10');
                 el.style.opacity = '1';
             } else {
-                el.setAttribute('stroke', origColor);
-                el.setAttribute('fill', origColor + '22');
-                el.setAttribute('stroke-width', '6');
-                el.style.opacity = '0.7';
+                el.setAttribute('stroke', '#666');
+                el.setAttribute('fill', 'rgba(100,100,100,0.15)');
+                el.setAttribute('stroke-width', '4');
+                el.style.opacity = '0.4';
             }
         });
 
         document.querySelectorAll('.bbox-label-bg').forEach(el => {
             const art = el.getAttribute('data-art');
             const origColor = getBoxColor(art);
-            if (hasSelection && art === selectedArt) {
-                el.setAttribute('fill', '#ffd166');
-            } else {
+            if (!hasSelection) {
                 el.setAttribute('fill', origColor);
+                el.style.opacity = '1';
+            } else if (art === selectedArt) {
+                el.setAttribute('fill', '#ffd166');
+                el.style.opacity = '1';
+            } else {
+                el.setAttribute('fill', '#555');
+                el.style.opacity = '0.4';
             }
-            el.style.opacity = '1';
         });
 
         document.querySelectorAll('.bbox-label').forEach(el => {
-            el.style.opacity = '1';
+            const art = el.getAttribute('data-art');
+            if (!hasSelection || art === selectedArt) {
+                el.style.opacity = '1';
+            } else {
+                el.style.opacity = '0.3';
+            }
         });
 
         document.querySelectorAll('.bbox-shelf').forEach(el => {
