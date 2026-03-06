@@ -11,4 +11,15 @@ venv/
 .vercel/
 .playwright-mcp/
 data/current_planogram.json
+data/sample_planogram.json
+data/planogram_summary.json
 node_modules/
+
+# Data migrated to Supabase (no longer needed locally)
+Demo data/*.csv
+Demo data/*.xlsx
+Demo data/*_assortment.json
+Demo data/*_raw_products.json
+Demo data/*_raw_shelves.json
+data/coffee_*_assortment.json
+data/coffee_default_planogram.json

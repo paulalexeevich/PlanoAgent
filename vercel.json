@@ -6,7 +6,7 @@
       "use": "@vercel/python",
       "config": {
         "maxLambdaSize": "50mb",
-        "includeFiles": ["Demo data/**", "data/**", "templates/**"]
+        "includeFiles": ["Demo data/*.jpg", "data/**", "templates/**"]
       }
     },
     {
@@ -14,7 +14,7 @@
       "use": "@vercel/static"
     },
     {
-      "src": "Demo data/**",
+      "src": "Demo data/*.jpg",
       "use": "@vercel/static"
     }
   ],
