@@ -716,3 +716,27 @@ body.photo-viewer {
     min-width: 16px;
     text-align: center;
 }
+
+/* ============================================================
+   SALES / METER LEGEND
+   ============================================================ */
+.spm-legend {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    padding: 3px 10px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+.spm-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
