@@ -5,8 +5,13 @@
       "src": "api/index.py",
       "use": "@vercel/python",
       "config": {
-        "includeFiles": "{Demo data/**,templates/**,data/**,static/**}"
+        "maxLambdaSize": "50mb",
+        "includeFiles": "Demo data/**"
       }
+    },
+    {
+      "src": "static/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -15,8 +20,15 @@
       "dest": "/static/$1"
     },
     {
+      "src": "/demo-images/(.*)",
+      "dest": "/Demo data/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/api/index.py"
     }
-  ]
+  ],
+  "env": {
+    "PYTHONPATH": "/var/task"
+  }
 }
