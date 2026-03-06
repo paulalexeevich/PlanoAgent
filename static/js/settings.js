@@ -49,6 +49,27 @@ function setFillMode(mode) {
     saveSettings();
 }
 
+function setDataSource(source) {
+    dataSource = source;
+    const sel = document.getElementById('dataSource');
+    if (sel) sel.value = source;
+    saveSettings();
+}
+
+function setColorMode(mode) {
+    colorMode = mode;
+    const sel = document.getElementById('colorMode');
+    if (sel) sel.value = mode;
+    saveSettings();
+    if (planogramData) renderAll();
+}
+
+function setDisplayLayer(layer, visible) {
+    displayLayers[layer] = visible;
+    saveSettings();
+    if (planogramData) renderAll();
+}
+
 function openSettings() {
     const overlay = document.getElementById('settingsOverlay');
     document.getElementById('settingsUnitIn').classList.toggle('active', !useMetric);
@@ -56,6 +77,11 @@ function openSettings() {
     document.getElementById('settingsCurrency').value = currency;
     document.getElementById('fillMode').value = fillMode || 'algorithm';
     document.getElementById('settingsShowDims').checked = showDimensions;
+    document.getElementById('dataSource').value = dataSource || 'supabase';
+    document.getElementById('colorMode').value = colorMode || 'price_meter';
+    document.getElementById('layerProducts').checked = displayLayers.products !== false;
+    document.getElementById('layerShelves').checked = displayLayers.shelves === true;
+    document.getElementById('layerLabels').checked = displayLayers.labels === true;
     overlay.classList.add('open');
 }
 
@@ -79,6 +105,9 @@ function saveSettings() {
             showDimensions,
             scale,
             editorScale: EDITOR_SCALE,
+            dataSource,
+            colorMode,
+            displayLayers,
         }));
     } catch (_) { /* localStorage unavailable */ }
 }
@@ -113,6 +142,15 @@ function loadSettings() {
         }
         if (typeof s.editorScale === 'number') {
             EDITOR_SCALE = s.editorScale;
+        }
+        if (s.dataSource) {
+            dataSource = s.dataSource;
+        }
+        if (s.colorMode) {
+            colorMode = s.colorMode;
+        }
+        if (s.displayLayers) {
+            displayLayers = { ...displayLayers, ...s.displayLayers };
         }
         updateScaleLabels();
     } catch (_) { /* localStorage unavailable */ }

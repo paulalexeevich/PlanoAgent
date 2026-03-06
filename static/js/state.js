@@ -14,6 +14,13 @@ let decisionTreeData = null;   // decision tree definition
 let complianceData = null;     // compliance report from backend
 let currentLayer = 'products'; // 'products' | 'dt-0' | 'dt-1' | ...
 let dtPositionMap = {};        // product_id → {LevelName: groupValue, ...}
+let dataSource = 'supabase';   // 'json' | 'supabase' — default data source
+let colorMode = 'price_meter'; // 'colors' | 'price_meter' — product coloring mode
+let displayLayers = {           // layer visibility toggles
+    products: true,
+    shelves: false,
+    labels: false
+};
 
 const DT_KNOWN_PALETTES = {
     'Segment': {
