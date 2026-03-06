@@ -239,6 +239,42 @@ body.photo-viewer {
     background: var(--bg-dark);
 }
 
+/* ============================================================
+   FLOATING ACTION BUTTON (to reopen panel)
+   ============================================================ */
+.panel-toggle-fab {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+    z-index: 150;
+}
+
+.panel-toggle-fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), 0 3px 6px rgba(0, 0, 0, 0.4);
+    background: #5fa3ff;
+}
+
+.panel-toggle-fab:active {
+    transform: scale(0.95);
+}
+
+.panel-toggle-fab svg {
+    flex-shrink: 0;
+}
+
 .detail-panel .field { margin-bottom: 8px; }
 
 .detail-panel .field-label {
