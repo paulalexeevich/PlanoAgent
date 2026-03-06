@@ -8,9 +8,10 @@ venv
 .venv
 .env.local
 .git
-*.png
-*.jpg
-*.jpeg
+# Exclude root-level images (screenshots, diagrams)
+/*.png
+/*.jpg
+/*.jpeg
 .cursor
 node_modules
 .vercel
