@@ -279,7 +279,10 @@
                     }
                     reloadCurrentView();
                 })
-                .catch(() => reloadCurrentView());
+                .catch(err => {
+                    console.error('[photo_viewer] Failed to load photos from Supabase:', err);
+                    reloadCurrentView();
+                });
         } else {
             fetch('/api/photo-list?source=json')
                 .then(r => r.json())
@@ -290,7 +293,10 @@
                     }
                     reloadCurrentView();
                 })
-                .catch(() => reloadCurrentView());
+                .catch(err => {
+                    console.error('[photo_viewer] Failed to load photos from JSON:', err);
+                    reloadCurrentView();
+                });
         }
     }
 
@@ -1136,10 +1142,14 @@
                 renderActions();
                 const badge = document.getElementById('actionsBadge');
                 badge.textContent = actionsData.length;
+            } else {
+                throw new Error(data.error || 'Unknown error');
             }
         }).catch(err => {
+            console.error('[photo_viewer] Failed to load actions:', err);
+            actionsLoaded = false;
             document.getElementById('actionsList').innerHTML =
-                `<div class="empty-state">Failed to load actions</div>`;
+                `<div class="empty-state">Failed to load actions: ${err.message}</div>`;
         });
     }
 
@@ -1152,6 +1162,12 @@
     }
 
     function renderActions() {
+        if (!actionsData || !Array.isArray(actionsData)) {
+            document.getElementById('actionsList').innerHTML =
+                '<div class="empty-state">No actions data available</div>';
+            return;
+        }
+
         const filtered = actionFilter === 'all'
             ? actionsData
             : actionsData.filter(a => a.priority === actionFilter);
@@ -1215,8 +1231,14 @@
 
     // Initial load: fetch planogram facings + sales data then load photos
     Promise.all([
-        fetch('/api/planogram-facings').then(r => r.json()).catch(() => ({})),
-        fetch('/api/sales-data').then(r => r.json()).catch(() => ({})),
+        fetch('/api/planogram-facings').then(r => r.json()).catch(err => {
+            console.error('[photo_viewer] Failed to load planogram facings:', err);
+            return {};
+        }),
+        fetch('/api/sales-data').then(r => r.json()).catch(err => {
+            console.error('[photo_viewer] Failed to load sales data:', err);
+            return {};
+        }),
     ]).then(([facings, sales]) => {
         planogramFacings = facings;
         salesData = sales;
@@ -1234,7 +1256,10 @@
             const badge = document.getElementById('actionsBadge');
             badge.textContent = data.actions.length;
         }
-    }).catch(() => {});
+    }).catch(err => {
+        console.error('[photo_viewer] Failed to pre-load actions:', err);
+        actionsLoaded = false;
+    });
 
     // Settings dropdown toggle
     function toggleSettings(event) {
