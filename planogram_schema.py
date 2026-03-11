@@ -58,6 +58,7 @@ class Product:
     color_hex: str = "#CCCCCC"
     weekly_units_sold: int = 0
     image_url: str = ""   # miniature image URL (from assortment data)
+    image_no_bg_url: str = ""  # background-removed image URL
 
     @property
     def margin(self) -> float:

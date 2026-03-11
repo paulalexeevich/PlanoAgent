@@ -300,7 +300,7 @@
                 </div>
                 <div class="plano-bay-section">
                     <div class="plano-bay-header">
-                        <span>Planogram (from recognition)</span>
+                        <span>Realogram</span>
                     </div>
                     <div class="planogram-container plano-mini show-dimensions" id="plano-${name}">
                         <div class="plano-loading">Building planogram...</div>
@@ -1414,10 +1414,16 @@
                         block.style.left = leftPx + 'px';
                         block.style.top = (shelfTopPx + shelfHeight - blockHeight) + 'px';
 
-                        if (product.image_url && blockHeight > 14 && singleWidth > 10) {
+                        const hasNoBg = !!product.image_no_bg_url;
+                        const imgSrc = product.image_no_bg_url || product.image_url;
+
+                        if (imgSrc && blockHeight > 14 && singleWidth > 10) {
                             block.classList.add('product-block-image');
+                            if (hasNoBg) {
+                                block.classList.add('product-no-bg');
+                            }
                             const imgEl = document.createElement('img');
-                            imgEl.src = product.image_url;
+                            imgEl.src = imgSrc;
                             imgEl.className = 'product-image';
                             imgEl.draggable = false;
                             block.appendChild(imgEl);

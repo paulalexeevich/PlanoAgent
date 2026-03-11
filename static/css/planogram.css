@@ -161,6 +161,21 @@
     border-color: rgba(255,255,255,0.4);
 }
 
+/* NO-BG product highlight — transparent background with glowing bounding box */
+.product-block.product-no-bg {
+    background: transparent;
+    border: 2px solid #00e5ff;
+    box-shadow: 0 0 8px rgba(0, 229, 255, 0.5), inset 0 0 4px rgba(0, 229, 255, 0.15);
+    border-radius: 2px;
+}
+.product-block.product-no-bg .product-image {
+    padding: 0;
+}
+.product-block.product-no-bg:hover {
+    border-color: #00e5ff;
+    box-shadow: 0 0 16px rgba(0, 229, 255, 0.7), inset 0 0 6px rgba(0, 229, 255, 0.2);
+}
+
 /* TOOLTIP */
 .tooltip {
     display: none;

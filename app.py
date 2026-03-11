@@ -186,6 +186,20 @@ def _build_image_map() -> dict:
         return {}
 
 
+def _build_no_bg_image_map() -> dict:
+    """Build recognition_id → image_no_bg_url from test_coffee_product_map."""
+    try:
+        rows = _supabase_get("test_coffee_product_map", {
+            "select": "recognition_id,image_no_bg_url",
+            "image_no_bg_url": "not.is.null",
+        })
+        return {r["recognition_id"]: r["image_no_bg_url"]
+                for r in rows if r.get("recognition_id") and r.get("image_no_bg_url")}
+    except Exception as e:
+        print(f"[no_bg_map] Supabase failed: {e}", flush=True)
+        return {}
+
+
 CM_TO_IN = 1.0 / 2.54
 
 
@@ -330,6 +344,8 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
     if not photo_names:
         raise ValueError("No recognition photos found")
 
+    no_bg_map = _build_no_bg_image_map()
+
     all_products_dict: dict[str, dict] = {}
     bays: list[dict] = []
     shelf_width_in = round(shelf_width_cm * CM_TO_IN, 2)
@@ -428,6 +444,7 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
                 if pid not in all_products_dict:
                     prod_info = p
                     brand = prod_info.get("brand_name", "") or "Unknown"
+                    no_bg_url = no_bg_map.get(pid, "")
                     all_products_dict[pid] = {
                         "id": pid,
                         "upc": prod_info.get("barcode", "") or pid,
@@ -448,7 +465,8 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
                         "abv": 0.0,
                         "color_hex": _stable_color_from_text(pid),
                         "weekly_units_sold": 0,
-                        "image_url": prod_info.get("miniature_url", ""),
+                        "image_url": no_bg_url or prod_info.get("miniature_url", ""),
+                        "image_no_bg_url": no_bg_url,
                     }
 
             if total_width_cm > shelf_width_cm:
