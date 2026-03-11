@@ -972,6 +972,12 @@
         photoScales[name] = scale;
     }
 
+    let planoRenderTimer = null;
+    function scheduleReRenderPlanograms() {
+        if (planoRenderTimer) clearTimeout(planoRenderTimer);
+        planoRenderTimer = setTimeout(renderAllMiniPlanograms, 120);
+    }
+
     function zoomAll(delta) {
         if (globalScale === null) globalScale = 0.3;
         globalScale = Math.max(0.05, Math.min(2, globalScale + delta));
@@ -981,6 +987,7 @@
             }
         });
         document.getElementById('zoomLabel').textContent = Math.round(globalScale * 100) + '%';
+        scheduleReRenderPlanograms();
     }
 
     function zoomFitAll() {
@@ -993,24 +1000,38 @@
         const panelW = panel.classList.contains('open') ? panel.offsetWidth : 0;
         const totalW = window.innerWidth - panelW - 1;
         const totalH = window.innerHeight - toolbar.offsetHeight;
-        const headerH = 26; // photo-header height per card
+        const headerH = 26;
+        const planoHeaderH = 30; // "PLANOGRAM (FROM RECOGNITION)" bar + padding
+        const planoFooterH = 28; // bay footer "125 cm" + padding
         const pad = 16;
         const gaps = (count - 1) * 8;
         const availW = (totalW - pad - gaps) / count;
-        const availH = totalH - pad - headerH;
+        const fixedOverhead = pad + headerH + planoHeaderH + planoFooterH;
+        const availH = totalH - fixedOverhead;
 
         let fitScale = 1;
         visiblePhotos.forEach(name => {
             const size = photoNaturalSizes[name];
             if (!size) return;
             const sw = availW / size.w;
-            const sh = availH / size.h;
+
+            // Planogram height scales with photo width: planoH = bayHeightIn * (photoW / bayWidthIn)
+            const bay = recogBayMap[name];
+            const bayWidthIn = bay ? bay.width_in : 49.21;
+            const bayHeightIn = bay ? bay.height_in : 0;
+            // effectiveH = photo px height + planogram px height (both scale with zoomScale)
+            // planoH(scale) = bayHeightIn * (size.w * scale / bayWidthIn) = scale * bayHeightIn * size.w / bayWidthIn
+            // totalH(scale) = scale * size.h + scale * bayHeightIn * size.w / bayWidthIn
+            //               = scale * (size.h + bayHeightIn * size.w / bayWidthIn)
+            const effectiveH = size.h + (bay ? bayHeightIn * size.w / bayWidthIn : 0);
+            const sh = availH / effectiveH;
             fitScale = Math.min(fitScale, sw, sh);
         });
 
         globalScale = Math.max(0.02, fitScale);
         visiblePhotos.forEach(name => applyScaleToPhoto(name, globalScale));
         document.getElementById('zoomLabel').textContent = Math.round(globalScale * 100) + '%';
+        scheduleReRenderPlanograms();
     }
 
     let activeTab = 'actions';
@@ -1280,7 +1301,7 @@
 
     let recogPlanogramData = null;
     let recogProductsMap = {};
-    const PLANO_SCALE = 3; // px per inch for mini planogram
+    let recogBayMap = {}; // photoName → bay data (for re-renders on zoom)
 
     function fetchAndRenderPlanograms() {
         fetch('/api/build-from-recognition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
@@ -1293,6 +1314,16 @@
                 recogPlanogramData = data.planogram;
                 recogProductsMap = {};
                 (recogPlanogramData.products || []).forEach(p => { recogProductsMap[p.id] = p; });
+
+                const bays = recogPlanogramData.equipment.bays || [];
+                const sortedPhotos = [...PHOTOS].sort();
+                recogBayMap = {};
+                bays.forEach((bay, idx) => {
+                    const photoName = sortedPhotos[idx];
+                    if (photoName) recogBayMap[photoName] = bay;
+                });
+
+                zoomFitAll();
                 renderAllMiniPlanograms();
             })
             .catch(err => console.error('[plano-mini] Fetch error:', err));
@@ -1300,21 +1331,26 @@
 
     function renderAllMiniPlanograms() {
         if (!recogPlanogramData || !recogPlanogramData.equipment) return;
-        const bays = recogPlanogramData.equipment.bays || [];
-        const sortedPhotos = [...PHOTOS].sort();
 
-        bays.forEach((bay, idx) => {
-            const photoName = sortedPhotos[idx];
-            if (!photoName) return;
+        Object.keys(recogBayMap).forEach(photoName => {
             const container = document.getElementById(`plano-${photoName}`);
             if (!container) return;
-            renderMiniBay(container, bay, photoName);
+            renderMiniBay(container, recogBayMap[photoName], photoName);
         });
+    }
+
+    function getPlanoScaleForPhoto(photoName, bayWidthIn) {
+        const img = document.getElementById(`img-${photoName}`);
+        if (!img) return 3;
+        const photoDisplayW = img.offsetWidth || img.clientWidth;
+        if (photoDisplayW < 20) return 3;
+        return photoDisplayW / bayWidthIn;
     }
 
     function renderMiniBay(container, bay, photoName) {
         container.innerHTML = '';
-        const sc = PLANO_SCALE;
+        const bayWidthIn = bay.width_in || 49.21;
+        const sc = getPlanoScaleForPhoto(photoName, bayWidthIn);
 
         const bays = BayRenderer.normalizeDashboard({ bays: [bay] });
         const layout = BayRenderer.render({

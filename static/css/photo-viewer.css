@@ -901,14 +901,10 @@ body.photo-viewer {
 .plano-mini {
     padding: 6px;
     min-height: 40px;
-}
-
-.plano-mini .br-bay-wrapper {
-    width: 100% !important;
+    overflow: hidden;
 }
 
 .plano-mini .br-bay {
-    width: 100% !important;
     border-radius: 4px;
 }
 
@@ -929,15 +925,6 @@ body.photo-viewer {
 
 .plano-mini .br-shelf-label {
     font-size: 8px;
-}
-
-.plano-mini .product-block .product-label {
-    font-size: 6px;
-    -webkit-line-clamp: 2;
-}
-
-.plano-mini .product-block.product-block-image .product-label {
-    font-size: 5px;
 }
 
 .plano-mini .product-block:hover {
