@@ -113,11 +113,11 @@ def download_image(image_url: str) -> Image.Image:
 
 
 def remove_background(client, image: Image.Image) -> Image.Image:
-    """Send image to Gemini for background removal. Returns PNG with transparent bg."""
+    """Send image to Gemini for background removal, then convert white bg to transparent."""
     prompt = (
         "Remove the background from this product image completely. "
         "Keep ONLY the product itself with no background. "
-        "Output the product on a pure transparent background. "
+        "Output the product on a pure white background. "
         "Do not crop or resize the product, preserve its original shape and details."
     )
 
@@ -129,11 +129,71 @@ def remove_background(client, image: Image.Image) -> Image.Image:
         ),
     )
 
+    gemini_img = None
     for part in response.candidates[0].content.parts:
         if part.inline_data is not None:
-            return Image.open(io.BytesIO(part.inline_data.data))
+            gemini_img = Image.open(io.BytesIO(part.inline_data.data))
+            break
 
-    raise RuntimeError("Gemini did not return an image in the response")
+    if gemini_img is None:
+        raise RuntimeError("Gemini did not return an image in the response")
+
+    return _white_to_transparent(gemini_img)
+
+
+def _white_to_transparent(img: Image.Image, tolerance: int = 20) -> Image.Image:
+    """
+    Convert white/near-white background pixels to transparent using flood-fill
+    from edges. This only removes connected white regions touching the border,
+    so white areas inside the product (labels, text) are preserved.
+    """
+    import numpy as np
+
+    img = img.convert("RGBA")
+    data = np.array(img)
+    h, w = data.shape[:2]
+
+    r, g, b, a = data[:,:,0], data[:,:,1], data[:,:,2], data[:,:,3]
+    is_white = (r > 255 - tolerance) & (g > 255 - tolerance) & (b > 255 - tolerance) & (a > 200)
+
+    visited = np.zeros((h, w), dtype=bool)
+    bg_mask = np.zeros((h, w), dtype=bool)
+
+    # Seed from all border pixels that are white
+    queue = []
+    for x in range(w):
+        for y in [0, h - 1]:
+            if is_white[y, x] and not visited[y, x]:
+                queue.append((y, x))
+                visited[y, x] = True
+    for y in range(h):
+        for x in [0, w - 1]:
+            if is_white[y, x] and not visited[y, x]:
+                queue.append((y, x))
+                visited[y, x] = True
+
+    # BFS flood fill
+    while queue:
+        batch = queue
+        queue = []
+        for cy, cx in batch:
+            bg_mask[cy, cx] = True
+            for dy, dx in [(-1,0),(1,0),(0,-1),(0,1)]:
+                ny, nx = cy + dy, cx + dx
+                if 0 <= ny < h and 0 <= nx < w and not visited[ny, nx] and is_white[ny, nx]:
+                    visited[ny, nx] = True
+                    queue.append((ny, nx))
+
+    # Apply: make background fully transparent
+    data[bg_mask, 3] = 0
+
+    # Soften edges: semi-transparent fringe (1px dilation of bg boundary)
+    from scipy.ndimage import binary_dilation
+    dilated = binary_dilation(bg_mask, iterations=1)
+    fringe = dilated & ~bg_mask
+    data[fringe, 3] = (data[fringe, 3] * 0.4).astype(np.uint8)
+
+    return Image.fromarray(data)
 
 
 def resize_to_proportions(image: Image.Image, width_cm: float, height_cm: float) -> Image.Image:
