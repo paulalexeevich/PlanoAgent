@@ -160,8 +160,20 @@
 - **Stale summary on reload**: `_load_saved_state()` used saved `summary` from file (stale). Fix: always call `generate_summary()` on load to recompute from current planogram data.
 - **LESSON**: When adding `_phantom` to a dataclass, audit ALL loops that iterate positions — not just the obvious ones. Summary/aggregation code is easy to miss. And fill rate (visual metric) vs SKU aggregation (data metric) have different phantom handling.
 
+## Recognition → Planogram Converter (v0.50)
+- **`_build_planogram_from_recognition()`** in `app.py`: Converts recognition photos directly into planogram format.
+- **Mapping**: Each photo = one bay. Shelf bounding boxes from `recognition_raw_shelves` define shelf count. Products from `recognition_assortment` placed using `line` (shelf assignment) and `x1` (left-to-right order).
+- **Scale calculation**: `scale = facing.height_cm / (y2 - y1)` per product, then median per shelf. Handles perspective distortion where bottom shelves have larger pixel sizes than top.
+- **Shelf height**: `median_scale * (shelf_line[N].y1 - shelf_line[N-1].y1)` converts pixel gaps to cm. Top shelf uses distance from min product y1 to first shelf line.
+- **Shelf width fixed at 125 cm** (~49.21 in). Overflow logged but products kept.
+- **Data flow**: `recognition_assortment.line` → shelf number, `facing.width_cm/height_cm` → product dimensions, `group.fact` → `facings_wide`, `product_info.miniature_url` → `image_url`.
+- **`_load_coffee_planogram(source)`**: Now accepts `source` param ("auto", "recognition", "positions", "saved"). Auto priority: saved → recognition → positions.
+- **API**: `/api/build-from-recognition` (POST, optional `shelf_width_cm` in body).
+- **LESSON**: Use median (not mean) for per-shelf scale to resist outliers from misrecognized products. Filter products with `h_px > 20 and h_cm > 1` before scale calculation.
+
 ## Known Issues & TODOs
 - Fill target is 99% but achievable ~96% due to fractional inch gaps (product widths don't evenly divide shelf width).
 - `ComplianceReport` uses `.overall_pct` not `.overall_score` — always check attribute names.
 - Gemini AI: 30-120s response time, overflows ~60% of shelves. Post-processing recovers to 97%+.
 - API key in `.env` file (gitignored). Never commit secrets.
+- Recognition converter: coffee_3 has significant overflow on most shelves (129-193 cm vs 125 cm limit) likely due to duplicate products not flagged as `is_duplicated`.

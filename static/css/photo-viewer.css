@@ -876,3 +876,80 @@ body.photo-viewer {
     flex: 0 0 auto;
 }
 
+/* ============================================================
+   MINI PLANOGRAM UNDER PHOTO
+   ============================================================ */
+.plano-bay-section {
+    border-top: 1px solid var(--border);
+    background: var(--bg-dark);
+}
+
+.plano-bay-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.plano-mini {
+    padding: 6px;
+    min-height: 40px;
+}
+
+.plano-mini .br-bay-wrapper {
+    width: 100% !important;
+}
+
+.plano-mini .br-bay {
+    width: 100% !important;
+    border-radius: 4px;
+}
+
+.plano-mini .br-bay-header {
+    padding: 4px 8px;
+    font-size: 10px;
+    display: none;
+}
+
+.plano-mini .br-bay-footer {
+    padding: 2px 6px;
+    font-size: 9px;
+}
+
+.plano-mini .br-bay-body {
+    overflow: visible;
+}
+
+.plano-mini .br-shelf-label {
+    font-size: 8px;
+}
+
+.plano-mini .product-block .product-label {
+    font-size: 6px;
+    -webkit-line-clamp: 2;
+}
+
+.plano-mini .product-block.product-block-image .product-label {
+    font-size: 5px;
+}
+
+.plano-mini .product-block:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.plano-loading {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 10px;
+    padding: 12px;
+    font-style: italic;
+}
+
