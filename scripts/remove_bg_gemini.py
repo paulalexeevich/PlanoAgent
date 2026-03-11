@@ -112,7 +112,7 @@ def download_image(image_url: str) -> Image.Image:
     return Image.open(io.BytesIO(resp.content))
 
 
-def remove_background(client, image: Image.Image) -> Image.Image:
+def remove_background(client, image: Image.Image, max_retries: int = 3) -> Image.Image:
     """Send image to Gemini for background removal, then convert white bg to transparent."""
     prompt = (
         "Remove the background from this product image completely. "
@@ -121,24 +121,39 @@ def remove_background(client, image: Image.Image) -> Image.Image:
         "Do not crop or resize the product, preserve its original shape and details."
     )
 
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=[prompt, image],
-        config=types.GenerateContentConfig(
-            response_modalities=["Text", "Image"],
-        ),
-    )
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=[prompt, image],
+                config=types.GenerateContentConfig(
+                    response_modalities=["Text", "Image"],
+                ),
+            )
 
-    gemini_img = None
-    for part in response.candidates[0].content.parts:
-        if part.inline_data is not None:
-            gemini_img = Image.open(io.BytesIO(part.inline_data.data))
-            break
+            if not response.candidates or not response.candidates[0].content:
+                if attempt < max_retries - 1:
+                    time.sleep(3)
+                    continue
+                raise RuntimeError("Gemini returned no candidates (safety filter or empty response)")
 
-    if gemini_img is None:
-        raise RuntimeError("Gemini did not return an image in the response")
+            for part in response.candidates[0].content.parts:
+                if part.inline_data is not None:
+                    gemini_img = Image.open(io.BytesIO(part.inline_data.data))
+                    return _white_to_transparent(gemini_img)
 
-    return _white_to_transparent(gemini_img)
+            if attempt < max_retries - 1:
+                time.sleep(3)
+                continue
+            raise RuntimeError("Gemini response contained no image data")
+
+        except AttributeError:
+            if attempt < max_retries - 1:
+                time.sleep(3)
+                continue
+            raise RuntimeError("Gemini returned malformed response after retries")
+
+    raise RuntimeError("Failed after all retries")
 
 
 def _white_to_transparent(img: Image.Image, tolerance: int = 20) -> Image.Image:
