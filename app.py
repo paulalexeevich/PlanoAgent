@@ -314,55 +314,263 @@ def _build_planogram_from_supabase(store_id: str = "617533") -> Planogram:
     })
 
 
-def _load_coffee_planogram():
+# ── Recognition → Planogram converter ────────────────────────────────────────
+
+
+def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogram:
+    """Build a Planogram directly from recognition data.
+
+    Each photo in recognition_photos becomes one bay.
+    Shelf dimensions are derived from shelf bounding-box pixel distances
+    scaled via product physical sizes (cm/px).
+    """
+    import statistics
+
+    photo_names = _supabase_photo_list()
+    if not photo_names:
+        raise ValueError("No recognition photos found")
+
+    all_products_dict: dict[str, dict] = {}
+    bays: list[dict] = []
+    shelf_width_in = round(shelf_width_cm * CM_TO_IN, 2)
+
+    for bay_idx, photo_name in enumerate(sorted(photo_names), start=1):
+        shelf_rows = _supabase_shelves(photo_name)
+        product_rows = _supabase_assortment_products(photo_name)
+
+        shelf_lines = sorted(shelf_rows, key=lambda s: s.get("y1", 0))
+        num_shelves = len(shelf_lines)
+        if num_shelves == 0:
+            continue
+
+        products_by_line: dict[int, list] = defaultdict(list)
+        for p in product_rows:
+            products_by_line[p.get("line", 0)].append(p)
+
+        # --- Per-shelf scale (cm / px) using product heights ---------------
+        scale_by_line: dict[int, float] = {}
+        for line_num, prods in products_by_line.items():
+            scales = []
+            for p in prods:
+                h_px = p.get("y2", 0) - p.get("y1", 0)
+                h_cm = p.get("facing_height_cm", 0)
+                if h_px > 20 and h_cm > 1:
+                    scales.append(h_cm / h_px)
+            if scales:
+                scale_by_line[line_num] = statistics.median(scales)
+
+        # Fallback: global median across the whole photo
+        all_scales = [s for s in scale_by_line.values()]
+        global_scale = statistics.median(all_scales) if all_scales else 0.06
+
+        # Fill gaps for lines with no usable products
+        all_lines = sorted(products_by_line.keys())
+        for ln in all_lines:
+            if ln not in scale_by_line:
+                scale_by_line[ln] = global_scale
+
+        # --- Shelf-line y-positions (top→bottom) --------------------------
+        shelf_y_positions = [s.get("y1", 0) for s in shelf_lines]
+
+        # --- Build shelves bottom-to-top (planogram convention) -----------
+        shelf_defs: list[dict] = []
+        y_cursor = 2.0  # small offset from floor (inches)
+
+        for shelf_idx in range(num_shelves - 1, -1, -1):
+            line_num = shelf_idx + 1  # recognition lines are 1-based, top=1
+            scale = scale_by_line.get(line_num, global_scale)
+
+            # Height between consecutive shelf lines
+            if shelf_idx == 0:
+                top_products = products_by_line.get(line_num, [])
+                min_product_y = min((p["y1"] for p in top_products), default=0)
+                gap_px = shelf_y_positions[0] - min_product_y
+            else:
+                gap_px = shelf_y_positions[shelf_idx] - shelf_y_positions[shelf_idx - 1]
+
+            shelf_height_cm = scale * max(gap_px, 50)
+            shelf_height_in = round(shelf_height_cm * CM_TO_IN, 2)
+
+            # Place products on this shelf
+            line_products = products_by_line.get(line_num, [])
+            line_products = [p for p in line_products if not p.get("is_duplicated", False)]
+            line_products.sort(key=lambda p: p.get("x1", 0))
+
+            positions: list[dict] = []
+            x_cursor_in = 0.0
+            total_width_cm = 0.0
+
+            for p in line_products:
+                pid = p.get("product_id", "")
+                if not pid:
+                    continue
+
+                w_cm = p.get("facing_width_cm", 0) or p.get("group_width_cm", 0) or 7.5
+                h_cm = p.get("facing_height_cm", 0) or 20.0
+                w_in = round(w_cm * CM_TO_IN, 2)
+                h_in = round(h_cm * CM_TO_IN, 2)
+
+                facings_wide = max(1, p.get("group_count", 1))
+                facing_w_in = w_in / facings_wide if facings_wide > 1 else w_in
+
+                positions.append({
+                    "product_id": pid,
+                    "x_position": round(x_cursor_in, 2),
+                    "facings_wide": facings_wide,
+                    "facings_high": 1,
+                    "facings_deep": 1,
+                    "orientation": "front",
+                })
+                x_cursor_in += w_in
+                total_width_cm += w_cm
+
+                # Collect unique product catalog entry
+                if pid not in all_products_dict:
+                    prod_info = p
+                    brand = prod_info.get("brand_name", "") or "Unknown"
+                    all_products_dict[pid] = {
+                        "id": pid,
+                        "upc": prod_info.get("barcode", "") or pid,
+                        "name": prod_info.get("display_name", "") or prod_info.get("art", "") or pid,
+                        "brand": brand,
+                        "manufacturer": prod_info.get("brand_owner_name", "") or "Recognition",
+                        "category": prod_info.get("category_name", "") or "Coffee",
+                        "subcategory": prod_info.get("macro_category_name", "") or "",
+                        "beer_type": "N/A",
+                        "package_type": "pack_box",
+                        "pack_size": 1,
+                        "unit_size_oz": 0.0,
+                        "width_in": round(facing_w_in, 2),
+                        "height_in": h_in,
+                        "depth_in": 4.0,
+                        "price": float(p.get("price", 0) or 0),
+                        "cost": 0.0,
+                        "abv": 0.0,
+                        "color_hex": _stable_color_from_text(pid),
+                        "weekly_units_sold": 0,
+                        "image_url": prod_info.get("miniature_url", ""),
+                    }
+
+            if total_width_cm > shelf_width_cm:
+                print(
+                    f"[recognition→plano] Bay {bay_idx} shelf {line_num}: "
+                    f"overflow {total_width_cm:.1f} cm > {shelf_width_cm} cm",
+                    flush=True,
+                )
+
+            shelf_defs.append({
+                "shelf_number": num_shelves - shelf_idx,
+                "width_in": shelf_width_in,
+                "height_in": max(shelf_height_in, 4.0),
+                "depth_in": 8.0,
+                "y_position": round(y_cursor, 1),
+                "positions": positions,
+                "shelf_type": "standard",
+            })
+            y_cursor += max(shelf_height_in, 4.0)
+
+        bay_height_in = round(y_cursor + 2.0, 1)
+        bays.append({
+            "bay_number": bay_idx,
+            "width_in": shelf_width_in,
+            "height_in": bay_height_in,
+            "depth_in": 8.0,
+            "shelves": shelf_defs,
+            "glued_right": bay_idx < len(photo_names),
+        })
+
+    if not bays:
+        raise ValueError("No bays could be built from recognition data")
+
+    return Planogram.from_dict({
+        "id": "PLN-RECOGNITION-COFFEE",
+        "name": "Coffee Planogram (from Recognition)",
+        "category": "Coffee",
+        "store_type": "Recognition Import",
+        "effective_date": "2026-03-11",
+        "metadata": {
+            "version": "1.0",
+            "generated_by": "Recognition Converter",
+            "shelf_width_cm": shelf_width_cm,
+            "source_photos": sorted(photo_names),
+        },
+        "equipment": {
+            "id": "EQ-RECOG-001",
+            "name": "Coffee Equipment (Recognition)",
+            "equipment_type": "gondola",
+            "bays": bays,
+        },
+        "products": list(all_products_dict.values()),
+    })
+
+
+def _load_coffee_planogram(source: str = "auto"):
     """Load coffee planogram into current state.
 
-    Priority: 1) Supabase planograms table (pre-built)
-              2) Build from Supabase positions table
-              3) Fallback to local JSON file
+    Args:
+        source: "auto" (default priority chain), "recognition" (force recognition),
+                "positions" (force positions table), "saved" (force saved planogram).
+
+    Priority (auto): 1) Supabase planograms table (pre-built)
+                     2) Build from recognition data
+                     3) Build from Supabase positions table
     """
     global current_planogram, current_summary, current_compliance, current_decision_tree, current_equipment
 
-    # Try loading pre-built planogram from Supabase
-    try:
-        rows = _supabase_get("planograms", {
-            "select": "planogram_data,summary_data",
-            "planogram_id": "eq.PLN-CSV-COFFEE-617533",
-            "limit": "1",
-        })
-        if rows:
-            planogram_data = rows[0]["planogram_data"]
-            image_map = _build_image_map()
-            for prod in planogram_data.get("products", []):
-                upc = prod.get("upc", "")
-                if upc and upc in image_map:
-                    prod["image_url"] = image_map[upc]
-            current_planogram = Planogram.from_dict(planogram_data)
-            current_summary = generate_summary(current_planogram, len(current_planogram.products))
-            current_compliance = None
-            current_decision_tree = None
-            from dataclasses import asdict
-            current_equipment = asdict(current_planogram.equipment) if current_planogram.equipment else None
-            _save_state()
-            print("[init] Loaded coffee planogram from Supabase planograms table", flush=True)
-            return
-    except Exception as e:
-        print(f"[init] Supabase planograms load failed: {e}", flush=True)
-
-    # Try building from Supabase positions table
-    try:
-        current_planogram = _build_planogram_from_supabase("617533")
-        current_summary = generate_summary(current_planogram, len(current_planogram.products))
+    def _apply(plano, label):
+        global current_planogram, current_summary, current_compliance, current_decision_tree, current_equipment
+        current_planogram = plano
+        current_summary = generate_summary(plano, len(plano.products))
         current_compliance = None
         current_decision_tree = None
         from dataclasses import asdict
-        current_equipment = asdict(current_planogram.equipment) if current_planogram.equipment else None
+        current_equipment = asdict(plano.equipment) if plano.equipment else None
         _save_state()
-        print("[init] Built coffee planogram from Supabase positions", flush=True)
-        return
-    except Exception as e:
-        print(f"[init] Supabase positions build failed: {e}", flush=True)
-        raise RuntimeError("Could not load coffee planogram from Supabase")
+        print(f"[init] {label}", flush=True)
+
+    if source in ("auto", "saved"):
+        try:
+            rows = _supabase_get("planograms", {
+                "select": "planogram_data,summary_data",
+                "planogram_id": "eq.PLN-CSV-COFFEE-617533",
+                "limit": "1",
+            })
+            if rows:
+                planogram_data = rows[0]["planogram_data"]
+                image_map = _build_image_map()
+                for prod in planogram_data.get("products", []):
+                    upc = prod.get("upc", "")
+                    if upc and upc in image_map:
+                        prod["image_url"] = image_map[upc]
+                _apply(Planogram.from_dict(planogram_data),
+                       "Loaded coffee planogram from Supabase planograms table")
+                return
+        except Exception as e:
+            print(f"[init] Supabase planograms load failed: {e}", flush=True)
+            if source == "saved":
+                raise
+
+    if source in ("auto", "recognition"):
+        try:
+            _apply(_build_planogram_from_recognition(),
+                   "Built coffee planogram from recognition data")
+            return
+        except Exception as e:
+            print(f"[init] Recognition build failed: {e}", flush=True)
+            if source == "recognition":
+                raise
+
+    if source in ("auto", "positions"):
+        try:
+            _apply(_build_planogram_from_supabase("617533"),
+                   "Built coffee planogram from Supabase positions")
+            return
+        except Exception as e:
+            print(f"[init] Supabase positions build failed: {e}", flush=True)
+            if source == "positions":
+                raise
+
+    raise RuntimeError("Could not load coffee planogram from any source")
 
 
 @app.route("/")
@@ -1338,6 +1546,36 @@ def load_demo_csv():
         return jsonify({
             "status": "success",
             "source": "coffee_default_planogram",
+            "planogram": current_planogram.to_dict(),
+            "summary": current_summary,
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "error": str(e),
+        }), 400
+
+
+@app.route("/api/build-from-recognition", methods=["POST"])
+def build_from_recognition():
+    """Build a planogram directly from recognition photos + assortment data."""
+    global current_planogram, current_summary, current_compliance, current_decision_tree, current_equipment
+    try:
+        data = request.json or {}
+        shelf_width_cm = float(data.get("shelf_width_cm", 125.0))
+
+        current_planogram = _build_planogram_from_recognition(shelf_width_cm)
+        current_summary = generate_summary(current_planogram, len(current_planogram.products))
+        current_compliance = None
+        current_decision_tree = None
+        from dataclasses import asdict
+        current_equipment = asdict(current_planogram.equipment) if current_planogram.equipment else None
+        _save_state()
+
+        return jsonify({
+            "status": "success",
+            "source": "recognition",
             "planogram": current_planogram.to_dict(),
             "summary": current_summary,
         })
