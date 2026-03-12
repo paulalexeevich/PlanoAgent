@@ -1917,15 +1917,45 @@ def suggest_placement():
         pm_rows = []
 
     pm_by_recog = {}
+    pm_by_code = {}
     for r in pm_rows:
         rid = r.get("recognition_id")
+        brand = (r.get("brand") or "").strip()
+        info = {
+            "category_l1": r.get("category_l1") or "",
+            "category_l2": r.get("category_l2") or "",
+            "brand": brand,
+            "product_code": r.get("product_code") or "",
+            "recognition_id": rid or "",
+        }
         if rid:
-            pm_by_recog[rid] = {
-                "category_l1": r.get("category_l1") or "",
-                "category_l2": r.get("category_l2") or "",
-                "brand": (r.get("brand") or "").strip(),
-                "product_code": r.get("product_code") or "",
-            }
+            pm_by_recog[rid] = info
+        pc = r.get("product_code")
+        if pc:
+            pm_by_code[pc] = info
+
+    # Resolve target_brand through product_map to get canonical (Latin) brand.
+    # Action cards may store Russian brand (НЕСКАФЕ) while data uses Latin (NESCAFE).
+    resolved_brand = target_brand
+    if exclude_product and exclude_product in pm_by_code:
+        canonical = pm_by_code[exclude_product]["brand"]
+        if canonical:
+            resolved_brand = canonical
+
+    # Build brand alias set: all known spellings for the target brand.
+    brand_aliases = set()
+    if resolved_brand:
+        brand_aliases.add(resolved_brand.lower())
+    if target_brand:
+        brand_aliases.add(target_brand.lower())
+
+    # Build set of recognition IDs to exclude (the product itself)
+    exclude_recog_ids = set()
+    if exclude_product:
+        excl_info = pm_by_code.get(exclude_product)
+        if excl_info and excl_info.get("recognition_id"):
+            exclude_recog_ids.add(excl_info["recognition_id"])
+        exclude_recog_ids.add(exclude_product)
 
     shelf_scores = defaultdict(lambda: {
         "score": 0, "cat_l2": 0, "cat_l1": 0, "brand": 0,
@@ -1954,7 +1984,7 @@ def suggest_placement():
             line = item.get("line", 0)
             display_shelf = num_shelves + 1 - line
 
-            if exclude_product and product_id == exclude_product:
+            if exclude_recog_ids and product_id in exclude_recog_ids:
                 continue
 
             recog_brand = (pi.get("brand_name") or "").strip()
@@ -1970,8 +2000,12 @@ def suggest_placement():
 
             cat_l2_match = target_cat_l2 and item_cat_l2 == target_cat_l2
             cat_l1_match = target_cat_l1 and item_cat_l1 == target_cat_l1
-            brand_match = (target_brand and item_brand
-                           and item_brand.lower() == target_brand.lower())
+            brand_match = bool(
+                brand_aliases
+                and item_brand
+                and (item_brand.lower() in brand_aliases
+                     or recog_brand.lower() in brand_aliases)
+            )
 
             if cat_l2_match:
                 shelf_scores[key]["score"] += 3
@@ -2000,11 +2034,12 @@ def suggest_placement():
     best_key = max(shelf_scores, key=lambda k: shelf_scores[k]["score"])
     best = shelf_scores[best_key]
 
+    display_brand = target_brand or resolved_brand
     reasons = []
     if best["brand_cat_l2"]:
-        reasons.append(f'{best["brand_cat_l2"]} {target_brand} "{target_cat_l2}" here')
+        reasons.append(f'{best["brand_cat_l2"]} {display_brand} "{target_cat_l2}" here')
     elif best["brand"]:
-        reasons.append(f'{best["brand"]} {target_brand} products on this shelf')
+        reasons.append(f'{best["brand"]} {display_brand} products on this shelf')
     if best["cat_l2"]:
         reasons.append(f'{best["cat_l2"]} products share category "{target_cat_l2}"')
     if best["cat_l1"] and not best["cat_l2"]:
