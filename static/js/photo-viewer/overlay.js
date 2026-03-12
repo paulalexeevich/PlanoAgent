@@ -24,11 +24,6 @@ function renderOverlay(name) {
     const showShelves = document.getElementById('showShelves').checked;
     const showLabels = document.getElementById('showLabels').checked;
 
-    const statsEl = document.getElementById(`stats-${name}`);
-    if (statsEl) {
-        const uniqueInPhoto = new Set(data.products.map(p => p.art)).size;
-        statsEl.innerHTML = `SKUs: <strong>${uniqueInPhoto}</strong> &nbsp; Facings: <strong>${data.products.length}</strong> &nbsp; Shelves: <strong>${data.shelves.length}</strong>`;
-    }
 
     if (showShelves) {
         const gShelves = document.createElementNS('http://www.w3.org/2000/svg', 'g');

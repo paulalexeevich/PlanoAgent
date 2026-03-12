@@ -39,7 +39,6 @@ function buildGrid(photoNames) {
         card.innerHTML = `
             <div class="photo-header">
                 <span class="photo-title">${name}</span>
-                <span class="photo-stats" id="stats-${name}">Loading...</span>
             </div>
             <div class="canvas-inner" id="canvas-${name}">
                 <img id="img-${name}" alt="${name}">
