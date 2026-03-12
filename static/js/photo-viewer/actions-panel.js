@@ -119,6 +119,11 @@ function renderActions() {
                         <span class="tag-plano">P:${a.planogram_facings}</span>
                         <span class="tag-oos">Out of shelf</span>
                     </div>
+                    ${a.category_l1 || a.category_l2 ? `
+                    <div class="action-categories">
+                        ${a.category_l1 ? `<span class="tag-cat">${a.category_l1}</span>` : ''}
+                        ${a.category_l2 && a.category_l2 !== a.category_l1 ? `<span class="tag-cat2">${a.category_l2}</span>` : ''}
+                    </div>` : ''}
                     <div class="action-stats">
                         <span>Qty: <strong>${parseFloat(a.avg_sale_qty || 0).toFixed(1)}</strong>/wk</span>
                         <span>Stock: <strong>${parseFloat(a.avg_stock_qty || 0).toFixed(1)}</strong></span>

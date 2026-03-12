@@ -46,7 +46,7 @@ def supabase_post(table, data):
 def load_product_sizes():
     """Load product sizes from Supabase test_coffee_product_map."""
     rows = supabase_get("test_coffee_product_map", {
-        "select": "product_code,tiny_name,product_name,width_cm,height_cm",
+        "select": "product_code,tiny_name,product_name,width_cm,height_cm,category_l1,category_l2",
     })
     size_map = {}
     for r in rows:
@@ -58,6 +58,8 @@ def load_product_sizes():
             "height_cm": float(r.get("height_cm") or 0),
             "name": r.get("product_name") or "",
             "tiny_name": r.get("tiny_name") or "",
+            "category_l1": r.get("category_l1") or "",
+            "category_l2": r.get("category_l2") or "",
         }
     return size_map
 
@@ -95,6 +97,8 @@ def build_planogram_facings(planogram_data, size_map):
                         "width_cm": sz.get("width_cm", 0),
                         "height_cm": sz.get("height_cm", 0),
                         "product_code": ext_id,
+                        "category_l1": sz.get("category_l1", ""),
+                        "category_l2": sz.get("category_l2", ""),
                     }
                 facings[tiny]["facings_wide"] += fw
                 facings[tiny]["positions"] += 1
@@ -218,6 +222,8 @@ def main():
                 "avg_sale_qty": sd.get("avg_sale_qty", 0),
                 "avg_stock_qty": sd.get("avg_stock_qty", 0),
                 "weeks": sd.get("weeks", 0),
+                "category_l1": pf.get("category_l1", ""),
+                "category_l2": pf.get("category_l2", ""),
             })
 
     out_of_shelf.sort(key=lambda x: x["avg_sale_amount"], reverse=True)
@@ -253,6 +259,8 @@ def main():
             "avg_stock_qty": p["avg_stock_qty"],
             "weeks": p["weeks"],
             "priority": priority,
+            "category_l1": p.get("category_l1", ""),
+            "category_l2": p.get("category_l2", ""),
             "notes": f"Product in planogram ({p['planogram_facings']} facings) but missing from shelf photos. "
                      f"Weekly avg sales: {p['avg_sale_amount']}₽",
         }

@@ -673,6 +673,33 @@ body.photo-viewer {
     margin-bottom: 6px;
 }
 
+.action-categories {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+.tag-cat {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    background: rgba(168,85,247,0.12);
+    color: #c084fc;
+    border: 1px solid rgba(168,85,247,0.25);
+}
+.tag-cat2 {
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    background: rgba(168,85,247,0.08);
+    color: #a78bfa;
+    border: 1px solid rgba(168,85,247,0.15);
+}
+
 .action-stats {
     display: flex;
     gap: 12px;
