@@ -161,19 +161,37 @@
     border-color: rgba(255,255,255,0.4);
 }
 
-/* NO-BG product highlight — transparent background with glowing bounding box */
+/* NO-BG product — transparent background, same border as regular blocks */
 .product-block.product-no-bg {
     background: transparent;
-    border: 2px solid #00e5ff;
-    box-shadow: 0 0 8px rgba(0, 229, 255, 0.5), inset 0 0 4px rgba(0, 229, 255, 0.15);
-    border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.1);
 }
 .product-block.product-no-bg .product-image {
     padding: 0;
 }
-.product-block.product-no-bg:hover {
-    border-color: #00e5ff;
-    box-shadow: 0 0 16px rgba(0, 229, 255, 0.7), inset 0 0 6px rgba(0, 229, 255, 0.2);
+
+/* Realogram product selection / dimming */
+.product-block.realogram-selected {
+    border: 2px solid #ffd166 !important;
+    box-shadow: 0 0 10px rgba(255,209,102,0.6);
+    z-index: 10;
+    opacity: 1 !important;
+}
+.product-block.realogram-dimmed {
+    opacity: 0.2 !important;
+    filter: grayscale(0.8);
+}
+.product-block.realogram-dimmed .product-label {
+    opacity: 0.3;
+}
+
+/* ₽/meter color mode tint overlay on realogram */
+.product-block .spm-tint {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    z-index: 2;
 }
 
 /* TOOLTIP */

@@ -229,6 +229,26 @@
         renderAllOverlays();
         renderProductList();
         updateSalesPerMeterLegend();
+        applyRealogramColorMode();
+    }
+
+    function applyRealogramColorMode() {
+        document.querySelectorAll('.product-block[data-art]').forEach(el => {
+            el.querySelectorAll('.spm-tint').forEach(t => t.remove());
+
+            if (colorMode === 'salesPerMeter') {
+                const art = el.dataset.art;
+                const data = salesPerMeterMap[art];
+                const color = data ? data.color : '#888888';
+                const tint = document.createElement('div');
+                tint.className = 'spm-tint';
+                tint.style.background = color;
+                tint.style.opacity = '0.35';
+                tint.style.border = `2px solid ${color}`;
+                tint.style.boxSizing = 'border-box';
+                el.appendChild(tint);
+            }
+        });
     }
 
     function updateSalesPerMeterLegend() {
@@ -782,6 +802,104 @@
                 }
             }
         });
+
+        document.querySelectorAll('.product-block[data-art]').forEach(el => {
+            const art = el.dataset.art;
+            el.classList.remove('realogram-selected', 'realogram-dimmed');
+            if (!hasSelection) {
+                el.style.opacity = '';
+                el.style.filter = '';
+            } else if (art === selectedArt) {
+                el.classList.add('realogram-selected');
+            } else {
+                el.classList.add('realogram-dimmed');
+            }
+        });
+    }
+
+    function selectRealogramProduct(art, productId) {
+        selectedId = null;
+        selectedPhotoName = null;
+        selectedArt = art;
+
+        let html = '';
+        const pf = planogramFacings[art];
+        const artFacings = {};
+        Object.keys(photoDataMap).forEach(pn => {
+            photoDataMap[pn].products.forEach(p => {
+                if (p.art === art) artFacings[pn] = (artFacings[pn] || 0) + 1;
+            });
+        });
+        const totalPhotoFacings = Object.values(artFacings).reduce((a, b) => a + b, 0);
+
+        const product = recogProductsMap[productId];
+        const fullName = (product && (product.full_name || product.name)) || art;
+        const thumbUrl = (product && (product.image_no_bg_url || product.image_url)) || '';
+
+        html += `
+            <div class="detail-header">
+                ${thumbUrl ? `<img class="detail-thumb" src="${thumbUrl}" alt="${fullName}" onerror="this.style.display='none'">` : ''}
+                <div class="detail-header-info">
+                    <div class="field-value" style="font-weight:600;font-size:12px;margin-bottom:4px;line-height:1.3">${fullName}</div>
+                </div>
+            </div>
+        `;
+
+        html += `<div class="field" style="margin-bottom:12px">`;
+        if (pf) {
+            html += `<span class="tag-plano" style="font-size:11px;padding:3px 8px">In Planogram</span>`;
+        } else {
+            html += `<span class="tag-alert" style="font-size:11px;padding:3px 8px">Not in Planogram</span>`;
+        }
+        html += `</div>`;
+
+        html += `
+            <div class="field">
+                <div class="field-label">Facings Comparison</div>
+                <div class="dims-grid" style="margin-top:4px">
+                    <span class="dim-label">Planogram</span><span class="dim-value">${pf ? pf.facings_wide : '—'}</span>
+                    <span class="dim-label">On Shelf (photos)</span><span class="dim-value">${totalPhotoFacings}</span>
+                </div>
+            </div>
+        `;
+
+        const sd = salesData[art];
+        if (sd) {
+            html += `
+                <div class="field">
+                    <div class="field-label">Sales Data (weekly avg)</div>
+                    <div class="dims-grid" style="margin-top:4px">
+                        <span class="dim-label">Avg Sale ₽</span><span class="dim-value" style="color:#4ecdc4;font-weight:600">${sd.avg_sale_amount.toLocaleString('ru-RU', {minimumFractionDigits: 0, maximumFractionDigits: 0})} ₽</span>
+                        <span class="dim-label">Avg Qty</span><span class="dim-value">${sd.avg_sale_qty.toFixed(1)}</span>
+                        <span class="dim-label">Avg Stock</span><span class="dim-value">${sd.avg_stock_qty.toFixed(1)}</span>
+                        <span class="dim-label">Weeks</span><span class="dim-value">${sd.weeks}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        const spmData = salesPerMeterMap[art];
+        if (spmData && avgSalesPerMeter > 0) {
+            const spm = spmData.salesPerMeter;
+            const pctDiff = ((spm - avgSalesPerMeter) / avgSalesPerMeter) * 100;
+            const pctSign = pctDiff >= 0 ? '+' : '';
+            const pctColor = pctDiff >= 50 ? '#ef4444' : pctDiff <= -50 ? '#f59e0b' : '#22c55e';
+            html += `
+                <div class="field">
+                    <div class="field-label">₽ / Meter (shelf efficiency)</div>
+                    <div class="dims-grid" style="margin-top:4px">
+                        <span class="dim-label">₽/meter</span><span class="dim-value" style="color:${spmData.color};font-weight:600">${spm.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
+                        <span class="dim-label">Avg (all SKUs)</span><span class="dim-value">${avgSalesPerMeter.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
+                        <span class="dim-label">vs Average</span><span class="dim-value" style="color:${pctColor};font-weight:600">${pctSign}${pctDiff.toFixed(0)}%</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        document.getElementById('detailContent').innerHTML = html;
+        openPanelTab('analytics');
+        highlightSelected();
+        highlightListItem();
     }
 
     function clearSelection() {
@@ -1408,6 +1526,9 @@
                         block.className = 'product-block';
                         if (f > 0) block.classList.add('facing-repeat');
 
+                        block.dataset.art = product.name || '';
+                        block.dataset.productId = pos.product_id || '';
+
                         const leftPx = bodyLeftPx + baseLeft + f * singleWidth;
                         block.style.width = singleWidth + 'px';
                         block.style.height = blockHeight + 'px';
@@ -1439,10 +1560,19 @@
                             block.appendChild(labelEl);
                         }
 
+                        block.style.cursor = 'pointer';
+                        block.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            selectRealogramProduct(product.name || '', pos.product_id || '');
+                        });
+
                         productLayer.appendChild(block);
                     }
                 });
             });
+
+            applyRealogramColorMode();
+            if (selectedArt) highlightSelected();
         });
     }
     </script>
