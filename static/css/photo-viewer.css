@@ -99,6 +99,7 @@ body.photo-viewer {
     border-radius: 8px;
     overflow: visible;
     flex-shrink: 0;
+    text-align: center;
 }
 
 .photo-card .photo-header {
