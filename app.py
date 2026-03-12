@@ -1941,26 +1941,31 @@ def suggest_placement():
         except Exception:
             continue
 
+        # Recognition line 1=top, but UI shelf 1=bottom.
+        # Count shelves per bay to convert: display_shelf = num_shelves + 1 - line
+        max_line = max((item.get("line", 0) for item in rows), default=7)
+        num_shelves = max_line
+
         for item in rows:
             if item.get("is_duplicated"):
                 continue
             pi = item.get("product_info") or {}
             product_id = item.get("product_id", "")
-            shelf = item.get("line", 0)
+            line = item.get("line", 0)
+            display_shelf = num_shelves + 1 - line
 
             if exclude_product and product_id == exclude_product:
                 continue
 
             recog_brand = (pi.get("brand_name") or "").strip()
             recog_cat = (pi.get("category_name") or "").strip()
-            recog_macro = (pi.get("macro_category_name") or "").strip()
 
             pm_info = pm_by_recog.get(product_id, {})
             item_brand = pm_info.get("brand") or recog_brand
             item_cat_l2 = pm_info.get("category_l2") or ""
             item_cat_l1 = pm_info.get("category_l1") or recog_cat
 
-            key = (bay_idx, shelf)
+            key = (bay_idx, display_shelf)
             shelf_scores[key]["total"] += 1
 
             cat_l2_match = target_cat_l2 and item_cat_l2 == target_cat_l2
