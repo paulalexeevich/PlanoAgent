@@ -153,10 +153,10 @@ def _stable_color_from_text(text: str) -> str:
 
 def _load_product_sizes() -> dict:
     """Load product dimensions from test_coffee_product_map in Supabase.
-    Returns dict keyed by product_code → {width_cm, height_cm, name, tiny_name}."""
+    Returns dict keyed by product_code → {width_cm, height_cm, name, tiny_name, recognition_id}."""
     try:
         rows = _supabase_get("test_coffee_product_map", {
-            "select": "product_code,tiny_name,product_name,width_cm,height_cm",
+            "select": "product_code,tiny_name,product_name,width_cm,height_cm,recognition_id",
         })
         return {
             r["product_code"]: {
@@ -164,6 +164,7 @@ def _load_product_sizes() -> dict:
                 "height_cm": float(r["height_cm"] or 0),
                 "name": r.get("product_name") or "",
                 "tiny_name": r.get("tiny_name") or "",
+                "recognition_id": r.get("recognition_id") or "",
             }
             for r in rows if r.get("product_code")
         }
@@ -1443,6 +1444,9 @@ def planogram_facings():
 
     size_map = _load_product_sizes()
     ext_to_tiny = {eid: info["tiny_name"] for eid, info in size_map.items() if info.get("tiny_name")}
+    recog_to_tiny = {info["recognition_id"]: info["tiny_name"]
+                     for info in size_map.values()
+                     if info.get("recognition_id") and info.get("tiny_name")}
 
     # Build product metadata lookup: product_id → product dict
     prod_lookup = {}
@@ -1463,7 +1467,7 @@ def planogram_facings():
                     if pos.get("_phantom"):
                         continue
                     ext_id = pid.replace("CSV-", "") if pid.startswith("CSV-") else pid
-                    tiny = ext_to_tiny.get(ext_id, "")
+                    tiny = ext_to_tiny.get(ext_id) or recog_to_tiny.get(pid, "")
                     if not tiny:
                         continue
                     fw = pos.get("facings_wide", 1)
