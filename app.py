@@ -1431,61 +1431,64 @@ def photo_data(photo_name):
 def planogram_facings():
     """Return planogram facing counts keyed by tiny_name for cross-referencing with photos.
 
-    Builds a map: tiny_name → {facings_wide, positions, in_planogram}.
-    Uses Supabase product map to translate external_id → tiny_name.
+    Always loads the canonical coffee planogram directly from Supabase
+    (PLN-CSV-COFFEE-617533) to avoid using a recognition-built planogram
+    that may have overwritten current_planogram.
     """
-    global current_planogram
-    mode = request.args.get("mode", "coffee").lower()
-    if current_planogram is None or (mode == "coffee" and getattr(current_planogram, "category", "") != "Coffee"):
-        if mode == "coffee":
-            _load_coffee_planogram()
-        elif not _load_saved_state():
-            init_default_planogram()
-
     size_map = _load_product_sizes()
     ext_to_tiny = {eid: info["tiny_name"] for eid, info in size_map.items() if info.get("tiny_name")}
     recog_to_tiny = {info["recognition_id"]: info["tiny_name"]
                      for info in size_map.values()
                      if info.get("recognition_id") and info.get("tiny_name")}
 
-    # Build product metadata lookup: product_id → product dict
+    # Load coffee planogram directly from Supabase — never use current_planogram
+    planogram_data = None
+    try:
+        rows = _supabase_get("planograms", {
+            "select": "planogram_data",
+            "planogram_id": "eq.PLN-CSV-COFFEE-617533",
+            "limit": "1",
+        })
+        if rows:
+            planogram_data = rows[0]["planogram_data"]
+    except Exception as e:
+        print(f"[planogram-facings] Failed to load coffee planogram: {e}", flush=True)
+
+    if not planogram_data:
+        return jsonify({})
+
     prod_lookup = {}
-    if current_planogram and current_planogram.products:
-        from dataclasses import asdict as _asdict
-        for p in current_planogram.products:
-            pd = _asdict(p) if hasattr(p, '__dataclass_fields__') else (p if isinstance(p, dict) else {})
-            prod_lookup[pd.get("id", "")] = pd
+    for p in planogram_data.get("products", []):
+        prod_lookup[p.get("id", "")] = p
 
-    facings = {}  # tiny_name → {facings_wide, positions, ...metadata}
-    if current_planogram and current_planogram.equipment:
-        from dataclasses import asdict
-        eq = asdict(current_planogram.equipment)
-        for bay in eq.get("bays", []):
-            for shelf in bay.get("shelves", []):
-                for pos in shelf.get("positions", []):
-                    pid = pos.get("product_id", "")
-                    if pos.get("_phantom"):
-                        continue
-                    ext_id = pid.replace("CSV-", "") if pid.startswith("CSV-") else pid
-                    tiny = ext_to_tiny.get(ext_id) or recog_to_tiny.get(pid, "")
-                    if not tiny:
-                        continue
-                    fw = pos.get("facings_wide", 1)
-                    if tiny not in facings:
-                        prod = prod_lookup.get(pid, {})
-                        sz = size_map.get(ext_id, {})
-                        facings[tiny] = {
-                            "facings_wide": 0,
-                            "positions": 0,
-                            "name": prod.get("name", ""),
-                            "brand": prod.get("brand", ""),
-                            "image_url": prod.get("image_url", ""),
-                            "width_cm": sz.get("width_cm", 0),
-                            "height_cm": sz.get("height_cm", 0),
-                        }
-                    facings[tiny]["facings_wide"] += fw
-                    facings[tiny]["positions"] += 1
+    facings = {}
+    for bay in planogram_data.get("equipment", {}).get("bays", []):
+        for shelf in bay.get("shelves", []):
+            for pos in shelf.get("positions", []):
+                pid = pos.get("product_id", "")
+                if pos.get("_phantom"):
+                    continue
+                ext_id = pid.replace("CSV-", "") if pid.startswith("CSV-") else pid
+                tiny = ext_to_tiny.get(ext_id) or recog_to_tiny.get(pid, "")
+                if not tiny:
+                    continue
+                fw = pos.get("facings_wide", 1)
+                if tiny not in facings:
+                    prod = prod_lookup.get(pid, {})
+                    sz = size_map.get(ext_id, {})
+                    facings[tiny] = {
+                        "facings_wide": 0,
+                        "positions": 0,
+                        "name": prod.get("name", ""),
+                        "brand": prod.get("brand", ""),
+                        "image_url": prod.get("image_url", ""),
+                        "width_cm": sz.get("width_cm", 0),
+                        "height_cm": sz.get("height_cm", 0),
+                    }
+                facings[tiny]["facings_wide"] += fw
+                facings[tiny]["positions"] += 1
 
+    print(f"[planogram-facings] Loaded {len(facings)} products from coffee planogram", flush=True)
     return jsonify(facings)
 
 
