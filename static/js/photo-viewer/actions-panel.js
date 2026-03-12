@@ -130,7 +130,7 @@ function renderActions() {
                         <span>${a.width_cm}×${a.height_cm} cm</span>
                     </div>
                     <div class="action-placement" id="placement-${a.id}">
-                        <button class="btn-where-place" onclick="event.stopPropagation(); suggestPlacement(${a.id}, '${(a.category_l1 || '').replace(/'/g, "\\'")}', '${(a.category_l2 || '').replace(/'/g, "\\'")}', '${(a.brand || '').replace(/'/g, "\\'")}')">
+                        <button class="btn-where-place" onclick="event.stopPropagation(); suggestPlacement(${a.id}, '${(a.category_l1 || '').replace(/'/g, "\\'")}', '${(a.category_l2 || '').replace(/'/g, "\\'")}', '${(a.brand || '').replace(/'/g, "\\'")}', '${(a.product_code || '').replace(/'/g, "\\'")}')">
                             Where to Place
                         </button>
                     </div>
@@ -141,7 +141,7 @@ function renderActions() {
     }).join('');
 }
 
-function suggestPlacement(actionId, catL1, catL2, brand) {
+function suggestPlacement(actionId, catL1, catL2, brand, productCode) {
     const container = document.getElementById(`placement-${actionId}`);
     if (!container) return;
 
@@ -151,6 +151,7 @@ function suggestPlacement(actionId, catL1, catL2, brand) {
     if (catL1) params.set('category_l1', catL1);
     if (catL2) params.set('category_l2', catL2);
     if (brand) params.set('brand', brand);
+    if (productCode) params.set('exclude_product', productCode);
 
     fetch(`/api/suggest-placement?${params}`)
         .then(r => r.json())

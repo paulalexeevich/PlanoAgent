@@ -1896,6 +1896,7 @@ def suggest_placement():
     target_cat_l2 = (request.args.get("category_l2") or "").strip()
     target_cat_l1 = (request.args.get("category_l1") or "").strip()
     target_brand = (request.args.get("brand") or "").strip()
+    exclude_product = (request.args.get("exclude_product") or "").strip()
 
     if not target_cat_l2 and not target_brand:
         return jsonify({"status": "error",
@@ -1938,9 +1939,14 @@ def suggest_placement():
         if alias:
             resolved_brand = alias
 
-    shelf_scores = defaultdict(lambda: {"score": 0, "cat_l2": 0, "cat_l1": 0, "brand": 0, "total": 0})
+    shelf_scores = defaultdict(lambda: {
+        "score": 0, "cat_l2": 0, "cat_l1": 0, "brand": 0,
+        "brand_cat_l2": 0, "total": 0,
+    })
     for r in pos_rows:
         ext_id = r.get("external_product_id", "")
+        if exclude_product and ext_id == exclude_product:
+            continue
         bay = r.get("eq_num_in_scene_group")
         shelf = r.get("shelf_number")
         if bay is None or shelf is None:
@@ -1949,32 +1955,42 @@ def suggest_placement():
         key = (bay, shelf)
         shelf_scores[key]["total"] += 1
 
-        if target_cat_l2 and info.get("category_l2") == target_cat_l2:
-            shelf_scores[key]["score"] += 2
+        cat_l2_match = target_cat_l2 and info.get("category_l2") == target_cat_l2
+        cat_l1_match = target_cat_l1 and info.get("category_l1") == target_cat_l1
+        shelf_brand = info.get("brand", "")
+        brand_match = resolved_brand and shelf_brand.lower() == resolved_brand.lower()
+
+        if cat_l2_match:
+            shelf_scores[key]["score"] += 3
             shelf_scores[key]["cat_l2"] += 1
-        elif target_cat_l1 and info.get("category_l1") == target_cat_l1:
+        elif cat_l1_match:
             shelf_scores[key]["score"] += 1
             shelf_scores[key]["cat_l1"] += 1
 
-        shelf_brand = info.get("brand", "")
-        if resolved_brand and shelf_brand.lower() == resolved_brand.lower():
-            shelf_scores[key]["score"] += 5
+        if brand_match:
+            shelf_scores[key]["score"] += 3
             shelf_scores[key]["brand"] += 1
+
+        if brand_match and cat_l2_match:
+            shelf_scores[key]["score"] += 5
+            shelf_scores[key]["brand_cat_l2"] += 1
 
     if not shelf_scores:
         return jsonify({"status": "error", "error": "No shelf data available"}), 404
 
-    # Brand cluster bonus: shelves with any brand match get +10
-    # so products are placed near their brand siblings
     for key, vals in shelf_scores.items():
         if vals["brand"] > 0:
             vals["score"] += 10
+        if vals["brand_cat_l2"] > 0:
+            vals["score"] += 8
 
     best_key = max(shelf_scores, key=lambda k: shelf_scores[k]["score"])
     best = shelf_scores[best_key]
 
     reasons = []
-    if best["brand"]:
+    if best["brand_cat_l2"]:
+        reasons.append(f'{best["brand_cat_l2"]} {resolved_brand} "{target_cat_l2}" here')
+    elif best["brand"]:
         reasons.append(f'{best["brand"]} {resolved_brand} products on this shelf')
     if best["cat_l2"]:
         reasons.append(f'{best["cat_l2"]} products share category "{target_cat_l2}"')
