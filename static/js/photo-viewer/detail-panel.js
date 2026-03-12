@@ -201,16 +201,63 @@ function selectRealogramProduct(art, productId) {
     PV.selection.art = art;
 
     const pf = PV.planogramFacings[art];
-    const { total: totalPhotoFacings } = countFacingsForArt(art);
+    const { total: totalPhotoFacings, breakdown: photoBreakdown } = countFacingsForArt(art);
     const product = PV.recog.productsMap[productId];
     const fullName = (product && (product.full_name || product.name)) || art;
     const thumbUrl = (product && (product.image_no_bg_url || product.image_url)) || '';
 
-    let html = buildDetailHeader(fullName, thumbUrl);
+    let photoProduct = null;
+    for (const name of PV.photos) {
+        const d = PV.photoData[name];
+        if (!d) continue;
+        const match = d.products.find(pp => pp.art === art);
+        if (match) { photoProduct = match; break; }
+    }
+
+    const brand = (photoProduct && photoProduct.brand_name) || (pf && pf.brand);
+    const category = photoProduct && photoProduct.category_name;
+    const price = photoProduct && photoProduct.price;
+
+    let html = buildDetailHeader(fullName, thumbUrl, { brand, category, price });
     html += buildStatusBadge(pf ? 'in-plano' : 'not-in-plano');
     html += buildFacingsGrid(pf ? pf.facings_wide : 0, totalPhotoFacings, !!pf);
-    html += buildSalesSection(PV.salesData[art]);
-    html += buildSpmSection(art);
+
+    if (photoBreakdown.length > 0) {
+        html += `<div class="field"><div class="field-label">Per Photo</div>`;
+        photoBreakdown.forEach(pb => {
+            html += `<div style="font-size:11px;color:#ccc;margin-top:2px">${pb.name}: <strong>${pb.count}</strong> facing${pb.count > 1 ? 's' : ''}</div>`;
+        });
+        html += `</div>`;
+    }
+
+    const barcode = photoProduct && photoProduct.barcode;
+    if (barcode) {
+        html += `<div class="field"><div class="field-label">Barcode</div><div class="field-value" style="font-family:monospace;font-size:11px">${barcode}</div></div>`;
+    }
+
+    const hasRecogSize = photoProduct && photoProduct.facing_width_cm > 0;
+    const hasMapSize = pf && pf.width_cm > 0;
+    if (hasRecogSize || hasMapSize) {
+        html += `<div class="field"><div class="field-label">Size (cm)</div><div class="dims-grid" style="margin-top:4px">`;
+        if (hasRecogSize) {
+            html += `<span class="dim-label">Recognition</span><span class="dim-value" style="font-size:11px">${photoProduct.facing_width_cm.toFixed(1)} × ${photoProduct.facing_height_cm.toFixed(1)}</span>`;
+        }
+        if (hasMapSize) {
+            html += `<span class="dim-label">Product Map</span><span class="dim-value" style="font-size:11px">${pf.width_cm.toFixed(1)} × ${pf.height_cm.toFixed(1)}</span>`;
+        }
+        if (hasRecogSize && hasMapSize) {
+            const wDiff = Math.abs(photoProduct.facing_width_cm - pf.width_cm);
+            const hDiff = Math.abs(photoProduct.facing_height_cm - pf.height_cm);
+            const mismatch = wDiff > 2 || hDiff > 2;
+            const diffColor = mismatch ? '#ef4444' : '#22c55e';
+            const diffLabel = mismatch ? 'Mismatch' : 'Close';
+            html += `<span class="dim-label">Match</span><span class="dim-value" style="font-size:11px;color:${diffColor};font-weight:600">${diffLabel} (Δ${wDiff.toFixed(1)} × ${hDiff.toFixed(1)})</span>`;
+        }
+        html += `</div></div>`;
+    }
+
+    html += buildSalesSection(PV.salesData[art] || PV.salesData[productId]);
+    html += buildSpmSection(art, productId);
 
     document.getElementById('detailContent').innerHTML = html;
     openPanelTab('analytics');
