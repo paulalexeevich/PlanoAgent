@@ -153,10 +153,10 @@ def _stable_color_from_text(text: str) -> str:
 
 def _load_product_sizes() -> dict:
     """Load product dimensions from test_coffee_product_map in Supabase.
-    Returns dict keyed by product_code → {width_cm, height_cm, name, tiny_name, recognition_id}."""
+    Returns dict keyed by product_code → {width_cm, height_cm, name, tiny_name, recognition_id, brand}."""
     try:
         rows = _supabase_get("test_coffee_product_map", {
-            "select": "product_code,tiny_name,product_name,width_cm,height_cm,recognition_id",
+            "select": "product_code,tiny_name,product_name,width_cm,height_cm,recognition_id,brand",
         })
         return {
             r["product_code"]: {
@@ -165,6 +165,7 @@ def _load_product_sizes() -> dict:
                 "name": r.get("product_name") or "",
                 "tiny_name": r.get("tiny_name") or "",
                 "recognition_id": r.get("recognition_id") or "",
+                "brand": r.get("brand") or "",
             }
             for r in rows if r.get("product_code")
         }
@@ -227,8 +228,8 @@ def _build_planogram_from_supabase(store_id: str = "617533") -> Planogram:
         if pid not in seen_ids:
             seen_ids.add(pid)
             name = (row.get("external_product_name") or "").strip()
-            brand = name.split(" ")[0] if name else "Unknown"
             dims = size_map.get(eid, {})
+            brand = dims.get("brand") or (name.split(" ")[0] if name else "Unknown")
             w_in = round(float(dims.get("width_cm", 7.5)) * CM_TO_IN, 2)
             h_in = round(float(dims.get("height_cm", 20.0)) * CM_TO_IN, 2)
             prod_width_in[pid] = w_in
@@ -506,7 +507,7 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
 
                 if pid not in all_products_dict:
                     prod_info = p
-                    brand = prod_info.get("brand_name", "") or "Unknown"
+                    brand = map_dims.get("brand") or prod_info.get("brand_name", "") or "Unknown"
                     no_bg_url = no_bg_map.get(pid, "")
                     all_products_dict[pid] = {
                         "id": pid,
