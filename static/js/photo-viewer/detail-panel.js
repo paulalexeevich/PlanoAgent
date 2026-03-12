@@ -138,8 +138,25 @@ function selectProduct(photoName, idx) {
     if (p.barcode) {
         html += `<div class="field"><div class="field-label">Barcode</div><div class="field-value" style="font-family:monospace;font-size:11px">${p.barcode}</div></div>`;
     }
-    if (p.facing_width_cm) {
-        html += `<div class="field"><div class="field-label">Size (cm)</div><div class="field-value" style="font-size:11px">${p.facing_width_cm.toFixed(1)} × ${p.facing_height_cm.toFixed(1)}</div></div>`;
+    const hasRecogSize = p.facing_width_cm > 0;
+    const hasMapSize = pf && pf.width_cm > 0;
+    if (hasRecogSize || hasMapSize) {
+        html += `<div class="field"><div class="field-label">Size (cm)</div><div class="dims-grid" style="margin-top:4px">`;
+        if (hasRecogSize) {
+            html += `<span class="dim-label">Recognition</span><span class="dim-value" style="font-size:11px">${p.facing_width_cm.toFixed(1)} × ${p.facing_height_cm.toFixed(1)}</span>`;
+        }
+        if (hasMapSize) {
+            html += `<span class="dim-label">Product Map</span><span class="dim-value" style="font-size:11px">${pf.width_cm.toFixed(1)} × ${pf.height_cm.toFixed(1)}</span>`;
+        }
+        if (hasRecogSize && hasMapSize) {
+            const wDiff = Math.abs(p.facing_width_cm - pf.width_cm);
+            const hDiff = Math.abs(p.facing_height_cm - pf.height_cm);
+            const mismatch = wDiff > 2 || hDiff > 2;
+            const diffColor = mismatch ? '#ef4444' : '#22c55e';
+            const diffLabel = mismatch ? 'Mismatch' : 'Close';
+            html += `<span class="dim-label">Match</span><span class="dim-value" style="font-size:11px;color:${diffColor};font-weight:600">${diffLabel} (Δ${wDiff.toFixed(1)} × ${hDiff.toFixed(1)})</span>`;
+        }
+        html += `</div></div>`;
     }
 
     html += buildSalesSection(PV.salesData[p.art] || PV.salesData[p.product_id]);
@@ -164,7 +181,10 @@ function selectOutOfShelfProduct(art) {
     html += buildFacingsGrid(pf.facings_wide, 0, true);
 
     if (pf.width_cm) {
-        html += `<div class="field"><div class="field-label">Size (cm)</div><div class="field-value" style="font-size:11px">${pf.width_cm.toFixed(1)} × ${pf.height_cm.toFixed(1)}</div></div>`;
+        html += `<div class="field"><div class="field-label">Size (cm)</div><div class="dims-grid" style="margin-top:4px">`;
+        html += `<span class="dim-label">Product Map</span><span class="dim-value" style="font-size:11px">${pf.width_cm.toFixed(1)} × ${pf.height_cm.toFixed(1)}</span>`;
+        html += `<span class="dim-label">Recognition</span><span class="dim-value" style="font-size:11px;color:#666">— (not on shelf)</span>`;
+        html += `</div></div>`;
     }
 
     html += buildSalesSection(PV.salesData[art]);
