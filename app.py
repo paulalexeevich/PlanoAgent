@@ -1431,53 +1431,47 @@ def photo_data(photo_name):
 def planogram_facings():
     """Return planned planogram facings keyed by tiny_name.
 
-    Reads from source_data_617533 which has the real store planogram data:
-    - on_planogram: whether the product is on the planned planogram
-    - face_width_planogram: planned number of facings
-    Maps product_code → tiny_name via the product size map.
+    Reads from test_coffee_planogram_positions which has the actual store
+    planogram layout with faces_width per position.
+    Maps external_product_id → tiny_name via test_coffee_product_map.
     """
     size_map = _load_product_sizes()
     ext_to_tiny = {eid: info["tiny_name"] for eid, info in size_map.items() if info.get("tiny_name")}
     image_map = _build_image_map()
 
     try:
-        rows = _supabase_get("source_data_617533", {
-            "select": "product_code,product_name,recognition_product_id,"
-                      "on_planogram,face_width_planogram",
+        rows = _supabase_get("test_coffee_planogram_positions", {
+            "select": "external_product_id,external_product_name,faces_width,"
+                      "shelf_number,eq_num_in_scene_group,on_shelf_position",
         })
     except Exception as e:
-        print(f"[planogram-facings] Failed to load source data: {e}", flush=True)
+        print(f"[planogram-facings] Failed to load positions: {e}", flush=True)
         return jsonify({})
 
     facings = {}
     for r in rows:
-        on_plano = r.get("on_planogram", 0)
-        if not on_plano:
-            continue
-        fw = r.get("face_width_planogram") or 0
-        if fw <= 0:
-            continue
-
-        product_code = r.get("product_code", "")
-        tiny = ext_to_tiny.get(product_code, "")
+        ext_id = r.get("external_product_id", "")
+        tiny = ext_to_tiny.get(ext_id, "")
         if not tiny:
             continue
 
-        if tiny in facings:
-            continue
+        fw = int(r.get("faces_width", 1) or 1)
+        sz = size_map.get(ext_id, {})
 
-        sz = size_map.get(product_code, {})
-        facings[tiny] = {
-            "facings_wide": int(fw),
-            "positions": 1,
-            "name": r.get("product_name", ""),
-            "brand": "",
-            "image_url": image_map.get(product_code, ""),
-            "width_cm": sz.get("width_cm", 0),
-            "height_cm": sz.get("height_cm", 0),
-        }
+        if tiny not in facings:
+            facings[tiny] = {
+                "facings_wide": 0,
+                "positions": 0,
+                "name": r.get("external_product_name", ""),
+                "brand": "",
+                "image_url": image_map.get(ext_id, ""),
+                "width_cm": sz.get("width_cm", 0),
+                "height_cm": sz.get("height_cm", 0),
+            }
+        facings[tiny]["facings_wide"] += fw
+        facings[tiny]["positions"] += 1
 
-    print(f"[planogram-facings] Loaded {len(facings)} products from source_data_617533", flush=True)
+    print(f"[planogram-facings] Loaded {len(facings)} products from planogram positions", flush=True)
     return jsonify(facings)
 
 
