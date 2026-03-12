@@ -129,43 +129,44 @@
     </div>
 
     <script>
-    let PHOTOS = {{ photos | tojson }};
-    const photoDataMap = {};   // photoName → {products, shelves, source}
-    const photoScales = {};    // photoName → scale
-    const photoNaturalSizes = {}; // photoName → {w, h}
-    let planogramFacings = {}; // tiny_name → {facings_wide, positions}
-    let salesData = {};        // tiny_name → {avg_sale_amount, avg_sale_qty, ...}
-
-    let currentView = 'all';
-    let selectedId = null;
-    let selectedPhotoName = null;
-    let selectedArt = null;
-    let activeFilter = 'all';
-    let globalScale = null;    // will be computed on fit
-
-    const PRODUCT_COLORS = {};
-    const COLOR_PALETTE = [
-        '#e94560','#00b4d8','#90be6d','#f9c74f','#f8961e',
-        '#43aa8b','#577590','#f3722c','#4cc9f0','#7209b7',
-        '#3a86a7','#fb5607','#ff006e','#8338ec','#06d6a0',
-        '#118ab2','#ef476f','#ffd166','#073b4c','#06aed5'
-    ];
-
-    let colorMode = 'default';
-    let salesPerMeterMap = {};
-    let avgSalesPerMeter = 0;
+    const PV = {
+        photos: {{ photos | tojson }},
+        photoData: {},
+        scales: {},
+        naturalSizes: {},
+        planogramFacings: {},
+        salesData: {},
+        view: 'all',
+        selection: { id: null, photoName: null, art: null },
+        filter: 'all',
+        globalScale: null,
+        productColors: {},
+        COLOR_PALETTE: [
+            '#e94560','#00b4d8','#90be6d','#f9c74f','#f8961e',
+            '#43aa8b','#577590','#f3722c','#4cc9f0','#7209b7',
+            '#3a86a7','#fb5607','#ff006e','#8338ec','#06d6a0',
+            '#118ab2','#ef476f','#ffd166','#073b4c','#06aed5'
+        ],
+        colorMode: 'default',
+        salesPerMeter: { map: {}, avg: 0 },
+        activeTab: 'actions',
+        actions: { data: [], loaded: false, filter: 'all' },
+        recog: { planogramData: null, productsMap: {}, bayMap: {} },
+        drag: { active: false, startX: 0, startY: 0, scrollX: 0, scrollY: 0, distance: 0 },
+        planoRenderTimer: null,
+    };
 
     function getColorForArt(art) {
-        if (!PRODUCT_COLORS[art]) {
-            const idx = Object.keys(PRODUCT_COLORS).length % COLOR_PALETTE.length;
-            PRODUCT_COLORS[art] = COLOR_PALETTE[idx];
+        if (!PV.productColors[art]) {
+            const idx = Object.keys(PV.productColors).length % PV.COLOR_PALETTE.length;
+            PV.productColors[art] = PV.COLOR_PALETTE[idx];
         }
-        return PRODUCT_COLORS[art];
+        return PV.productColors[art];
     }
 
     function getBoxColor(art) {
-        if (colorMode === 'salesPerMeter') {
-            const data = salesPerMeterMap[art];
+        if (PV.colorMode === 'salesPerMeter') {
+            const data = PV.salesPerMeter.map[art];
             if (data) return data.color;
             return '#888888';
         }
@@ -173,11 +174,11 @@
     }
 
     function calculateSalesPerMeter() {
-        salesPerMeterMap = {};
+        PV.salesPerMeter.map = {};
         const artInfo = {};
 
-        PHOTOS.forEach(name => {
-            const data = photoDataMap[name];
+        PV.photos.forEach(name => {
+            const data = PV.photoData[name];
             if (!data) return;
             data.products.forEach(p => {
                 const key = p.art;
@@ -193,33 +194,33 @@
 
         const values = [];
         Object.entries(artInfo).forEach(([art, info]) => {
-            const sd = salesData[art] || salesData[info.product_id];
+            const sd = PV.salesData[art] || PV.salesData[info.product_id];
             if (!sd || !info.width_cm || info.count === 0) return;
             const totalShelfMeters = info.count * info.width_cm / 100;
             const spm = sd.avg_sale_amount / totalShelfMeters;
             const entry = { salesPerMeter: spm, color: '#22c55e' };
-            salesPerMeterMap[art] = entry;
-            if (info.product_id) salesPerMeterMap[info.product_id] = entry;
+            PV.salesPerMeter.map[art] = entry;
+            if (info.product_id) PV.salesPerMeter.map[info.product_id] = entry;
             values.push(spm);
         });
 
-        avgSalesPerMeter = values.length > 0
+        PV.salesPerMeter.avg = values.length > 0
             ? values.reduce((a, b) => a + b, 0) / values.length
             : 0;
 
-        Object.entries(salesPerMeterMap).forEach(([art, data]) => {
-            if (data.salesPerMeter >= avgSalesPerMeter * 2) {
-                data.color = '#ef4444'; // red — 2x above average
-            } else if (data.salesPerMeter <= avgSalesPerMeter / 2) {
-                data.color = '#f59e0b'; // yellow — 2x below average
+        Object.entries(PV.salesPerMeter.map).forEach(([art, data]) => {
+            if (data.salesPerMeter >= PV.salesPerMeter.avg * 2) {
+                data.color = '#ef4444';
+            } else if (data.salesPerMeter <= PV.salesPerMeter.avg / 2) {
+                data.color = '#f59e0b';
             } else {
-                data.color = '#22c55e'; // green — normal range
+                data.color = '#22c55e';
             }
         });
     }
 
     function setColorMode(mode) {
-        colorMode = mode;
+        PV.colorMode = mode;
         document.querySelectorAll('#colorModeToggle button').forEach(b => {
             b.classList.toggle('active', b.getAttribute('data-mode') === mode);
         });
@@ -236,9 +237,9 @@
         document.querySelectorAll('.product-block[data-art]').forEach(el => {
             el.querySelectorAll('.spm-tint').forEach(t => t.remove());
 
-            if (colorMode === 'salesPerMeter') {
+            if (PV.colorMode === 'salesPerMeter') {
                 const art = el.dataset.art;
-                const data = salesPerMeterMap[art];
+                const data = PV.salesPerMeter.map[art];
                 const color = data ? data.color : '#888888';
                 const tint = document.createElement('div');
                 tint.className = 'spm-tint';
@@ -253,7 +254,7 @@
 
     function updateSalesPerMeterLegend() {
         let existing = document.getElementById('spmLegend');
-        if (colorMode !== 'salesPerMeter') {
+        if (PV.colorMode !== 'salesPerMeter') {
             if (existing) existing.remove();
             return;
         }
@@ -263,7 +264,7 @@
             existing.className = 'spm-legend';
             document.querySelector('.toolbar').appendChild(existing);
         }
-        const avgFormatted = avgSalesPerMeter.toLocaleString('ru-RU', {maximumFractionDigits: 0});
+        const avgFormatted = PV.salesPerMeter.avg.toLocaleString('ru-RU', {maximumFractionDigits: 0});
         existing.innerHTML = `
             <span class="spm-dot" style="background:#ef4444"></span> &gt;2× avg (${avgFormatted} ₽/m)
             <span class="spm-dot" style="background:#22c55e;margin-left:8px"></span> normal
@@ -274,11 +275,11 @@
 
     function rebuildPhotoSelect() {
         const sel = document.getElementById('photoSelect');
-        sel.innerHTML = PHOTOS.map(p => `<option value="${p}">${p}</option>`).join('');
+        sel.innerHTML = PV.photos.map(p => `<option value="${p}">${p}</option>`).join('');
     }
 
     function setView(mode) {
-        currentView = mode;
+        PV.view = mode;
         const viewToggle = event.target.closest('.settings-section').querySelector('.view-toggle');
         const btns = viewToggle.querySelectorAll('button');
         btns.forEach(b => b.classList.remove('active'));
@@ -297,7 +298,7 @@
     }
 
     async function loadAllPhotos() {
-        buildGrid(PHOTOS);
+        buildGrid(PV.photos);
     }
 
     function buildGrid(photoNames) {
@@ -331,7 +332,7 @@
 
             const img = document.getElementById(`img-${name}`);
             img.onload = function() {
-                photoNaturalSizes[name] = { w: img.naturalWidth, h: img.naturalHeight };
+                PV.naturalSizes[name] = { w: img.naturalWidth, h: img.naturalHeight };
                 fetchPhotoData(name);
                 loadedCount++;
                 if (loadedCount === photoNames.length) {
@@ -344,13 +345,13 @@
     }
 
     async function fetchPhotoData(name) {
-        if (photoDataMap[name]) {
+        if (PV.photoData[name]) {
             renderOverlay(name);
             updateStats();
             return;
         }
         const resp = await fetch(`/api/photo-data/${name}`);
-        photoDataMap[name] = await resp.json();
+        PV.photoData[name] = await resp.json();
         renderOverlay(name);
         updateStats();
         renderProductList();
@@ -358,13 +359,13 @@
     }
 
     function updateStats() {
-        const activePhotos = Object.keys(photoDataMap).filter(n =>
+        const activePhotos = Object.keys(PV.photoData).filter(n =>
             document.getElementById(`card-${n}`)
         );
         let totalFacings = 0;
         const uniqueArts = new Set();
         activePhotos.forEach(n => {
-            const data = photoDataMap[n];
+            const data = PV.photoData[n];
             if (!data) return;
             totalFacings += data.products.length;
             data.products.forEach(p => uniqueArts.add(p.art));
@@ -375,17 +376,17 @@
     }
 
     function renderAllOverlays() {
-        PHOTOS.forEach(name => {
-            if (photoDataMap[name] && document.getElementById(`svg-${name}`)) {
+        PV.photos.forEach(name => {
+            if (PV.photoData[name] && document.getElementById(`svg-${name}`)) {
                 renderOverlay(name);
             }
         });
     }
 
     function renderOverlay(name) {
-        const data = photoDataMap[name];
+        const data = PV.photoData[name];
         if (!data) return;
-        const size = photoNaturalSizes[name];
+        const size = PV.naturalSizes[name];
         if (!size) return;
 
         const svg = document.getElementById(`svg-${name}`);
@@ -459,7 +460,7 @@
                 rect.setAttribute('data-product-id', p._id);
                 rect.setAttribute('data-art', p.art);
                 rect.setAttribute('data-photo', name);
-                rect.style.opacity = (selectedId === p._id && selectedPhotoName === name) ? '1' : '0.7';
+                rect.style.opacity = (PV.selection.id === p._id && PV.selection.photoName === name) ? '1' : '0.7';
                 rect.onclick = (e) => { e.stopPropagation(); selectProduct(name, i); };
                 gProducts.appendChild(rect);
 
@@ -498,18 +499,16 @@
     }
 
     function selectProduct(photoName, idx) {
-        const data = photoDataMap[photoName];
+        const data = PV.photoData[photoName];
         const p = data.products[idx];
-        selectedId = p._id;
-        selectedPhotoName = photoName;
-        selectedArt = p.art;
-        const isRich = !!p.brand_name;
+        PV.selection.id = p._id;
+        PV.selection.photoName = photoName;
+        PV.selection.art = p.art;
 
-        // Count facings across all photos for this art
         let totalPhotoFacings = 0;
         const photoBreakdown = [];
-        PHOTOS.forEach(name => {
-            const d = photoDataMap[name];
+        PV.photos.forEach(name => {
+            const d = PV.photoData[name];
             if (!d) return;
             const cnt = d.products.filter(pp => pp.art === p.art).length;
             if (cnt > 0) {
@@ -517,7 +516,7 @@
                 photoBreakdown.push({ name, count: cnt });
             }
         });
-        const pf = planogramFacings[p.art];
+        const pf = PV.planogramFacings[p.art];
         const inPlano = !!pf;
         const planoFacings = pf ? pf.facings_wide : 0;
 
@@ -539,7 +538,6 @@
             </div>
         `;
 
-        // Planogram status
         html += `<div class="field" style="margin-bottom:12px">`;
         if (inPlano) {
             html += `<span class="tag-plano" style="font-size:11px;padding:3px 8px">In Planogram</span>`;
@@ -548,7 +546,6 @@
         }
         html += `</div>`;
 
-        // Facings comparison
         html += `
             <div class="field">
                 <div class="field-label">Facings Comparison</div>
@@ -559,7 +556,6 @@
             </div>
         `;
 
-        // Per-photo breakdown
         if (photoBreakdown.length > 0) {
             html += `<div class="field"><div class="field-label">Per Photo</div>`;
             photoBreakdown.forEach(pb => {
@@ -575,7 +571,7 @@
             html += `<div class="field"><div class="field-label">Size (cm)</div><div class="field-value" style="font-size:11px">${p.facing_width_cm.toFixed(1)} × ${p.facing_height_cm.toFixed(1)}</div></div>`;
         }
 
-        const sd = salesData[p.art] || salesData[p.product_id];
+        const sd = PV.salesData[p.art] || PV.salesData[p.product_id];
         if (sd) {
             html += `
                 <div class="field">
@@ -590,10 +586,10 @@
             `;
         }
 
-        const spmData = salesPerMeterMap[p.art] || salesPerMeterMap[p.product_id];
-        if (spmData && avgSalesPerMeter > 0) {
+        const spmData = PV.salesPerMeter.map[p.art] || PV.salesPerMeter.map[p.product_id];
+        if (spmData && PV.salesPerMeter.avg > 0) {
             const spm = spmData.salesPerMeter;
-            const pctDiff = ((spm - avgSalesPerMeter) / avgSalesPerMeter) * 100;
+            const pctDiff = ((spm - PV.salesPerMeter.avg) / PV.salesPerMeter.avg) * 100;
             const pctSign = pctDiff >= 0 ? '+' : '';
             const pctColor = pctDiff >= 50 ? '#ef4444' : pctDiff <= -50 ? '#f59e0b' : '#22c55e';
             html += `
@@ -601,7 +597,7 @@
                     <div class="field-label">₽ / Meter (shelf efficiency)</div>
                     <div class="dims-grid" style="margin-top:4px">
                         <span class="dim-label">₽/meter</span><span class="dim-value" style="color:${spmData.color};font-weight:600">${spm.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
-                        <span class="dim-label">Avg (all SKUs)</span><span class="dim-value">${avgSalesPerMeter.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
+                        <span class="dim-label">Avg (all SKUs)</span><span class="dim-value">${PV.salesPerMeter.avg.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
                         <span class="dim-label">vs Average</span><span class="dim-value" style="color:${pctColor};font-weight:600">${pctSign}${pctDiff.toFixed(0)}%</span>
                     </div>
                 </div>
@@ -609,19 +605,17 @@
         }
 
         document.getElementById('detailContent').innerHTML = html;
-        
         openPanelTab('analytics');
-        
         highlightSelected();
         highlightListItem();
     }
 
     function selectOutOfShelfProduct(art) {
-        selectedId = null;
-        selectedPhotoName = null;
-        selectedArt = art;
+        PV.selection.id = null;
+        PV.selection.photoName = null;
+        PV.selection.art = art;
 
-        const pf = planogramFacings[art];
+        const pf = PV.planogramFacings[art];
         if (!pf) return;
         const planoFacings = pf.facings_wide;
 
@@ -659,7 +653,7 @@
             html += `<div class="field"><div class="field-label">Size (cm)</div><div class="field-value" style="font-size:11px">${pf.width_cm.toFixed(1)} × ${pf.height_cm.toFixed(1)}</div></div>`;
         }
 
-        const sd = salesData[art];
+        const sd = PV.salesData[art];
         if (sd) {
             html += `
                 <div class="field">
@@ -674,10 +668,10 @@
             `;
         }
 
-        const spmData = salesPerMeterMap[art];
-        if (spmData && avgSalesPerMeter > 0) {
+        const spmData = PV.salesPerMeter.map[art];
+        if (spmData && PV.salesPerMeter.avg > 0) {
             const spm = spmData.salesPerMeter;
-            const pctDiff = ((spm - avgSalesPerMeter) / avgSalesPerMeter) * 100;
+            const pctDiff = ((spm - PV.salesPerMeter.avg) / PV.salesPerMeter.avg) * 100;
             const pctSign = pctDiff >= 0 ? '+' : '';
             const pctColor = pctDiff >= 50 ? '#ef4444' : pctDiff <= -50 ? '#f59e0b' : '#22c55e';
             html += `
@@ -685,7 +679,7 @@
                     <div class="field-label">₽ / Meter (shelf efficiency)</div>
                     <div class="dims-grid" style="margin-top:4px">
                         <span class="dim-label">₽/meter</span><span class="dim-value" style="color:${spmData.color};font-weight:600">${spm.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
-                        <span class="dim-label">Avg (all SKUs)</span><span class="dim-value">${avgSalesPerMeter.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
+                        <span class="dim-label">Avg (all SKUs)</span><span class="dim-value">${PV.salesPerMeter.avg.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
                         <span class="dim-label">vs Average</span><span class="dim-value" style="color:${pctColor};font-weight:600">${pctSign}${pctDiff.toFixed(0)}%</span>
                     </div>
                 </div>
@@ -693,17 +687,15 @@
         }
 
         document.getElementById('detailContent').innerHTML = html;
-        
         openPanelTab('analytics');
-        
         highlightListItem();
     }
 
     function selectShelf(photoName, idx) {
-        const data = photoDataMap[photoName];
+        const data = PV.photoData[photoName];
         const s = data.shelves[idx];
-        selectedId = s._id;
-        selectedPhotoName = photoName;
+        PV.selection.id = s._id;
+        PV.selection.photoName = photoName;
 
         const html = `
             <span class="tag tag-photo">${photoName}</span><br><br>
@@ -732,14 +724,12 @@
             </div>
         `;
         document.getElementById('detailContent').innerHTML = html;
-        
         openPanelTab('analytics');
-        
         highlightSelected();
     }
 
     function highlightSelected() {
-        const hasSelection = !!selectedArt;
+        const hasSelection = !!PV.selection.art;
 
         document.querySelectorAll('.bbox-product').forEach(el => {
             const art = el.getAttribute('data-art');
@@ -750,7 +740,7 @@
                 el.setAttribute('fill', origColor + '22');
                 el.setAttribute('stroke-width', '6');
                 el.style.opacity = '0.7';
-            } else if (art === selectedArt) {
+            } else if (art === PV.selection.art) {
                 el.setAttribute('stroke', '#ffd166');
                 el.setAttribute('fill', 'rgba(255,209,102,0.15)');
                 el.setAttribute('stroke-width', '10');
@@ -769,7 +759,7 @@
             if (!hasSelection) {
                 el.setAttribute('fill', origColor);
                 el.style.opacity = '1';
-            } else if (art === selectedArt) {
+            } else if (art === PV.selection.art) {
                 el.setAttribute('fill', '#ffd166');
                 el.style.opacity = '1';
             } else {
@@ -780,7 +770,7 @@
 
         document.querySelectorAll('.bbox-label').forEach(el => {
             const art = el.getAttribute('data-art');
-            if (!hasSelection || art === selectedArt) {
+            if (!hasSelection || art === PV.selection.art) {
                 el.style.opacity = '1';
             } else {
                 el.style.opacity = '0.3';
@@ -790,10 +780,10 @@
         document.querySelectorAll('.bbox-shelf').forEach(el => {
             const idx = parseInt(el.getAttribute('data-shelf-idx'));
             const photo = el.getAttribute('data-photo');
-            const data = photoDataMap[photo];
+            const data = PV.photoData[photo];
             if (data) {
                 const s = data.shelves[idx];
-                if (s._id === selectedId && photo === selectedPhotoName) {
+                if (s._id === PV.selection.id && photo === PV.selection.photoName) {
                     el.setAttribute('stroke-width', '12');
                     el.setAttribute('fill', 'rgba(0,180,216,0.35)');
                 } else {
@@ -809,7 +799,7 @@
             if (!hasSelection) {
                 el.style.opacity = '';
                 el.style.filter = '';
-            } else if (art === selectedArt) {
+            } else if (art === PV.selection.art) {
                 el.classList.add('realogram-selected');
             } else {
                 el.classList.add('realogram-dimmed');
@@ -818,21 +808,21 @@
     }
 
     function selectRealogramProduct(art, productId) {
-        selectedId = null;
-        selectedPhotoName = null;
-        selectedArt = art;
+        PV.selection.id = null;
+        PV.selection.photoName = null;
+        PV.selection.art = art;
 
         let html = '';
-        const pf = planogramFacings[art];
+        const pf = PV.planogramFacings[art];
         const artFacings = {};
-        Object.keys(photoDataMap).forEach(pn => {
-            photoDataMap[pn].products.forEach(p => {
+        Object.keys(PV.photoData).forEach(pn => {
+            PV.photoData[pn].products.forEach(p => {
                 if (p.art === art) artFacings[pn] = (artFacings[pn] || 0) + 1;
             });
         });
         const totalPhotoFacings = Object.values(artFacings).reduce((a, b) => a + b, 0);
 
-        const product = recogProductsMap[productId];
+        const product = PV.recog.productsMap[productId];
         const fullName = (product && (product.full_name || product.name)) || art;
         const thumbUrl = (product && (product.image_no_bg_url || product.image_url)) || '';
 
@@ -863,7 +853,7 @@
             </div>
         `;
 
-        const sd = salesData[art];
+        const sd = PV.salesData[art];
         if (sd) {
             html += `
                 <div class="field">
@@ -878,10 +868,10 @@
             `;
         }
 
-        const spmData = salesPerMeterMap[art];
-        if (spmData && avgSalesPerMeter > 0) {
+        const spmData = PV.salesPerMeter.map[art];
+        if (spmData && PV.salesPerMeter.avg > 0) {
             const spm = spmData.salesPerMeter;
-            const pctDiff = ((spm - avgSalesPerMeter) / avgSalesPerMeter) * 100;
+            const pctDiff = ((spm - PV.salesPerMeter.avg) / PV.salesPerMeter.avg) * 100;
             const pctSign = pctDiff >= 0 ? '+' : '';
             const pctColor = pctDiff >= 50 ? '#ef4444' : pctDiff <= -50 ? '#f59e0b' : '#22c55e';
             html += `
@@ -889,7 +879,7 @@
                     <div class="field-label">₽ / Meter (shelf efficiency)</div>
                     <div class="dims-grid" style="margin-top:4px">
                         <span class="dim-label">₽/meter</span><span class="dim-value" style="color:${spmData.color};font-weight:600">${spm.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
-                        <span class="dim-label">Avg (all SKUs)</span><span class="dim-value">${avgSalesPerMeter.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
+                        <span class="dim-label">Avg (all SKUs)</span><span class="dim-value">${PV.salesPerMeter.avg.toLocaleString('ru-RU', {maximumFractionDigits: 0})} ₽</span>
                         <span class="dim-label">vs Average</span><span class="dim-value" style="color:${pctColor};font-weight:600">${pctSign}${pctDiff.toFixed(0)}%</span>
                     </div>
                 </div>
@@ -903,9 +893,9 @@
     }
 
     function clearSelection() {
-        selectedId = null;
-        selectedPhotoName = null;
-        selectedArt = null;
+        PV.selection.id = null;
+        PV.selection.photoName = null;
+        PV.selection.art = null;
         document.getElementById('detailContent').innerHTML =
             '<div class="empty-state">Click a bounding box to see details</div>';
         highlightSelected();
@@ -913,7 +903,7 @@
     }
 
     function getProductStatus(art, photoFacings) {
-        const pf = planogramFacings[art];
+        const pf = PV.planogramFacings[art];
         if (!pf) return 'not-in-plano';
         if (photoFacings === 0) return 'out-of-shelf';
         const plano = pf.facings_wide;
@@ -924,8 +914,8 @@
 
     function renderProductList() {
         const artCounts = {};
-        PHOTOS.forEach(name => {
-            const data = photoDataMap[name];
+        PV.photos.forEach(name => {
+            const data = PV.photoData[name];
             if (!data) return;
             data.products.forEach(p => {
                 const key = p.art;
@@ -945,10 +935,9 @@
             });
         });
 
-        // Add out-of-shelf: products in planogram but not in any photo
-        Object.keys(planogramFacings).forEach(art => {
+        Object.keys(PV.planogramFacings).forEach(art => {
             if (!artCounts[art]) {
-                const pf = planogramFacings[art];
+                const pf = PV.planogramFacings[art];
                 artCounts[art] = {
                     count: 0,
                     display_name: pf.name || art,
@@ -975,7 +964,6 @@
                 return b[1].count - a[1].count;
             });
 
-        // Count per status
         const counts = { all: items.length };
         items.forEach(([, , status]) => { counts[status] = (counts[status] || 0) + 1; });
         document.getElementById('filterCounts').innerHTML =
@@ -990,7 +978,7 @@
             const thumb = info.miniature_url
                 ? `<img class="thumb" src="${info.miniature_url}" alt="" onerror="this.style.display='none'">`
                 : `<span class="color-dot" style="background:${getBoxColor(art)}"></span>`;
-            const pf = planogramFacings[art];
+            const pf = PV.planogramFacings[art];
             const planoFacings = pf ? pf.facings_wide : 0;
             const photoFacings = info.count;
 
@@ -1025,7 +1013,7 @@
     }
 
     function setFilter(filter) {
-        activeFilter = filter;
+        PV.filter = filter;
         document.querySelectorAll('#filterBar .filter-btn').forEach(b => {
             b.classList.toggle('active', b.getAttribute('data-filter') === filter);
         });
@@ -1037,15 +1025,15 @@
         document.querySelectorAll('.product-list-item').forEach(el => {
             const status = el.getAttribute('data-status');
             const text = el.textContent.toLowerCase();
-            const matchesFilter = activeFilter === 'all' || status === activeFilter;
+            const matchesFilter = PV.filter === 'all' || status === PV.filter;
             const matchesSearch = !q || text.includes(q);
             el.style.display = (matchesFilter && matchesSearch) ? '' : 'none';
         });
     }
 
     function selectByArt(art) {
-        for (const name of PHOTOS) {
-            const data = photoDataMap[name];
+        for (const name of PV.photos) {
+            const data = PV.photoData[name];
             if (!data) continue;
             const idx = data.products.findIndex(p => p.art === art);
             if (idx >= 0) {
@@ -1059,13 +1047,13 @@
         document.querySelectorAll('.product-list-item').forEach(el => {
             el.classList.remove('selected');
         });
-        if (selectedArt && !selectedId) {
-            const el = document.querySelector(`.product-list-item[data-art="${selectedArt}"]`);
+        if (PV.selection.art && !PV.selection.id) {
+            const el = document.querySelector(`.product-list-item[data-art="${PV.selection.art}"]`);
             if (el) el.classList.add('selected');
-        } else if (selectedId && selectedPhotoName) {
-            const data = photoDataMap[selectedPhotoName];
+        } else if (PV.selection.id && PV.selection.photoName) {
+            const data = PV.photoData[PV.selection.photoName];
             if (data) {
-                const p = data.products.find(pp => pp._id === selectedId);
+                const p = data.products.find(pp => pp._id === PV.selection.id);
                 if (p) {
                     const el = document.querySelector(`.product-list-item[data-art="${p.art}"]`);
                     if (el) el.classList.add('selected');
@@ -1078,33 +1066,31 @@
         applyFilter();
     }
 
-    // Zoom: set actual image width so layout reflows properly for scrolling
     function applyScaleToPhoto(name, scale) {
         const img = document.getElementById(`img-${name}`);
-        const size = photoNaturalSizes[name];
+        const size = PV.naturalSizes[name];
         if (!img || !size) return;
         const w = Math.round(size.w * scale);
         const h = Math.round(size.h * scale);
         img.style.width = w + 'px';
         img.style.height = h + 'px';
-        photoScales[name] = scale;
+        PV.scales[name] = scale;
     }
 
-    let planoRenderTimer = null;
     function scheduleReRenderPlanograms() {
-        if (planoRenderTimer) clearTimeout(planoRenderTimer);
-        planoRenderTimer = setTimeout(renderAllMiniPlanograms, 120);
+        if (PV.planoRenderTimer) clearTimeout(PV.planoRenderTimer);
+        PV.planoRenderTimer = setTimeout(renderAllMiniPlanograms, 120);
     }
 
     function zoomAll(delta) {
-        if (globalScale === null) globalScale = 0.3;
-        globalScale = Math.max(0.05, Math.min(2, globalScale + delta));
-        PHOTOS.forEach(name => {
+        if (PV.globalScale === null) PV.globalScale = 0.3;
+        PV.globalScale = Math.max(0.05, Math.min(2, PV.globalScale + delta));
+        PV.photos.forEach(name => {
             if (document.getElementById(`canvas-${name}`)) {
-                applyScaleToPhoto(name, globalScale);
+                applyScaleToPhoto(name, PV.globalScale);
             }
         });
-        document.getElementById('zoomLabel').textContent = Math.round(globalScale * 100) + '%';
+        document.getElementById('zoomLabel').textContent = Math.round(PV.globalScale * 100) + '%';
         scheduleReRenderPlanograms();
     }
 
@@ -1112,15 +1098,15 @@
         const grid = document.getElementById('photosGrid');
         const panel = document.getElementById('sidePanel');
         const toolbar = document.querySelector('.toolbar');
-        const visiblePhotos = PHOTOS.filter(n => document.getElementById(`card-${n}`));
+        const visiblePhotos = PV.photos.filter(n => document.getElementById(`card-${n}`));
         const count = visiblePhotos.length || 1;
 
         const panelW = panel.classList.contains('open') ? panel.offsetWidth : 0;
         const totalW = window.innerWidth - panelW - 1;
         const totalH = window.innerHeight - toolbar.offsetHeight;
         const headerH = 26;
-        const planoHeaderH = 30; // "PLANOGRAM (FROM RECOGNITION)" bar + padding
-        const planoFooterH = 28; // bay footer "125 cm" + padding
+        const planoHeaderH = 30;
+        const planoFooterH = 28;
         const pad = 16;
         const gaps = (count - 1) * 8;
         const availW = (totalW - pad - gaps) / count;
@@ -1129,37 +1115,29 @@
 
         let fitScale = 1;
         visiblePhotos.forEach(name => {
-            const size = photoNaturalSizes[name];
+            const size = PV.naturalSizes[name];
             if (!size) return;
             const sw = availW / size.w;
-
-            // Planogram height scales with photo width: planoH = bayHeightIn * (photoW / bayWidthIn)
-            const bay = recogBayMap[name];
+            const bay = PV.recog.bayMap[name];
             const bayWidthIn = bay ? bay.width_in : 49.21;
             const bayHeightIn = bay ? bay.height_in : 0;
-            // effectiveH = photo px height + planogram px height (both scale with zoomScale)
-            // planoH(scale) = bayHeightIn * (size.w * scale / bayWidthIn) = scale * bayHeightIn * size.w / bayWidthIn
-            // totalH(scale) = scale * size.h + scale * bayHeightIn * size.w / bayWidthIn
-            //               = scale * (size.h + bayHeightIn * size.w / bayWidthIn)
             const effectiveH = size.h + (bay ? bayHeightIn * size.w / bayWidthIn : 0);
             const sh = availH / effectiveH;
             fitScale = Math.min(fitScale, sw, sh);
         });
 
-        globalScale = Math.max(0.02, fitScale);
-        visiblePhotos.forEach(name => applyScaleToPhoto(name, globalScale));
-        document.getElementById('zoomLabel').textContent = Math.round(globalScale * 100) + '%';
+        PV.globalScale = Math.max(0.02, fitScale);
+        visiblePhotos.forEach(name => applyScaleToPhoto(name, PV.globalScale));
+        document.getElementById('zoomLabel').textContent = Math.round(PV.globalScale * 100) + '%';
         scheduleReRenderPlanograms();
     }
 
-    let activeTab = 'actions';
-
     function openPanelTab(tab) {
         const panel = document.getElementById('sidePanel');
-        activeTab = tab;
+        PV.activeTab = tab;
         panel.classList.add('open');
         switchTab(tab);
-        if (tab === 'actions' && !actionsLoaded) loadActions();
+        if (tab === 'actions' && !PV.actions.loaded) loadActions();
         else if (tab === 'actions') renderActions();
         setTimeout(zoomFitAll, 280);
     }
@@ -1170,7 +1148,7 @@
     }
 
     function switchTab(tab) {
-        activeTab = tab;
+        PV.activeTab = tab;
         document.querySelectorAll('.side-panel-tab').forEach(b => {
             b.classList.toggle('active', b.getAttribute('data-tab') === tab);
         });
@@ -1178,66 +1156,53 @@
         document.getElementById('tabAnalytics').style.display = tab === 'analytics' ? '' : 'none';
     }
 
-    // Mouse wheel zoom on grid
     document.getElementById('photosGrid').addEventListener('wheel', (e) => {
         e.preventDefault();
         const delta = e.deltaY > 0 ? -0.02 : 0.02;
         zoomAll(delta);
     }, { passive: false });
 
-    // Drag-to-pan
-    let isDragging = false;
-    let dragStartX = 0, dragStartY = 0;
-    let scrollStartX = 0, scrollStartY = 0;
-
     const grid = document.getElementById('photosGrid');
 
     grid.addEventListener('mousedown', (e) => {
         if (e.target.closest('.bbox-product') || e.target.closest('.bbox-shelf')) return;
-        isDragging = true;
-        dragStartX = e.clientX;
-        dragStartY = e.clientY;
-        scrollStartX = grid.scrollLeft;
-        scrollStartY = grid.scrollTop;
+        PV.drag.active = true;
+        PV.drag.startX = e.clientX;
+        PV.drag.startY = e.clientY;
+        PV.drag.scrollX = grid.scrollLeft;
+        PV.drag.scrollY = grid.scrollTop;
         grid.classList.add('dragging');
         e.preventDefault();
     });
 
     window.addEventListener('mousemove', (e) => {
-        if (!isDragging) return;
-        const dx = e.clientX - dragStartX;
-        const dy = e.clientY - dragStartY;
-        grid.scrollLeft = scrollStartX - dx;
-        grid.scrollTop = scrollStartY - dy;
+        if (!PV.drag.active) return;
+        const dx = e.clientX - PV.drag.startX;
+        const dy = e.clientY - PV.drag.startY;
+        grid.scrollLeft = PV.drag.scrollX - dx;
+        grid.scrollTop = PV.drag.scrollY - dy;
     });
 
     window.addEventListener('mouseup', () => {
-        if (isDragging) {
-            isDragging = false;
+        if (PV.drag.active) {
+            PV.drag.active = false;
             grid.classList.remove('dragging');
         }
     });
 
-    // Click on empty space to deselect (only if not dragging)
-    let dragDistance = 0;
-    grid.addEventListener('mousedown', (e) => { dragDistance = 0; });
-    grid.addEventListener('mousemove', () => { if (isDragging) dragDistance++; });
+    grid.addEventListener('mousedown', (e) => { PV.drag.distance = 0; });
+    grid.addEventListener('mousemove', () => { if (PV.drag.active) PV.drag.distance++; });
     grid.addEventListener('click', (e) => {
-        if (dragDistance > 3) return;
+        if (PV.drag.distance > 3) return;
         if (e.target.tagName === 'IMG' || e.target.classList.contains('photos-grid') ||
             e.target.classList.contains('photo-card')) {
             clearSelection();
         }
     });
 
-    // ── Actions Panel ──────────────────────────────────────────────────────
-    let actionsData = [];
-    let actionsLoaded = false;
-    let actionFilter = 'all';
-
     function toggleActionsPanel() {
         const panel = document.getElementById('sidePanel');
-        if (panel.classList.contains('open') && activeTab === 'actions') {
+        if (panel.classList.contains('open') && PV.activeTab === 'actions') {
             closeSidePanel();
         } else {
             openPanelTab('actions');
@@ -1246,14 +1211,13 @@
 
     function loadActions() {
         const loadingTimeout = setTimeout(() => {
-            if (!actionsLoaded) {
+            if (!PV.actions.loaded) {
                 document.getElementById('actionsList').innerHTML =
                     `<div class="empty-state">⏱️ Loading is taking longer than expected...<br>
                     <button onclick="loadActions()" style="margin-top:12px;padding:8px 16px;border:1px solid #444;background:#2a2a2a;color:#fff;border-radius:6px;cursor:pointer">Retry</button></div>`;
             }
         }, 8000);
 
-        // Fetch with AbortController for timeout
         const controller = new AbortController();
         const fetchTimeout = setTimeout(() => controller.abort(), 15000);
 
@@ -1268,11 +1232,11 @@
             .then(data => {
                 clearTimeout(loadingTimeout);
                 if (data.status === 'success') {
-                    actionsData = data.actions;
-                    actionsLoaded = true;
+                    PV.actions.data = data.actions;
+                    PV.actions.loaded = true;
                     renderActions();
-                    document.getElementById('actionsBadge').textContent = actionsData.length;
-                    document.getElementById('actionsBadgeTab').textContent = actionsData.length;
+                    document.getElementById('actionsBadge').textContent = PV.actions.data.length;
+                    document.getElementById('actionsBadgeTab').textContent = PV.actions.data.length;
                 } else {
                     throw new Error(data.error || 'Unknown error');
                 }
@@ -1281,8 +1245,8 @@
                 clearTimeout(loadingTimeout);
                 clearTimeout(fetchTimeout);
                 console.error('[photo_viewer] Failed to load actions:', err);
-                actionsLoaded = false;
-                const errMsg = err.name === 'AbortError' 
+                PV.actions.loaded = false;
+                const errMsg = err.name === 'AbortError'
                     ? 'Request timed out (>15s). Server might be slow or unavailable.'
                     : err.message;
                 document.getElementById('actionsList').innerHTML =
@@ -1293,7 +1257,7 @@
     }
 
     function setActionFilter(f) {
-        actionFilter = f;
+        PV.actions.filter = f;
         document.querySelectorAll('.actions-filters .filter-btn').forEach(b => {
             b.classList.toggle('active', b.getAttribute('data-apri') === f);
         });
@@ -1301,26 +1265,26 @@
     }
 
     function renderActions() {
-        if (!actionsData || !Array.isArray(actionsData)) {
+        if (!PV.actions.data || !Array.isArray(PV.actions.data)) {
             document.getElementById('actionsList').innerHTML =
                 '<div class="empty-state">No actions data available</div>';
             return;
         }
 
-        const filtered = actionFilter === 'all'
-            ? actionsData
-            : actionsData.filter(a => a.priority === actionFilter);
+        const filtered = PV.actions.filter === 'all'
+            ? PV.actions.data
+            : PV.actions.data.filter(a => a.priority === PV.actions.filter);
 
         const counts = { high: 0, medium: 0, low: 0 };
         let totalSales = 0;
-        actionsData.forEach(a => {
+        PV.actions.data.forEach(a => {
             counts[a.priority] = (counts[a.priority] || 0) + 1;
             totalSales += parseFloat(a.avg_sale_amount || 0);
         });
 
         document.getElementById('actionsSummary').innerHTML = `
             <div class="actions-stat-row">
-                <span><strong>${actionsData.length}</strong> actions</span>
+                <span><strong>${PV.actions.data.length}</strong> actions</span>
                 <span>Lost sales: <strong style="color:#f59e0b">${Math.round(totalSales).toLocaleString('ru-RU')} ₽/wk</strong></span>
             </div>
             <div class="actions-stat-row">
@@ -1339,7 +1303,6 @@
         document.getElementById('actionsList').innerHTML = filtered.map((a, i) => {
             const sale = parseFloat(a.avg_sale_amount || 0);
             const priClass = a.priority === 'high' ? 'apri-high' : a.priority === 'medium' ? 'apri-med' : 'apri-low';
-            const statusClass = a.status === 'completed' ? 'astatus-done' : a.status === 'in_progress' ? 'astatus-wip' : '';
 
             return `
                 <div class="action-card ${priClass}" data-action-id="${a.id}">
@@ -1368,7 +1331,6 @@
         }).join('');
     }
 
-    // Initial load: fetch planogram facings + sales data then load photos
     Promise.all([
         fetch('/api/planogram-facings').then(r => r.json()).catch(err => {
             console.error('[photo_viewer] Failed to load planogram facings:', err);
@@ -1379,47 +1341,38 @@
             return {};
         }),
     ]).then(([facings, sales]) => {
-        planogramFacings = facings;
-        salesData = sales;
+        PV.planogramFacings = facings;
+        PV.salesData = sales;
         console.log('[photo_viewer] Loaded planogram facings:', Object.keys(facings).length, 'products');
         console.log('[photo_viewer] Sample facings:', Object.keys(facings).slice(0, 5));
     }).finally(() => {
-        if (PHOTOS.length > 0) loadAllPhotos();
+        if (PV.photos.length > 0) loadAllPhotos();
     });
 
     fetch('/api/actions').then(r => r.json()).then(data => {
         if (data.status === 'success') {
-            actionsData = data.actions;
-            actionsLoaded = true;
+            PV.actions.data = data.actions;
+            PV.actions.loaded = true;
             document.getElementById('actionsBadge').textContent = data.actions.length;
             document.getElementById('actionsBadgeTab').textContent = data.actions.length;
         }
     }).catch(err => {
         console.error('[photo_viewer] Failed to pre-load actions:', err);
-        actionsLoaded = false;
+        PV.actions.loaded = false;
     });
 
-    // Settings dropdown toggle
     function toggleSettings(event) {
         event.stopPropagation();
         const menu = document.getElementById('settingsMenu');
         menu.classList.toggle('open');
     }
 
-    // Close settings menu when clicking outside
     document.addEventListener('click', (e) => {
         const menu = document.getElementById('settingsMenu');
-        const settingsBtn = document.querySelector('.settings-btn');
         if (menu.classList.contains('open') && !e.target.closest('.settings-dropdown')) {
             menu.classList.remove('open');
         }
     });
-
-    // ── Recognition → Planogram mini-viewer ──────────────────────────────
-
-    let recogPlanogramData = null;
-    let recogProductsMap = {};
-    let recogBayMap = {}; // photoName → bay data (for re-renders on zoom)
 
     function fetchAndRenderPlanograms() {
         fetch('/api/build-from-recognition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
@@ -1429,16 +1382,16 @@
                     console.warn('[plano-mini] Build failed:', data.error);
                     return;
                 }
-                recogPlanogramData = data.planogram;
-                recogProductsMap = {};
-                (recogPlanogramData.products || []).forEach(p => { recogProductsMap[p.id] = p; });
+                PV.recog.planogramData = data.planogram;
+                PV.recog.productsMap = {};
+                (PV.recog.planogramData.products || []).forEach(p => { PV.recog.productsMap[p.id] = p; });
 
-                const bays = recogPlanogramData.equipment.bays || [];
-                const sortedPhotos = [...PHOTOS].sort();
-                recogBayMap = {};
+                const bays = PV.recog.planogramData.equipment.bays || [];
+                const sortedPhotos = [...PV.photos].sort();
+                PV.recog.bayMap = {};
                 bays.forEach((bay, idx) => {
                     const photoName = sortedPhotos[idx];
-                    if (photoName) recogBayMap[photoName] = bay;
+                    if (photoName) PV.recog.bayMap[photoName] = bay;
                 });
 
                 zoomFitAll();
@@ -1448,12 +1401,12 @@
     }
 
     function renderAllMiniPlanograms() {
-        if (!recogPlanogramData || !recogPlanogramData.equipment) return;
+        if (!PV.recog.planogramData || !PV.recog.planogramData.equipment) return;
 
-        Object.keys(recogBayMap).forEach(photoName => {
+        Object.keys(PV.recog.bayMap).forEach(photoName => {
             const container = document.getElementById(`plano-${photoName}`);
             if (!container) return;
-            renderMiniBay(container, recogBayMap[photoName], photoName);
+            renderMiniBay(container, PV.recog.bayMap[photoName], photoName);
         });
     }
 
@@ -1514,7 +1467,7 @@
 
                 positions.forEach(pos => {
                     if (pos._phantom) return;
-                    const product = recogProductsMap[pos.product_id];
+                    const product = PV.recog.productsMap[pos.product_id];
                     if (!product) return;
 
                     const singleWidth = product.width_in * sc;
@@ -1564,12 +1517,11 @@
             });
 
             applyRealogramColorMode();
-            if (selectedArt) highlightSelected();
+            if (PV.selection.art) highlightSelected();
         });
     }
     </script>
     <script>
-    // Globals required by BayRenderer
     var useMetric = true;
     function dFmt(inches) {
         return +(inches * 2.54).toFixed(1) + ' cm';
