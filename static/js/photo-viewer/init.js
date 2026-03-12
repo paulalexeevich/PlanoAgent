@@ -31,7 +31,56 @@ function toggleSettings(event) {
     menu.classList.toggle('open');
 }
 
-// ── Event listeners ──────────────────────────────────────────────────────
+// ── Toolbar & settings event wiring ──────────────────────────────────────
+
+document.querySelector('.settings-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleSettings(e);
+});
+
+document.getElementById('viewModeToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-view]');
+    if (btn) setView(btn.dataset.view, btn);
+});
+
+document.getElementById('photoSelect').addEventListener('change', (e) => {
+    loadSinglePhoto(e.target.value);
+});
+
+document.querySelector('[data-action="zoom-out"]').addEventListener('click', () => zoomAll(-0.05));
+document.querySelector('[data-action="zoom-in"]').addEventListener('click', () => zoomAll(0.05));
+document.querySelector('[data-action="zoom-fit"]').addEventListener('click', () => zoomFitAll());
+
+document.getElementById('showProducts').addEventListener('change', renderAllOverlays);
+document.getElementById('showShelves').addEventListener('change', renderAllOverlays);
+document.getElementById('showLabels').addEventListener('change', renderAllOverlays);
+
+document.getElementById('colorModeToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-mode]');
+    if (btn) setColorMode(btn.dataset.mode);
+});
+
+document.getElementById('actionsBtn').addEventListener('click', () => openPanelTab('actions'));
+
+document.querySelectorAll('.side-panel-tab').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+document.querySelector('.side-panel-close').addEventListener('click', closeSidePanel);
+
+document.getElementById('actionsFilters').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-apri]');
+    if (btn) setActionFilter(btn.dataset.apri);
+});
+
+document.getElementById('searchInput').addEventListener('input', filterProductList);
+
+document.getElementById('filterBar').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-filter]');
+    if (btn) setFilter(btn.dataset.filter);
+});
+
+// ── Grid event listeners ─────────────────────────────────────────────────
 
 document.getElementById('photosGrid').addEventListener('wheel', (e) => {
     e.preventDefault();

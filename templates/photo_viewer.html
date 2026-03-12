@@ -17,15 +17,15 @@
         <div class="sep"></div>
 
         <div class="settings-dropdown">
-            <button class="settings-btn" onclick="toggleSettings(event)">⚙️ Settings</button>
+            <button class="settings-btn">⚙️ Settings</button>
             <div class="settings-menu" id="settingsMenu">
                 <div class="settings-section">
                     <div class="settings-label">View Mode</div>
-                    <div class="view-toggle">
-                        <button class="active" onclick="setView('all')">All Photos</button>
-                        <button onclick="setView('single')">Single</button>
+                    <div class="view-toggle" id="viewModeToggle">
+                        <button class="active" data-view="all">All Photos</button>
+                        <button data-view="single">Single</button>
                     </div>
-                    <select id="photoSelect" style="display:none;margin-top:8px;width:100%;font-size:11px;padding:5px 8px" onchange="loadSinglePhoto(this.value)">
+                    <select id="photoSelect" style="display:none;margin-top:8px;width:100%;font-size:11px;padding:5px 8px">
                         {% for p in photos %}
                         <option value="{{ p }}">{{ p }}</option>
                         {% endfor %}
@@ -34,32 +34,32 @@
                 <div class="settings-section">
                     <div class="settings-label">Zoom</div>
                     <div class="zoom-controls">
-                        <button onclick="zoomAll(-0.05)" title="Zoom out">&minus;</button>
+                        <button data-action="zoom-out" title="Zoom out">&minus;</button>
                         <span class="zoom-label" id="zoomLabel">fit</span>
-                        <button onclick="zoomAll(0.05)" title="Zoom in">+</button>
-                        <button onclick="zoomFitAll()" title="Fit to window">Fit</button>
+                        <button data-action="zoom-in" title="Zoom in">+</button>
+                        <button data-action="zoom-fit" title="Fit to window">Fit</button>
                     </div>
                 </div>
                 <div class="settings-section">
                     <div class="settings-label">Display Layers</div>
                     <label>
-                        <input type="checkbox" id="showProducts" checked onchange="renderAllOverlays()">
+                        <input type="checkbox" id="showProducts" checked>
                         Products
                     </label>
                     <label>
-                        <input type="checkbox" id="showShelves" onchange="renderAllOverlays()">
+                        <input type="checkbox" id="showShelves">
                         Shelves
                     </label>
                     <label>
-                        <input type="checkbox" id="showLabels" onchange="renderAllOverlays()">
+                        <input type="checkbox" id="showLabels">
                         Labels
                     </label>
                 </div>
                 <div class="settings-section">
                     <div class="settings-label">Color Mode</div>
                     <div class="view-toggle" id="colorModeToggle">
-                        <button class="active" data-mode="default" onclick="setColorMode('default')">Colors</button>
-                        <button data-mode="salesPerMeter" onclick="setColorMode('salesPerMeter')">₽/meter</button>
+                        <button class="active" data-mode="default">Colors</button>
+                        <button data-mode="salesPerMeter">₽/meter</button>
                     </div>
                 </div>
             </div>
@@ -74,7 +74,7 @@
         </div>
 
         <div class="sep"></div>
-        <button id="actionsBtn" onclick="openPanelTab('actions')" style="background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4);color:#f59e0b;font-weight:600">Actions <span id="actionsBadge"></span></button>
+        <button id="actionsBtn" style="background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.4);color:#f59e0b;font-weight:600">Actions <span id="actionsBadge"></span></button>
     </div>
 
     <div class="main-area">
@@ -84,20 +84,20 @@
         <div class="side-panel" id="sidePanel">
             <div class="side-panel-header">
                 <div class="side-panel-tabs">
-                    <button class="side-panel-tab active" data-tab="actions" onclick="switchTab('actions')">Actions <span id="actionsBadgeTab" class="tab-badge"></span></button>
-                    <button class="side-panel-tab" data-tab="analytics" onclick="switchTab('analytics')">Analytics</button>
+                    <button class="side-panel-tab active" data-tab="actions">Actions <span id="actionsBadgeTab" class="tab-badge"></span></button>
+                    <button class="side-panel-tab" data-tab="analytics">Analytics</button>
                 </div>
-                <button class="side-panel-close" onclick="closeSidePanel()">&times;</button>
+                <button class="side-panel-close">&times;</button>
             </div>
 
             <!-- Actions Tab Content -->
             <div class="side-panel-body tab-content" id="tabActions">
                 <div class="actions-summary" id="actionsSummary"></div>
                 <div class="actions-filters" id="actionsFilters">
-                    <button class="filter-btn active" data-apri="all" onclick="setActionFilter('all')">All</button>
-                    <button class="filter-btn" data-apri="high" onclick="setActionFilter('high')">High</button>
-                    <button class="filter-btn" data-apri="medium" onclick="setActionFilter('medium')">Medium</button>
-                    <button class="filter-btn" data-apri="low" onclick="setActionFilter('low')">Low</button>
+                    <button class="filter-btn active" data-apri="all">All</button>
+                    <button class="filter-btn" data-apri="high">High</button>
+                    <button class="filter-btn" data-apri="medium">Medium</button>
+                    <button class="filter-btn" data-apri="low">Low</button>
                 </div>
                 <div class="actions-list" id="actionsList">
                     <div class="empty-state">Loading actions...</div>
@@ -112,14 +112,14 @@
 
                 <div class="product-list" id="productList">
                     <h3>All products across photos</h3>
-                    <input type="text" class="search-input" id="searchInput" placeholder="Search products..." oninput="filterProductList()">
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search products...">
                     <div class="filter-bar" id="filterBar">
-                        <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
-                        <button class="filter-btn" data-filter="not-in-plano" onclick="setFilter('not-in-plano')">Not in plano</button>
-                        <button class="filter-btn" data-filter="less" onclick="setFilter('less')">Less</button>
-                        <button class="filter-btn" data-filter="equal" onclick="setFilter('equal')">Equal</button>
-                        <button class="filter-btn" data-filter="more" onclick="setFilter('more')">More</button>
-                        <button class="filter-btn" data-filter="out-of-shelf" onclick="setFilter('out-of-shelf')">Out of shelf</button>
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="not-in-plano">Not in plano</button>
+                        <button class="filter-btn" data-filter="less">Less</button>
+                        <button class="filter-btn" data-filter="equal">Equal</button>
+                        <button class="filter-btn" data-filter="more">More</button>
+                        <button class="filter-btn" data-filter="out-of-shelf">Out of shelf</button>
                     </div>
                     <div class="filter-counts" id="filterCounts"></div>
                     <div id="productListItems"></div>

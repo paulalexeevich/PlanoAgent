@@ -5,12 +5,11 @@ function rebuildPhotoSelect() {
     sel.innerHTML = PV.photos.map(p => `<option value="${p}">${p}</option>`).join('');
 }
 
-function setView(mode) {
+function setView(mode, clickedBtn) {
     PV.view = mode;
-    const viewToggle = event.target.closest('.settings-section').querySelector('.view-toggle');
-    const btns = viewToggle.querySelectorAll('button');
-    btns.forEach(b => b.classList.remove('active'));
-    event.target.classList.add('active');
+    const toggle = document.getElementById('viewModeToggle');
+    toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    if (clickedBtn) clickedBtn.classList.add('active');
     document.getElementById('photoSelect').style.display = mode === 'single' ? 'block' : 'none';
     if (mode === 'single') {
         const sel = document.getElementById('photoSelect').value;
