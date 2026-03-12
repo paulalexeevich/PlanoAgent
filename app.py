@@ -371,6 +371,15 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
 
     no_bg_map = _build_no_bg_image_map()
 
+    # Build recognition_id → product map sizes for stable dimensions
+    raw_size_map = _load_product_sizes()
+    product_size_by_recog_id: dict[str, dict] = {}
+    for _code, info in raw_size_map.items():
+        rid = info.get("recognition_id")
+        if rid and info["width_cm"] > 0 and info["height_cm"] > 0:
+            product_size_by_recog_id[rid] = info
+    print(f"[realogram] Product map sizes loaded for {len(product_size_by_recog_id)} recognition IDs", flush=True)
+
     all_products_dict: dict[str, dict] = {}
     bays: list[dict] = []
     shelf_width_in = round(shelf_width_cm * CM_TO_IN, 2)
@@ -424,7 +433,8 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
                 scales = []
                 for p in prods:
                     h_px = p.get("y2", 0) - p.get("y1", 0)
-                    h_cm = p.get("facing_height_cm", 0)
+                    pm = product_size_by_recog_id.get(p.get("product_id", ""), {})
+                    h_cm = pm.get("height_cm", 0) or p.get("facing_height_cm", 0)
                     if h_px > 20 and h_cm > 1:
                         scales.append(h_cm / h_px)
                 if scales:
@@ -474,8 +484,9 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
                 if not pid:
                     continue
 
-                w_cm = p.get("facing_width_cm", 0) or p.get("group_width_cm", 0) or 7.5
-                h_cm = p.get("facing_height_cm", 0) or 20.0
+                map_dims = product_size_by_recog_id.get(pid, {})
+                w_cm = map_dims.get("width_cm", 0) or p.get("facing_width_cm", 0) or p.get("group_width_cm", 0) or 7.5
+                h_cm = map_dims.get("height_cm", 0) or p.get("facing_height_cm", 0) or 20.0
                 w_in = round(w_cm * CM_TO_IN, 2)
                 h_in = round(h_cm * CM_TO_IN, 2)
 
