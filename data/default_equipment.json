@@ -1,9 +1,9 @@
 {
   "equipment_type": "gondola",
   "num_bays": 3,
-  "num_shelves": 5,
-  "bay_width": 48.0,
-  "bay_height": 72.0,
-  "bay_depth": 24.0,
+  "num_shelves": 7,
+  "bay_width": 49.21,
+  "bay_height": 82.68,
+  "bay_depth": 23.62,
   "bays_config": null
 }

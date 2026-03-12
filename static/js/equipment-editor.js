@@ -31,12 +31,12 @@ function initEditorScaleSlider() {
 function _defaultEditorState() {
     return {
         equipment_type: 'gondola',
-        height_in: 72,
-        depth_in: 24,
+        height_in: 82.68,
+        depth_in: 23.62,
         bays: [
-            { width_in: 48, num_shelves: 5, shelf_clearances: null },
-            { width_in: 48, num_shelves: 5, shelf_clearances: null },
-            { width_in: 48, num_shelves: 5, shelf_clearances: null }
+            { width_in: 49.21, num_shelves: 7, shelf_clearances: null },
+            { width_in: 49.21, num_shelves: 7, shelf_clearances: null },
+            { width_in: 49.21, num_shelves: 7, shelf_clearances: null }
         ]
     };
 }

@@ -336,14 +336,38 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
     """Build a Planogram directly from recognition data.
 
     Each photo in recognition_photos becomes one bay.
-    Shelf dimensions are derived from shelf bounding-box pixel distances
-    scaled via product physical sizes (cm/px).
+    When store equipment data exists in Supabase and the recognition shelf
+    count matches, stable equipment dimensions are used instead of the
+    perspective-dependent recognition pixel calculations.
     """
     import statistics
 
     photo_names = _supabase_photo_list()
     if not photo_names:
         raise ValueError("No recognition photos found")
+
+    # ── Fetch stable equipment config from Supabase ──────────────────────
+    store_eq = _get_store_equipment()
+    eq_cfg = None
+    if store_eq:
+        eq_cfg = {
+            "num_shelves": store_eq.get("default_num_shelves", 7),
+            "shelf_height_cm": float(store_eq.get("default_shelf_height_cm", 30.0)),
+            "bay_width_cm": float(store_eq.get("bay_width_cm", 125.0)),
+            "bay_height_cm": float(store_eq.get("bay_height_cm", 210.0)),
+            "bay_depth_cm": float(store_eq.get("bay_depth_cm", 60.0)),
+            "equipment_type": store_eq.get("equipment_type", "gondola"),
+            "bays_config": store_eq.get("bays_config"),
+        }
+        shelf_width_cm = eq_cfg["bay_width_cm"]
+        print(
+            f"[equipment] Store equipment: {store_eq.get('num_bays', '?')} bays, "
+            f"{eq_cfg['bay_width_cm']}cm wide, {eq_cfg['num_shelves']} shelves × "
+            f"{eq_cfg['shelf_height_cm']}cm",
+            flush=True,
+        )
+    else:
+        print("[equipment] No store equipment in Supabase — using recognition dimensions", flush=True)
 
     no_bg_map = _build_no_bg_image_map()
 
@@ -356,59 +380,87 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
         product_rows = _supabase_assortment_products(photo_name)
 
         shelf_lines = sorted(shelf_rows, key=lambda s: s.get("y1", 0))
-        num_shelves = len(shelf_lines)
-        if num_shelves == 0:
+        recog_num_shelves = len(shelf_lines)
+        if recog_num_shelves == 0:
             continue
+
+        # ── Per-bay equipment override (if bays_config provided) ─────────
+        bay_eq_shelves = eq_cfg["num_shelves"] if eq_cfg else None
+        bay_eq_shelf_h = eq_cfg["shelf_height_cm"] if eq_cfg else None
+        bay_eq_depth = eq_cfg["bay_depth_cm"] if eq_cfg else None
+        bay_eq_height = eq_cfg["bay_height_cm"] if eq_cfg else None
+        if eq_cfg and eq_cfg["bays_config"] and isinstance(eq_cfg["bays_config"], list):
+            if bay_idx <= len(eq_cfg["bays_config"]):
+                bcfg = eq_cfg["bays_config"][bay_idx - 1]
+                bay_eq_shelves = bcfg.get("num_shelves", bay_eq_shelves)
+                bay_eq_shelf_h = float(bcfg.get("shelf_height_cm", bay_eq_shelf_h))
+
+        use_equipment = bay_eq_shelves is not None and recog_num_shelves == bay_eq_shelves
+        if use_equipment:
+            print(
+                f"[equipment] Bay {bay_idx}: recognition ({recog_num_shelves} shelves) "
+                f"matches equipment — using stable dimensions",
+                flush=True,
+            )
+        elif bay_eq_shelves is not None:
+            print(
+                f"[equipment] Bay {bay_idx}: recognition ({recog_num_shelves} shelves) "
+                f"≠ equipment ({bay_eq_shelves}) — falling back to recognition dimensions",
+                flush=True,
+            )
+
+        num_shelves = recog_num_shelves
 
         products_by_line: dict[int, list] = defaultdict(list)
         for p in product_rows:
             products_by_line[p.get("line", 0)].append(p)
 
-        # --- Per-shelf scale (cm / px) using product heights ---------------
+        # ── Recognition-based scale (only needed when not using equipment) ──
         scale_by_line: dict[int, float] = {}
-        for line_num, prods in products_by_line.items():
-            scales = []
-            for p in prods:
-                h_px = p.get("y2", 0) - p.get("y1", 0)
-                h_cm = p.get("facing_height_cm", 0)
-                if h_px > 20 and h_cm > 1:
-                    scales.append(h_cm / h_px)
-            if scales:
-                scale_by_line[line_num] = statistics.median(scales)
+        global_scale = 0.06
+        shelf_y_positions: list[float] = []
+        if not use_equipment:
+            for line_num, prods in products_by_line.items():
+                scales = []
+                for p in prods:
+                    h_px = p.get("y2", 0) - p.get("y1", 0)
+                    h_cm = p.get("facing_height_cm", 0)
+                    if h_px > 20 and h_cm > 1:
+                        scales.append(h_cm / h_px)
+                if scales:
+                    scale_by_line[line_num] = statistics.median(scales)
 
-        # Fallback: global median across the whole photo
-        all_scales = [s for s in scale_by_line.values()]
-        global_scale = statistics.median(all_scales) if all_scales else 0.06
+            all_scales = [s for s in scale_by_line.values()]
+            global_scale = statistics.median(all_scales) if all_scales else 0.06
 
-        # Fill gaps for lines with no usable products
-        all_lines = sorted(products_by_line.keys())
-        for ln in all_lines:
-            if ln not in scale_by_line:
-                scale_by_line[ln] = global_scale
+            all_lines = sorted(products_by_line.keys())
+            for ln in all_lines:
+                if ln not in scale_by_line:
+                    scale_by_line[ln] = global_scale
 
-        # --- Shelf-line y-positions (top→bottom) --------------------------
-        shelf_y_positions = [s.get("y1", 0) for s in shelf_lines]
+            shelf_y_positions = [s.get("y1", 0) for s in shelf_lines]
 
-        # --- Build shelves bottom-to-top (planogram convention) -----------
+        # ── Build shelves bottom-to-top ──────────────────────────────────
         shelf_defs: list[dict] = []
-        y_cursor = 2.0  # small offset from floor (inches)
+        y_cursor = 2.0
 
         for shelf_idx in range(num_shelves - 1, -1, -1):
-            line_num = shelf_idx + 1  # recognition lines are 1-based, top=1
-            scale = scale_by_line.get(line_num, global_scale)
+            line_num = shelf_idx + 1
 
-            # Height between consecutive shelf lines
-            if shelf_idx == 0:
-                top_products = products_by_line.get(line_num, [])
-                min_product_y = min((p["y1"] for p in top_products), default=0)
-                gap_px = shelf_y_positions[0] - min_product_y
+            if use_equipment:
+                shelf_height_in = round(bay_eq_shelf_h * CM_TO_IN, 2)
             else:
-                gap_px = shelf_y_positions[shelf_idx] - shelf_y_positions[shelf_idx - 1]
+                scale = scale_by_line.get(line_num, global_scale)
+                if shelf_idx == 0:
+                    top_products = products_by_line.get(line_num, [])
+                    min_product_y = min((p["y1"] for p in top_products), default=0)
+                    gap_px = shelf_y_positions[0] - min_product_y
+                else:
+                    gap_px = shelf_y_positions[shelf_idx] - shelf_y_positions[shelf_idx - 1]
+                shelf_height_cm = scale * max(gap_px, 50)
+                shelf_height_in = round(shelf_height_cm * CM_TO_IN, 2)
 
-            shelf_height_cm = scale * max(gap_px, 50)
-            shelf_height_in = round(shelf_height_cm * CM_TO_IN, 2)
-
-            # Place products on this shelf
+            # Place products on this shelf (always from recognition data)
             line_products = products_by_line.get(line_num, [])
             line_products = [p for p in line_products if not p.get("is_duplicated", False)]
             line_products.sort(key=lambda p: p.get("x1", 0))
@@ -441,7 +493,6 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
                 x_cursor_in += w_in
                 total_width_cm += w_cm
 
-                # Collect unique product catalog entry
                 if pid not in all_products_dict:
                     prod_info = p
                     brand = prod_info.get("brand_name", "") or "Unknown"
@@ -477,23 +528,29 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
                     flush=True,
                 )
 
+            depth_in = round(bay_eq_depth * CM_TO_IN, 2) if use_equipment and bay_eq_depth else 8.0
             shelf_defs.append({
                 "shelf_number": num_shelves - shelf_idx,
                 "width_in": shelf_width_in,
                 "height_in": max(shelf_height_in, 4.0),
-                "depth_in": 8.0,
+                "depth_in": depth_in,
                 "y_position": round(y_cursor, 1),
                 "positions": positions,
                 "shelf_type": "standard",
             })
             y_cursor += max(shelf_height_in, 4.0)
 
-        bay_height_in = round(y_cursor + 2.0, 1)
+        if use_equipment and bay_eq_height:
+            bay_height_in = round(bay_eq_height * CM_TO_IN, 1)
+        else:
+            bay_height_in = round(y_cursor + 2.0, 1)
+        bay_depth_in = round(bay_eq_depth * CM_TO_IN, 2) if use_equipment and bay_eq_depth else 8.0
+
         bays.append({
             "bay_number": bay_idx,
             "width_in": shelf_width_in,
             "height_in": bay_height_in,
-            "depth_in": 8.0,
+            "depth_in": bay_depth_in,
             "shelves": shelf_defs,
             "glued_right": bay_idx < len(photo_names),
         })
@@ -501,9 +558,12 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
     if not bays:
         raise ValueError("No bays could be built from recognition data")
 
+    eq_type = eq_cfg["equipment_type"] if eq_cfg else "gondola"
+    source_label = "Equipment + Recognition" if eq_cfg else "Recognition"
+
     return Planogram.from_dict({
         "id": "PLN-RECOGNITION-COFFEE",
-        "name": "Coffee Planogram (from Recognition)",
+        "name": f"Coffee Planogram (from {source_label})",
         "category": "Coffee",
         "store_type": "Recognition Import",
         "effective_date": "2026-03-11",
@@ -512,11 +572,12 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
             "generated_by": "Recognition Converter",
             "shelf_width_cm": shelf_width_cm,
             "source_photos": sorted(photo_names),
+            "equipment_source": "store_equipment" if eq_cfg else "recognition_only",
         },
         "equipment": {
             "id": "EQ-RECOG-001",
-            "name": "Coffee Equipment (Recognition)",
-            "equipment_type": "gondola",
+            "name": f"Coffee Equipment ({source_label})",
+            "equipment_type": eq_type,
             "bays": bays,
         },
         "products": list(all_products_dict.values()),
@@ -1192,6 +1253,45 @@ def _supabase_patch(table: str, params: dict, data: dict) -> dict:
     return rows[0] if rows else data
 
 
+# ── Supabase Store Equipment ──────────────────────────────────────────────────
+
+
+def _get_store_equipment() -> dict | None:
+    """Fetch the active store equipment config from Supabase.
+
+    Returns the first active row from store_equipment, or None.
+    """
+    try:
+        rows = _supabase_get("store_equipment", {
+            "select": "*",
+            "is_active": "eq.true",
+            "order": "created_at.desc",
+            "limit": "1",
+        })
+        if rows:
+            return rows[0]
+    except Exception as e:
+        print(f"[supabase] Failed to fetch store equipment: {e}", flush=True)
+    return None
+
+
+def _save_store_equipment(data: dict) -> dict | None:
+    """Create or update store equipment in Supabase."""
+    try:
+        existing = _get_store_equipment()
+        if existing:
+            return _supabase_patch(
+                "store_equipment",
+                {"id": f"eq.{existing['id']}"},
+                {**data, "updated_at": "now()"},
+            )
+        else:
+            return _supabase_post("store_equipment", data)
+    except Exception as e:
+        print(f"[supabase] Failed to save store equipment: {e}", flush=True)
+    return None
+
+
 # ── Supabase Planogram Persistence ────────────────────────────────────────────
 
 
@@ -1593,6 +1693,42 @@ def build_from_recognition():
             "status": "error",
             "error": str(e),
         }), 400
+
+
+# ── Store Equipment API Endpoints ─────────────────────────────────────────────
+
+
+@app.route("/api/store-equipment", methods=["GET"])
+def get_store_equipment():
+    """Return the active store equipment configuration."""
+    eq = _get_store_equipment()
+    if eq:
+        return jsonify({"status": "success", "equipment": eq})
+    return jsonify({"status": "success", "equipment": None})
+
+
+@app.route("/api/store-equipment", methods=["POST"])
+def update_store_equipment():
+    """Create or update store equipment configuration.
+
+    Accepts JSON with any subset of:
+      name, equipment_type, num_bays, bay_width_cm, bay_height_cm,
+      bay_depth_cm, default_num_shelves, default_shelf_height_cm, bays_config
+    """
+    data = request.json or {}
+    allowed = {
+        "name", "equipment_type", "num_bays", "bay_width_cm",
+        "bay_height_cm", "bay_depth_cm", "default_num_shelves",
+        "default_shelf_height_cm", "bays_config", "is_active",
+    }
+    payload = {k: v for k, v in data.items() if k in allowed}
+    if not payload:
+        return jsonify({"status": "error", "error": "No valid fields provided"}), 400
+
+    result = _save_store_equipment(payload)
+    if result:
+        return jsonify({"status": "success", "equipment": result})
+    return jsonify({"status": "error", "error": "Failed to save equipment"}), 502
 
 
 # ── Supabase Planogram API Endpoints ──────────────────────────────────────────
