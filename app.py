@@ -1888,10 +1888,11 @@ def update_action(action_id):
 
 @app.route("/api/suggest-placement")
 def suggest_placement():
-    """Find the best shelf to place a product based on category and brand similarity.
+    """Find the best shelf to place a product based on the REALOGRAM (actual photos).
 
-    Scores each (bay, shelf) by how many products on it share category_l2 / category_l1
-    / brand with the target product.  Returns the top-scoring shelf.
+    Uses recognition_assortment (what's physically on shelves) rather than
+    planogram positions.  Scores each (bay, shelf) by brand + category
+    similarity with combo bonus for brand+category co-occurrence.
     """
     target_cat_l2 = (request.args.get("category_l2") or "").strip()
     target_cat_l1 = (request.args.get("category_l1") or "").strip()
@@ -1903,77 +1904,84 @@ def suggest_placement():
                         "error": "Provide at least category_l2 or brand"}), 400
 
     try:
-        pos_rows = _supabase_get("test_coffee_planogram_positions", {
-            "select": "external_product_id,eq_num_in_scene_group,shelf_number",
-        })
+        photo_names = _supabase_photo_list()
     except Exception as e:
-        return jsonify({"status": "error", "error": f"positions: {e}"}), 502
+        return jsonify({"status": "error", "error": f"photos: {e}"}), 502
 
+    # Load product map for category_l2 enrichment (recognition only has category_name)
     try:
         pm_rows = _supabase_get("test_coffee_product_map", {
-            "select": "product_code,category_l1,category_l2,brand,product_name",
+            "select": "product_code,recognition_id,category_l1,category_l2,brand",
         })
     except Exception as e:
-        return jsonify({"status": "error", "error": f"product_map: {e}"}), 502
+        pm_rows = []
 
-    pm = {}
-    brand_aliases = {}  # product_name first word → canonical brand
+    pm_by_recog = {}
     for r in pm_rows:
-        pc = r.get("product_code")
-        brand = (r.get("brand") or "").strip()
-        if pc:
-            pm[pc] = {
+        rid = r.get("recognition_id")
+        if rid:
+            pm_by_recog[rid] = {
                 "category_l1": r.get("category_l1") or "",
                 "category_l2": r.get("category_l2") or "",
-                "brand": brand,
+                "brand": (r.get("brand") or "").strip(),
+                "product_code": r.get("product_code") or "",
             }
-        if brand:
-            name = (r.get("product_name") or "").strip()
-            first_word = name.split()[0] if name else ""
-            if first_word and first_word.lower() != brand.lower():
-                brand_aliases[first_word.lower()] = brand
-
-    resolved_brand = target_brand
-    if target_brand:
-        alias = brand_aliases.get(target_brand.lower())
-        if alias:
-            resolved_brand = alias
 
     shelf_scores = defaultdict(lambda: {
         "score": 0, "cat_l2": 0, "cat_l1": 0, "brand": 0,
         "brand_cat_l2": 0, "total": 0,
     })
-    for r in pos_rows:
-        ext_id = r.get("external_product_id", "")
-        if exclude_product and ext_id == exclude_product:
+
+    for bay_idx, photo_name in enumerate(sorted(photo_names), start=1):
+        try:
+            rows = _supabase_get("recognition_assortment", {
+                "select": "product_id,product_info,line,is_duplicated",
+                "photo_name": f"eq.{photo_name}",
+            })
+        except Exception:
             continue
-        bay = r.get("eq_num_in_scene_group")
-        shelf = r.get("shelf_number")
-        if bay is None or shelf is None:
-            continue
-        info = pm.get(ext_id, {})
-        key = (bay, shelf)
-        shelf_scores[key]["total"] += 1
 
-        cat_l2_match = target_cat_l2 and info.get("category_l2") == target_cat_l2
-        cat_l1_match = target_cat_l1 and info.get("category_l1") == target_cat_l1
-        shelf_brand = info.get("brand", "")
-        brand_match = resolved_brand and shelf_brand.lower() == resolved_brand.lower()
+        for item in rows:
+            if item.get("is_duplicated"):
+                continue
+            pi = item.get("product_info") or {}
+            product_id = item.get("product_id", "")
+            shelf = item.get("line", 0)
 
-        if cat_l2_match:
-            shelf_scores[key]["score"] += 3
-            shelf_scores[key]["cat_l2"] += 1
-        elif cat_l1_match:
-            shelf_scores[key]["score"] += 1
-            shelf_scores[key]["cat_l1"] += 1
+            if exclude_product and product_id == exclude_product:
+                continue
 
-        if brand_match:
-            shelf_scores[key]["score"] += 3
-            shelf_scores[key]["brand"] += 1
+            recog_brand = (pi.get("brand_name") or "").strip()
+            recog_cat = (pi.get("category_name") or "").strip()
+            recog_macro = (pi.get("macro_category_name") or "").strip()
 
-        if brand_match and cat_l2_match:
-            shelf_scores[key]["score"] += 5
-            shelf_scores[key]["brand_cat_l2"] += 1
+            pm_info = pm_by_recog.get(product_id, {})
+            item_brand = pm_info.get("brand") or recog_brand
+            item_cat_l2 = pm_info.get("category_l2") or ""
+            item_cat_l1 = pm_info.get("category_l1") or recog_cat
+
+            key = (bay_idx, shelf)
+            shelf_scores[key]["total"] += 1
+
+            cat_l2_match = target_cat_l2 and item_cat_l2 == target_cat_l2
+            cat_l1_match = target_cat_l1 and item_cat_l1 == target_cat_l1
+            brand_match = (target_brand and item_brand
+                           and item_brand.lower() == target_brand.lower())
+
+            if cat_l2_match:
+                shelf_scores[key]["score"] += 3
+                shelf_scores[key]["cat_l2"] += 1
+            elif cat_l1_match:
+                shelf_scores[key]["score"] += 1
+                shelf_scores[key]["cat_l1"] += 1
+
+            if brand_match:
+                shelf_scores[key]["score"] += 3
+                shelf_scores[key]["brand"] += 1
+
+            if brand_match and cat_l2_match:
+                shelf_scores[key]["score"] += 5
+                shelf_scores[key]["brand_cat_l2"] += 1
 
     if not shelf_scores:
         return jsonify({"status": "error", "error": "No shelf data available"}), 404
@@ -1989,9 +1997,9 @@ def suggest_placement():
 
     reasons = []
     if best["brand_cat_l2"]:
-        reasons.append(f'{best["brand_cat_l2"]} {resolved_brand} "{target_cat_l2}" here')
+        reasons.append(f'{best["brand_cat_l2"]} {target_brand} "{target_cat_l2}" here')
     elif best["brand"]:
-        reasons.append(f'{best["brand"]} {resolved_brand} products on this shelf')
+        reasons.append(f'{best["brand"]} {target_brand} products on this shelf')
     if best["cat_l2"]:
         reasons.append(f'{best["cat_l2"]} products share category "{target_cat_l2}"')
     if best["cat_l1"] and not best["cat_l2"]:
