@@ -1,0 +1,279 @@
+/* TRAINING PAGE — Step wizard and equipment validation styles */
+
+/* ============================================================
+   STEP INDICATOR (toolbar)
+   ============================================================ */
+.step-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.step-indicator .step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-dark);
+    transition: all 0.25s;
+    cursor: default;
+}
+
+.step-indicator .step.active {
+    border-color: var(--accent);
+    background: rgba(74,158,255,0.12);
+}
+
+.step-indicator .step.completed {
+    border-color: var(--accent-green);
+    background: rgba(52,211,153,0.12);
+}
+
+.step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--border);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.step.active .step-num {
+    background: var(--accent);
+    color: #fff;
+}
+
+.step.completed .step-num {
+    background: var(--accent-green);
+    color: #fff;
+}
+
+.step-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.step.active .step-label { color: var(--accent); }
+.step.completed .step-label { color: var(--accent-green); }
+
+.step-arrow {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* ============================================================
+   TRAINING STEPS (side panel)
+   ============================================================ */
+.training-step {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+    transition: opacity 0.2s;
+}
+
+.training-step.locked {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.training-step.locked .training-step-badge {
+    background: var(--bg-dark);
+    color: var(--text-secondary);
+}
+
+.training-step.completed {
+    opacity: 1;
+}
+
+.training-step-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.training-step-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.training-step-badge {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(74,158,255,0.15);
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+.training-step.completed .training-step-badge {
+    background: rgba(52,211,153,0.15);
+    color: var(--accent-green);
+}
+
+.training-step-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 14px;
+}
+
+/* ============================================================
+   ACTION BUTTONS
+   ============================================================ */
+.btn-training {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    border-radius: 6px;
+    border: 1px solid var(--accent);
+    background: rgba(74,158,255,0.12);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-training:hover:not(:disabled) {
+    background: rgba(74,158,255,0.25);
+}
+
+.btn-training:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    border-color: var(--border);
+    background: var(--bg-dark);
+    color: var(--text-secondary);
+}
+
+.btn-training .btn-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   EQUIPMENT VALIDATION RESULTS
+   ============================================================ */
+.training-result {
+    margin-top: 14px;
+}
+
+.eq-validation-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 10px;
+}
+
+.eq-validation-table th {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.eq-validation-table td {
+    padding: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text-primary);
+}
+
+.eq-validation-table .match {
+    color: var(--accent-green);
+    font-weight: 600;
+}
+
+.eq-validation-table .mismatch {
+    color: var(--accent-red);
+    font-weight: 600;
+}
+
+.eq-status-icon {
+    font-size: 14px;
+    margin-right: 4px;
+}
+
+.eq-summary {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.eq-summary.all-match {
+    background: rgba(52,211,153,0.1);
+    border: 1px solid rgba(52,211,153,0.3);
+    color: var(--accent-green);
+}
+
+.eq-summary.has-mismatch {
+    background: rgba(245,158,11,0.1);
+    border: 1px solid rgba(245,158,11,0.3);
+    color: #f59e0b;
+}
+
+/* ============================================================
+   BUILD RESULT
+   ============================================================ */
+.build-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.build-stat {
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.build-stat strong {
+    color: var(--text-primary);
+    font-size: 14px;
+    display: block;
+    margin-top: 2px;
+}
+
+/* ============================================================
+   EMPTY PLANO STATE (training)
+   ============================================================ */
+.plano-empty-state {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 20px 10px;
+    font-style: italic;
+}

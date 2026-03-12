@@ -1501,6 +1501,16 @@ def photo_viewer():
     return render_template("photo_viewer.html", photos=photos)
 
 
+@app.route("/training")
+def training():
+    """Serve the training page for step-by-step realogram building."""
+    try:
+        photos = _supabase_photo_list()
+    except Exception:
+        photos = []
+    return render_template("training.html", photos=photos)
+
+
 @app.route("/api/debug/files")
 def debug_files():
     """Debug endpoint to list files in Demo data folder."""
@@ -1818,6 +1828,189 @@ def delete_cloud_planogram(row_id):
     if ok:
         return jsonify({"status": "success"})
     return jsonify({"status": "error", "error": "Failed to delete"}), 502
+
+
+# ── Supabase Realogram Persistence ────────────────────────────────────────────
+
+
+def _save_realogram_to_supabase(planogram_obj: Planogram) -> dict | None:
+    """Save a realogram to both realograms (parent) and realogram_positions tables.
+
+    Inserts the full planogram JSON for rendering, plus individual position
+    rows for granular querying.
+    """
+    if planogram_obj is None or planogram_obj.equipment is None:
+        return None
+
+    plano = planogram_obj.to_dict()
+    eq = planogram_obj.equipment
+    products_map = planogram_obj.products_map
+
+    photo_names = sorted(plano.get("metadata", {}).get("source_photos", []))
+
+    parent_row = {
+        "name": plano["name"],
+        "store_id": plano.get("store_type", ""),
+        "photo_names": photo_names,
+        "num_bays": len(eq.bays),
+        "num_shelves": eq.total_shelves,
+        "total_products": planogram_obj.total_products(),
+        "total_facings": planogram_obj.total_facings(),
+        "equipment_type": eq.equipment_type,
+        "equipment_data": {"id": eq.id, "name": eq.name, "equipment_type": eq.equipment_type},
+        "products_catalog": plano.get("products", []),
+        "planogram_data": plano,
+    }
+
+    from datetime import datetime, timezone
+    parent_row["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    try:
+        existing = _supabase_get("realograms", {
+            "select": "id",
+            "order": "created_at.desc",
+            "limit": "1",
+        })
+        if existing:
+            parent = _supabase_patch("realograms", {"id": f"eq.{existing[0]['id']}"}, parent_row)
+            realogram_id = existing[0]["id"]
+            url = f"{SUPABASE_URL}/rest/v1/realogram_positions?realogram_id=eq.{realogram_id}"
+            http_requests.delete(url, headers=_SUPABASE_HEADERS, timeout=10)
+            print(f"[realogram] Updated realogram (row {realogram_id}), cleared old positions", flush=True)
+        else:
+            parent = _supabase_post("realograms", parent_row)
+            realogram_id = parent.get("id")
+            print(f"[realogram] Created new realogram (row {realogram_id})", flush=True)
+
+        position_rows = []
+        for bay in eq.bays:
+            photo_name = photo_names[bay.bay_number - 1] if bay.bay_number <= len(photo_names) else ""
+            for shelf in bay.shelves:
+                for pos_idx, pos in enumerate(shelf.positions):
+                    if getattr(pos, "_phantom", False):
+                        continue
+                    product = products_map.get(pos.product_id)
+                    position_rows.append({
+                        "realogram_id": realogram_id,
+                        "photo_name": photo_name,
+                        "bay_number": bay.bay_number,
+                        "shelf_number": shelf.shelf_number,
+                        "position_index": pos_idx,
+                        "product_id": pos.product_id,
+                        "product_name": product.name if product else "",
+                        "brand": product.brand if product else "",
+                        "category": product.category if product else "",
+                        "x_position_in": pos.x_position,
+                        "width_in": product.width_in if product else 0,
+                        "height_in": product.height_in if product else 0,
+                        "facings_wide": pos.facings_wide,
+                        "facings_high": pos.facings_high,
+                        "facings_deep": pos.facings_deep,
+                        "total_width_in": round((product.width_in if product else 0) * pos.facings_wide, 2),
+                        "orientation": pos.orientation,
+                        "shelf_width_in": shelf.width_in,
+                        "shelf_height_in": shelf.height_in,
+                    })
+
+        batch_size = 200
+        for i in range(0, len(position_rows), batch_size):
+            batch = position_rows[i:i + batch_size]
+            url = f"{SUPABASE_URL}/rest/v1/realogram_positions"
+            headers = {**_SUPABASE_HEADERS, "Content-Type": "application/json", "Prefer": "return=minimal"}
+            resp = http_requests.post(url, headers=headers, json=batch, timeout=30)
+            resp.raise_for_status()
+
+        print(f"[realogram] Saved {len(position_rows)} position rows", flush=True)
+        return {"id": realogram_id, "positions_count": len(position_rows)}
+
+    except Exception as e:
+        print(f"[realogram] Failed to save: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def _load_realogram_from_supabase() -> dict | None:
+    """Load the latest realogram's full planogram_data from Supabase."""
+    try:
+        rows = _supabase_get("realograms", {
+            "select": "id,planogram_data,products_catalog",
+            "order": "updated_at.desc",
+            "limit": "1",
+        })
+        if rows and rows[0].get("planogram_data"):
+            return rows[0]
+    except Exception as e:
+        print(f"[realogram] Failed to load: {e}", flush=True)
+    return None
+
+
+# ── Supabase Realogram API Endpoints ──────────────────────────────────────────
+
+
+@app.route("/api/realogram/save", methods=["POST"])
+def save_realogram():
+    """Build realogram from recognition data and save to Supabase tables."""
+    try:
+        planogram = _build_planogram_from_recognition()
+        result = _save_realogram_to_supabase(planogram)
+        if result:
+            return jsonify({"status": "success", "saved": result})
+        return jsonify({"status": "error", "error": "Failed to save realogram"}), 502
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status": "error", "error": str(e)}), 400
+
+
+@app.route("/api/realogram/load")
+def load_realogram():
+    """Load the latest pre-saved realogram for the photo-viewer."""
+    row = _load_realogram_from_supabase()
+    if row and row.get("planogram_data"):
+        return jsonify({
+            "status": "success",
+            "planogram": row["planogram_data"],
+            "source": "saved",
+        })
+    return jsonify({"status": "not_found", "planogram": None}), 404
+
+
+@app.route("/api/realogram/positions")
+def query_realogram_positions():
+    """Query realogram positions with optional filters.
+
+    Query params: product_id, brand, category, bay_number, shelf_number, limit
+    """
+    try:
+        params = {"select": "*", "order": "bay_number,shelf_number,position_index"}
+
+        product_id = request.args.get("product_id")
+        if product_id:
+            params["product_id"] = f"eq.{product_id}"
+
+        brand = request.args.get("brand")
+        if brand:
+            params["brand"] = f"ilike.%{brand}%"
+
+        category = request.args.get("category")
+        if category:
+            params["category"] = f"ilike.%{category}%"
+
+        bay_number = request.args.get("bay_number", type=int)
+        if bay_number is not None:
+            params["bay_number"] = f"eq.{bay_number}"
+
+        shelf_number = request.args.get("shelf_number", type=int)
+        if shelf_number is not None:
+            params["shelf_number"] = f"eq.{shelf_number}"
+
+        limit = request.args.get("limit", 500, type=int)
+        params["limit"] = str(min(limit, 1000))
+
+        rows = _supabase_get("realogram_positions", params)
+        return jsonify({"status": "success", "positions": rows, "count": len(rows)})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 
 # ── Planogram Actions API ─────────────────────────────────────────────────────

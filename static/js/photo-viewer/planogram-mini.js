@@ -1,27 +1,41 @@
 /* Photo Viewer — Recognition-based mini planogram rendering. */
 
+function _applyPlanogramData(data) {
+    PV.recog.planogramData = data.planogram;
+    PV.recog.productsMap = {};
+    (PV.recog.planogramData.products || []).forEach(p => { PV.recog.productsMap[p.id] = p; });
+
+    const bays = PV.recog.planogramData.equipment.bays || [];
+    const sortedPhotos = [...PV.photos].sort();
+    PV.recog.bayMap = {};
+    bays.forEach((bay, idx) => {
+        const photoName = sortedPhotos[idx];
+        if (photoName) PV.recog.bayMap[photoName] = bay;
+    });
+
+    zoomFitAll();
+    renderAllMiniPlanograms();
+}
+
 function fetchAndRenderPlanograms() {
-    fetch('/api/build-from-recognition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    fetch('/api/realogram/load')
         .then(r => r.json())
         .then(data => {
-            if (data.status !== 'success' || !data.planogram) {
-                console.warn('[plano-mini] Build failed:', data.error);
+            if (data.status === 'success' && data.planogram) {
+                console.log('[plano-mini] Loaded pre-saved realogram');
+                _applyPlanogramData(data);
                 return;
             }
-            PV.recog.planogramData = data.planogram;
-            PV.recog.productsMap = {};
-            (PV.recog.planogramData.products || []).forEach(p => { PV.recog.productsMap[p.id] = p; });
-
-            const bays = PV.recog.planogramData.equipment.bays || [];
-            const sortedPhotos = [...PV.photos].sort();
-            PV.recog.bayMap = {};
-            bays.forEach((bay, idx) => {
-                const photoName = sortedPhotos[idx];
-                if (photoName) PV.recog.bayMap[photoName] = bay;
-            });
-
-            zoomFitAll();
-            renderAllMiniPlanograms();
+            console.log('[plano-mini] No saved realogram, building from recognition...');
+            return fetch('/api/build-from-recognition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+                .then(r => r.json())
+                .then(fallback => {
+                    if (fallback.status !== 'success' || !fallback.planogram) {
+                        console.warn('[plano-mini] Build failed:', fallback.error);
+                        return;
+                    }
+                    _applyPlanogramData(fallback);
+                });
         })
         .catch(err => console.error('[plano-mini] Fetch error:', err));
 }

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Training — Build Realogram</title>
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/bay-renderer.css">
+    <link rel="stylesheet" href="/static/css/planogram.css">
+    <link rel="stylesheet" href="/static/css/photo-viewer.css">
+    <link rel="stylesheet" href="/static/css/training.css">
+</head>
+<body class="photo-viewer">
+    <div class="toolbar">
+        <a href="/" class="back-link">&larr; Back</a>
+        <div class="sep"></div>
+        <h1>Training — Build Realogram</h1>
+        <div class="sep"></div>
+
+        <!-- Step indicator -->
+        <div class="step-indicator" id="stepIndicator">
+            <div class="step active" id="step1Indicator" data-step="1">
+                <span class="step-num">1</span>
+                <span class="step-label">Validate Equipment</span>
+            </div>
+            <div class="step-arrow">&rarr;</div>
+            <div class="step" id="step2Indicator" data-step="2">
+                <span class="step-num">2</span>
+                <span class="step-label">Build Realogram</span>
+            </div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="settings-dropdown">
+            <button class="settings-btn">&#9881; Settings</button>
+            <div class="settings-menu" id="settingsMenu">
+                <div class="settings-section">
+                    <div class="settings-label">View Mode</div>
+                    <div class="view-toggle" id="viewModeToggle">
+                        <button class="active" data-view="all">All Photos</button>
+                        <button data-view="single">Single</button>
+                    </div>
+                    <select id="photoSelect" style="display:none;margin-top:8px;width:100%;font-size:11px;padding:5px 8px">
+                        {% for p in photos %}
+                        <option value="{{ p }}">{{ p }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-label">Zoom</div>
+                    <div class="zoom-controls">
+                        <button data-action="zoom-out" title="Zoom out">&minus;</button>
+                        <span class="zoom-label" id="zoomLabel">fit</span>
+                        <button data-action="zoom-in" title="Zoom in">+</button>
+                        <button data-action="zoom-fit" title="Fit to window">Fit</button>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-label">Display Layers</div>
+                    <label>
+                        <input type="checkbox" id="showProducts" checked>
+                        Products
+                    </label>
+                    <label>
+                        <input type="checkbox" id="showShelves">
+                        Shelves
+                    </label>
+                    <label>
+                        <input type="checkbox" id="showLabels">
+                        Labels
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="stats-bar">
+            <span>Photos: <strong id="statPhotos">0</strong></span>
+            <span>Unique SKUs: <strong id="statUnique">0</strong></span>
+            <span>Facings: <strong id="statProducts">0</strong></span>
+        </div>
+    </div>
+
+    <div class="main-area">
+        <div class="photos-grid" id="photosGrid"></div>
+
+        <!-- Training side panel -->
+        <div class="side-panel open" id="sidePanel">
+            <div class="side-panel-header">
+                <div class="side-panel-tabs">
+                    <button class="side-panel-tab active" data-tab="training">Training Steps</button>
+                    <button class="side-panel-tab" data-tab="analytics">Analytics</button>
+                </div>
+                <button class="side-panel-close">&times;</button>
+            </div>
+
+            <!-- Training Tab -->
+            <div class="side-panel-body tab-content" id="tabTraining">
+                <!-- Step 1: Equipment Validation -->
+                <div class="training-step active" id="trainStep1">
+                    <div class="training-step-header">
+                        <span class="training-step-badge">Step 1</span>
+                        <h3>Validate Equipment</h3>
+                    </div>
+                    <p class="training-step-desc">
+                        Compare the number of shelves detected in each photo with the
+                        equipment configuration stored in Supabase. If they match, stable
+                        equipment dimensions will be used for the realogram.
+                    </p>
+                    <button class="btn-training" id="btnValidateEquipment">
+                        <span id="validateLabel">Validate Equipment</span>
+                        <span id="validateSpinner" class="btn-spinner" style="display:none"></span>
+                    </button>
+                    <div id="equipmentResult" class="training-result"></div>
+                </div>
+
+                <!-- Step 2: Build Realogram -->
+                <div class="training-step locked" id="trainStep2">
+                    <div class="training-step-header">
+                        <span class="training-step-badge">Step 2</span>
+                        <h3>Build Realogram</h3>
+                    </div>
+                    <p class="training-step-desc">
+                        Build the realogram from recognition data. Products detected in
+                        the photos will be placed on shelves using equipment dimensions
+                        from Step 1.
+                    </p>
+                    <button class="btn-training" id="btnBuildRealogram" disabled>
+                        <span id="buildLabel">Build Realogram</span>
+                        <span id="buildSpinner" class="btn-spinner" style="display:none"></span>
+                    </button>
+                    <div id="buildResult" class="training-result"></div>
+                </div>
+            </div>
+
+            <!-- Analytics Tab (reused from photo-viewer) -->
+            <div class="side-panel-body tab-content" id="tabAnalytics" style="display:none">
+                <div id="detailContent">
+                    <div class="empty-state">Click a bounding box to see details</div>
+                </div>
+
+                <div class="product-list" id="productList">
+                    <h3>All products across photos</h3>
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search products...">
+                    <div class="filter-bar" id="filterBar">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="not-in-plano">Not in plano</button>
+                        <button class="filter-btn" data-filter="less">Less</button>
+                        <button class="filter-btn" data-filter="equal">Equal</button>
+                        <button class="filter-btn" data-filter="more">More</button>
+                    </div>
+                    <div class="filter-counts" id="filterCounts"></div>
+                    <div id="productListItems"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>var _PHOTOS_INIT = {{ photos | tojson }};</script>
+    <script>var TRAINING_MODE = true;</script>
+    <script src="/static/js/photo-viewer/state.js"></script>
+    <script src="/static/js/photo-viewer/detail-panel.js"></script>
+    <script src="/static/js/photo-viewer/color-mode.js"></script>
+    <script src="/static/js/photo-viewer/overlay.js"></script>
+    <script src="/static/js/photo-viewer/product-list.js"></script>
+    <script src="/static/js/photo-viewer/zoom.js"></script>
+    <script src="/static/js/photo-viewer/data.js"></script>
+    <script>
+    var useMetric = true;
+    function dFmt(inches) {
+        return +(inches * 2.54).toFixed(1) + ' cm';
+    }
+    </script>
+    <script src="/static/js/bay-renderer.js"></script>
+    <script src="/static/js/photo-viewer/planogram-mini.js"></script>
+    <script src="/static/js/training/training-equipment.js"></script>
+    <script src="/static/js/training/training-init.js"></script>
+</body>
+</html>
