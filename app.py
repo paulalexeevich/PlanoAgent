@@ -1836,6 +1836,29 @@ def list_actions():
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
+@app.route("/api/toggle-duplicate", methods=["POST"])
+def toggle_duplicate():
+    """Toggle is_duplicated flag on a recognition_assortment row."""
+    data = request.json or {}
+    external_id = data.get("external_id")
+    if not external_id:
+        return jsonify({"status": "error", "error": "external_id required"}), 400
+    try:
+        rows = _supabase_get("recognition_assortment", {
+            "select": "external_id,is_duplicated",
+            "external_id": f"eq.{external_id}",
+            "limit": "1",
+        })
+        if not rows:
+            return jsonify({"status": "error", "error": "Row not found"}), 404
+        current = rows[0].get("is_duplicated", False)
+        new_val = not current
+        _supabase_patch("recognition_assortment", {"external_id": f"eq.{external_id}"}, {"is_duplicated": new_val})
+        return jsonify({"status": "success", "is_duplicated": new_val})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 @app.route("/api/actions/<int:action_id>", methods=["PATCH"])
 def update_action(action_id):
     """Update an action (status, target_facings, notes, etc.)."""

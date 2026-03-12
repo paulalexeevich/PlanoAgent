@@ -161,6 +161,13 @@ body.photo-viewer {
 
 .bbox-product:hover { opacity: 1 !important; }
 
+.bbox-product-duplicate {
+    stroke: #ef4444 !important;
+    stroke-dasharray: 16 8;
+    fill: rgba(239,68,68,0.12) !important;
+    opacity: 0.55 !important;
+}
+
 .bbox-shelf {
     pointer-events: all;
     cursor: pointer;

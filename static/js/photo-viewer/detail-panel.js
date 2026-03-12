@@ -89,6 +89,26 @@ function buildSpmSection(art, productId) {
     `;
 }
 
+function buildDuplicateToggle(product, photoName, idx) {
+    const isDup = !!product.is_duplicated;
+    const btnLabel = isDup ? 'Unmark Duplicate' : 'Mark as Duplicate';
+    const btnColor = isDup ? '#22c55e' : '#ef4444';
+    const badge = isDup
+        ? '<span style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3)">DUPLICATE</span>'
+        : '';
+    return `
+        <div class="field" style="margin-bottom:12px">
+            ${badge}
+            <button onclick="toggleDuplicate('${photoName}', ${idx})"
+                style="display:block;margin-top:6px;padding:5px 12px;border-radius:6px;border:1px solid ${btnColor};
+                background:${btnColor}18;color:${btnColor};font-size:11px;font-weight:600;cursor:pointer;
+                transition:all 0.15s"
+                onmouseover="this.style.background='${btnColor}33'"
+                onmouseout="this.style.background='${btnColor}18'">${btnLabel}</button>
+        </div>
+    `;
+}
+
 function selectProduct(photoName, idx) {
     const data = PV.photoData[photoName];
     const p = data.products[idx];
@@ -104,6 +124,7 @@ function selectProduct(photoName, idx) {
     let html = buildDetailHeader(fullName, p.miniature_url || '', {
         brand: p.brand_name, category: p.category_name, price: p.price,
     });
+    html += buildDuplicateToggle(p, photoName, idx);
     html += buildStatusBadge(inPlano ? 'in-plano' : 'not-in-plano');
     html += buildFacingsGrid(pf ? pf.facings_wide : 0, totalPhotoFacings, inPlano);
 

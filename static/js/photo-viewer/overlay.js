@@ -62,7 +62,8 @@ function renderOverlay(name) {
     if (showProducts) {
         const gProducts = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         data.products.forEach((p, i) => {
-            const color = getBoxColor(p.art);
+            const isDup = !!p.is_duplicated;
+            const color = isDup ? '#ef4444' : getBoxColor(p.art);
             const w = p.x2 - p.x1;
             const h = p.y2 - p.y1;
 
@@ -75,13 +76,15 @@ function renderOverlay(name) {
             rect.setAttribute('stroke', color);
             rect.setAttribute('stroke-width', '6');
             rect.setAttribute('rx', '4');
-            rect.setAttribute('class', 'bbox-product');
+            rect.setAttribute('class', 'bbox-product' + (isDup ? ' bbox-product-duplicate' : ''));
             rect.setAttribute('data-product-idx', i);
             rect.setAttribute('data-product-id', p._id);
             rect.setAttribute('data-art', p.art);
             rect.setAttribute('data-photo', name);
-            rect.style.opacity = (PV.selection.id === p._id && PV.selection.photoName === name) ? '1' : '0.7';
+            if (isDup) rect.setAttribute('stroke-dasharray', '16 8');
+            rect.style.opacity = (PV.selection.id === p._id && PV.selection.photoName === name) ? '1' : (isDup ? '0.55' : '0.7');
             rect.onclick = (e) => { e.stopPropagation(); selectProduct(name, i); };
+            rect.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); toggleDuplicate(name, i); };
             gProducts.appendChild(rect);
 
             if (showLabels) {
@@ -118,12 +121,58 @@ function renderOverlay(name) {
     highlightSelected();
 }
 
+function toggleDuplicate(photoName, idx) {
+    const data = PV.photoData[photoName];
+    if (!data) return;
+    const p = data.products[idx];
+    if (!p || !p._id) return;
+
+    fetch('/api/toggle-duplicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ external_id: p._id }),
+    })
+    .then(r => r.json())
+    .then(result => {
+        if (result.status !== 'success') {
+            console.error('[toggle-dup] Error:', result.error);
+            return;
+        }
+        p.is_duplicated = result.is_duplicated;
+        renderOverlay(photoName);
+
+        if (PV.selection.id === p._id && PV.selection.photoName === photoName) {
+            selectProduct(photoName, idx);
+        }
+
+        if (PV.planoRenderTimer) clearTimeout(PV.planoRenderTimer);
+        PV.planoRenderTimer = setTimeout(() => fetchAndRenderPlanograms(), 600);
+    })
+    .catch(err => console.error('[toggle-dup] Fetch error:', err));
+}
+
 function highlightSelected() {
     const hasSelection = !!PV.selection.art;
 
     document.querySelectorAll('.bbox-product').forEach(el => {
         const art = el.getAttribute('data-art');
         const origColor = getBoxColor(art);
+        const isDup = el.classList.contains('bbox-product-duplicate');
+
+        if (isDup) {
+            if (hasSelection && art === PV.selection.art) {
+                el.setAttribute('stroke', '#ef4444');
+                el.setAttribute('fill', 'rgba(239,68,68,0.25)');
+                el.setAttribute('stroke-width', '10');
+                el.style.opacity = '0.8';
+            } else {
+                el.setAttribute('stroke', '#ef4444');
+                el.setAttribute('fill', 'rgba(239,68,68,0.12)');
+                el.setAttribute('stroke-width', '6');
+                el.style.opacity = hasSelection ? '0.3' : '0.55';
+            }
+            return;
+        }
 
         if (!hasSelection) {
             el.setAttribute('stroke', origColor);
