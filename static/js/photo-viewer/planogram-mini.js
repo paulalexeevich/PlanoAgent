@@ -46,6 +46,7 @@ function getPlanoScaleForPhoto(photoName, bayWidthIn) {
 
 function renderMiniBay(container, bay, photoName) {
     container.innerHTML = '';
+    container.dataset.bayNumber = bay.bay_number;
     const bayWidthIn = bay.width_in || 49.21;
     const sc = getPlanoScaleForPhoto(photoName, bayWidthIn);
 
@@ -57,6 +58,7 @@ function renderMiniBay(container, bay, photoName) {
         gluedGap: 0,
         bays,
         onShelf(shelfEl, shelf, si, bayObj, bayIdx) {
+            shelfEl.dataset.shelfNumber = shelf.shelf_number;
             const hasProducts = shelf.positions && shelf.positions.length > 0;
             if (!hasProducts) {
                 shelfEl.classList.add('empty-shelf');
@@ -145,4 +147,29 @@ function renderMiniBay(container, bay, photoName) {
         applyRealogramColorMode();
         if (PV.selection.art) highlightSelected();
     });
+}
+
+function highlightSuggestedShelf(bayNumber, shelfNumber) {
+    document.querySelectorAll('.suggest-highlight').forEach(el => el.classList.remove('suggest-highlight'));
+
+    const containers = document.querySelectorAll('.planogram-container.plano-mini');
+    let targetShelf = null;
+    let targetContainer = null;
+
+    containers.forEach(c => {
+        if (parseInt(c.dataset.bayNumber) === bayNumber) {
+            targetContainer = c;
+            const shelves = c.querySelectorAll('.br-shelf');
+            shelves.forEach(s => {
+                if (parseInt(s.dataset.shelfNumber) === shelfNumber) {
+                    targetShelf = s;
+                }
+            });
+        }
+    });
+
+    if (targetShelf) {
+        targetShelf.classList.add('suggest-highlight');
+        targetContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 }

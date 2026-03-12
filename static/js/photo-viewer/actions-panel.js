@@ -129,9 +129,46 @@ function renderActions() {
                         <span>Stock: <strong>${parseFloat(a.avg_stock_qty || 0).toFixed(1)}</strong></span>
                         <span>${a.width_cm}×${a.height_cm} cm</span>
                     </div>
+                    <div class="action-placement" id="placement-${a.id}">
+                        <button class="btn-where-place" onclick="event.stopPropagation(); suggestPlacement(${a.id}, '${(a.category_l1 || '').replace(/'/g, "\\'")}', '${(a.category_l2 || '').replace(/'/g, "\\'")}', '${(a.brand || '').replace(/'/g, "\\'")}')">
+                            Where to Place
+                        </button>
+                    </div>
                 </div>
                 <div class="action-priority ${priClass}">${a.priority}</div>
             </div>
         `;
     }).join('');
+}
+
+function suggestPlacement(actionId, catL1, catL2, brand) {
+    const container = document.getElementById(`placement-${actionId}`);
+    if (!container) return;
+
+    container.innerHTML = '<span class="placement-loading">Finding best shelf...</span>';
+
+    const params = new URLSearchParams();
+    if (catL1) params.set('category_l1', catL1);
+    if (catL2) params.set('category_l2', catL2);
+    if (brand) params.set('brand', brand);
+
+    fetch(`/api/suggest-placement?${params}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                container.innerHTML = `
+                    <div class="suggest-badge" onclick="event.stopPropagation(); highlightSuggestedShelf(${data.bay_number}, ${data.shelf_number})">
+                        Bay ${data.bay_number}, Shelf ${data.shelf_number}
+                    </div>
+                    <div class="suggest-reason">${data.reason}</div>
+                `;
+                highlightSuggestedShelf(data.bay_number, data.shelf_number);
+            } else {
+                container.innerHTML = `<span class="placement-error">${data.error || 'No suggestion'}</span>`;
+            }
+        })
+        .catch(err => {
+            container.innerHTML = '<span class="placement-error">Failed to load</span>';
+            console.error('[suggest-placement]', err);
+        });
 }

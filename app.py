@@ -1886,6 +1886,91 @@ def update_action(action_id):
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
+@app.route("/api/suggest-placement")
+def suggest_placement():
+    """Find the best shelf to place a product based on category and brand similarity.
+
+    Scores each (bay, shelf) by how many products on it share category_l2 / category_l1
+    / brand with the target product.  Returns the top-scoring shelf.
+    """
+    target_cat_l2 = (request.args.get("category_l2") or "").strip()
+    target_cat_l1 = (request.args.get("category_l1") or "").strip()
+    target_brand = (request.args.get("brand") or "").strip()
+
+    if not target_cat_l2 and not target_brand:
+        return jsonify({"status": "error",
+                        "error": "Provide at least category_l2 or brand"}), 400
+
+    try:
+        pos_rows = _supabase_get("test_coffee_planogram_positions", {
+            "select": "external_product_id,eq_num_in_scene_group,shelf_number",
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "error": f"positions: {e}"}), 502
+
+    try:
+        pm_rows = _supabase_get("test_coffee_product_map", {
+            "select": "product_code,category_l1,category_l2,product_name",
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "error": f"product_map: {e}"}), 502
+
+    pm = {}
+    for r in pm_rows:
+        pc = r.get("product_code")
+        if pc:
+            name = r.get("product_name") or ""
+            pm[pc] = {
+                "category_l1": r.get("category_l1") or "",
+                "category_l2": r.get("category_l2") or "",
+                "brand": name.split(" ")[0] if name else "",
+            }
+
+    shelf_scores = defaultdict(lambda: {"score": 0, "cat_l2": 0, "cat_l1": 0, "brand": 0, "total": 0})
+    for r in pos_rows:
+        ext_id = r.get("external_product_id", "")
+        bay = r.get("eq_num_in_scene_group")
+        shelf = r.get("shelf_number")
+        if bay is None or shelf is None:
+            continue
+        info = pm.get(ext_id, {})
+        key = (bay, shelf)
+        shelf_scores[key]["total"] += 1
+
+        if target_cat_l2 and info.get("category_l2") == target_cat_l2:
+            shelf_scores[key]["score"] += 3
+            shelf_scores[key]["cat_l2"] += 1
+        elif target_cat_l1 and info.get("category_l1") == target_cat_l1:
+            shelf_scores[key]["score"] += 1
+            shelf_scores[key]["cat_l1"] += 1
+
+        if target_brand and info.get("brand", "").lower() == target_brand.lower():
+            shelf_scores[key]["score"] += 2
+            shelf_scores[key]["brand"] += 1
+
+    if not shelf_scores:
+        return jsonify({"status": "error", "error": "No shelf data available"}), 404
+
+    best_key = max(shelf_scores, key=lambda k: shelf_scores[k]["score"])
+    best = shelf_scores[best_key]
+
+    reasons = []
+    if best["cat_l2"]:
+        reasons.append(f'{best["cat_l2"]} products share category "{target_cat_l2}"')
+    if best["brand"]:
+        reasons.append(f'{best["brand"]} products share brand "{target_brand}"')
+    if best["cat_l1"] and not best["cat_l2"]:
+        reasons.append(f'{best["cat_l1"]} products share L1 category')
+
+    return jsonify({
+        "status": "success",
+        "bay_number": best_key[0],
+        "shelf_number": best_key[1],
+        "score": best["score"],
+        "reason": "; ".join(reasons) if reasons else "Best available shelf",
+    })
+
+
 # Load persisted state on startup; fall back to generating from defaults
 if not _load_saved_state():
     init_default_planogram()
