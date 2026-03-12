@@ -1910,21 +1910,33 @@ def suggest_placement():
 
     try:
         pm_rows = _supabase_get("test_coffee_product_map", {
-            "select": "product_code,category_l1,category_l2,product_name",
+            "select": "product_code,category_l1,category_l2,brand,product_name",
         })
     except Exception as e:
         return jsonify({"status": "error", "error": f"product_map: {e}"}), 502
 
     pm = {}
+    brand_aliases = {}  # product_name first word → canonical brand
     for r in pm_rows:
         pc = r.get("product_code")
+        brand = (r.get("brand") or "").strip()
         if pc:
-            name = r.get("product_name") or ""
             pm[pc] = {
                 "category_l1": r.get("category_l1") or "",
                 "category_l2": r.get("category_l2") or "",
-                "brand": name.split(" ")[0] if name else "",
+                "brand": brand,
             }
+        if brand:
+            name = (r.get("product_name") or "").strip()
+            first_word = name.split()[0] if name else ""
+            if first_word and first_word.lower() != brand.lower():
+                brand_aliases[first_word.lower()] = brand
+
+    resolved_brand = target_brand
+    if target_brand:
+        alias = brand_aliases.get(target_brand.lower())
+        if alias:
+            resolved_brand = alias
 
     shelf_scores = defaultdict(lambda: {"score": 0, "cat_l2": 0, "cat_l1": 0, "brand": 0, "total": 0})
     for r in pos_rows:
@@ -1944,7 +1956,8 @@ def suggest_placement():
             shelf_scores[key]["score"] += 1
             shelf_scores[key]["cat_l1"] += 1
 
-        if target_brand and info.get("brand", "").lower() == target_brand.lower():
+        shelf_brand = info.get("brand", "")
+        if resolved_brand and shelf_brand.lower() == resolved_brand.lower():
             shelf_scores[key]["score"] += 2
             shelf_scores[key]["brand"] += 1
 
