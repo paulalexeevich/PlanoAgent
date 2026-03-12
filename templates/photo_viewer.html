@@ -1548,16 +1548,8 @@
                             imgEl.className = 'product-image';
                             imgEl.draggable = false;
                             block.appendChild(imgEl);
-                            const labelEl = document.createElement('div');
-                            labelEl.className = 'product-label';
-                            labelEl.textContent = product.name || '';
-                            block.appendChild(labelEl);
                         } else {
                             block.style.backgroundColor = product.color_hex || '#666';
-                            const labelEl = document.createElement('div');
-                            labelEl.className = 'product-label';
-                            labelEl.textContent = product.name || '';
-                            block.appendChild(labelEl);
                         }
 
                         block.style.cursor = 'pointer';
