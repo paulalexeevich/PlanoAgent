@@ -240,7 +240,7 @@ function clearSelection() {
     PV.selection.photoName = null;
     PV.selection.art = null;
     document.getElementById('detailContent').innerHTML =
-        '<div class="empty-state">Click a bounding box to see details</div>';
+        '<div class="empty-state">Click a bounding box to see details<br><span style="font-size:10px;margin-top:6px;display:inline-block;opacity:0.7">⌥ Option + Click to mark duplicate</span></div>';
     highlightSelected();
     highlightListItem();
 }

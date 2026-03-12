@@ -83,8 +83,11 @@ function renderOverlay(name) {
             rect.setAttribute('data-photo', name);
             if (isDup) rect.setAttribute('stroke-dasharray', '16 8');
             rect.style.opacity = (PV.selection.id === p._id && PV.selection.photoName === name) ? '1' : (isDup ? '0.55' : '0.7');
-            rect.onclick = (e) => { e.stopPropagation(); selectProduct(name, i); };
-            rect.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); toggleDuplicate(name, i); };
+            rect.onclick = (e) => {
+                e.stopPropagation();
+                if (e.altKey) { toggleDuplicate(name, i); return; }
+                selectProduct(name, i);
+            };
             gProducts.appendChild(rect);
 
             if (showLabels) {
