@@ -387,6 +387,16 @@
     background: rgba(52, 211, 153, 0.1);
 }
 
+.dt-btn-export {
+    color: var(--accent);
+    border-color: rgba(74, 158, 255, 0.3);
+}
+
+.dt-btn-export:hover {
+    border-color: var(--accent);
+    background: rgba(74, 158, 255, 0.1);
+}
+
 .dt-btn-regen {
     color: var(--accent-orange);
     border-color: rgba(245, 158, 11, 0.3);

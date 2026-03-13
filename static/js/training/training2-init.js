@@ -47,6 +47,7 @@ function productMatchesRules(product, filterRules) {
         var field = keys[i];
         var expected = filterRules[field];
         var actual = p[field] || '';
+        if (expected === '' && actual === '') continue;
         if (actual !== expected) return false;
     }
     return true;
@@ -167,32 +168,16 @@ function buildLevel(parentNode, products, parentRules, depth, nextId) {
     });
 
     if (groups[''] && groups[''].length > 0) {
-        var nextField = null;
-        for (var d = depth + 1; d < splitSeq.length; d++) {
-            nextField = splitSeq[d];
-            break;
-        }
-        if (nextField) {
-            var subGroups = {};
-            groups[''].forEach(function(p) {
-                var sv = p[nextField] || '(unknown)';
-                if (!subGroups[sv]) subGroups[sv] = [];
-                subGroups[sv].push(p);
-            });
-            Object.keys(subGroups).sort().forEach(function(sv) {
-                var subRules = Object.assign({}, parentRules);
-                if (sv !== '(unknown)') subRules[nextField] = sv;
-                var lt = DT.FIELD_TO_LEVEL[nextField] || nextField;
-                var subNode = {
-                    id: nextId(),
-                    name: sv,
-                    level: lt,
-                    filter_rules: subRules,
-                    children: [],
-                };
-                parentNode.children.push(subNode);
-            });
-        }
+        var unknownRules = Object.assign({}, parentRules);
+        unknownRules[field] = '';
+        var unknownNode = {
+            id: nextId(),
+            name: '(unclassified)',
+            level: DT.FIELD_TO_LEVEL[field] || field,
+            filter_rules: unknownRules,
+            children: [],
+        };
+        parentNode.children.push(unknownNode);
     }
 }
 
@@ -616,6 +601,36 @@ function loadTreeList() {
     });
 }
 
+function exportDecisionTree() {
+    if (!DT.treeData) {
+        showTreeMessage('No tree to export', 'error');
+        return;
+    }
+
+    var nameInput = document.getElementById('dtSaveName');
+    var treeName = (nameInput && nameInput.value.trim()) || 'decision-tree';
+    var payload = {
+        name: treeName,
+        exported_at: new Date().toISOString(),
+        split_config: DEFAULT_SPLIT_CONFIG,
+        product_remaps: PRODUCT_REMAPS,
+        tree: serializeTree(DT.treeData),
+    };
+
+    var json = JSON.stringify(payload, null, 2);
+    var blob = new Blob([json], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = treeName.replace(/[^a-zA-Z0-9а-яА-ЯёЁ _-]/g, '').replace(/\s+/g, '-') + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showTreeMessage('Exported: ' + a.download, 'success');
+}
+
 function showTreeMessage(msg, type) {
     var el = document.getElementById('dtMessage');
     if (!el) return;
@@ -792,6 +807,7 @@ if (document.getElementById('searchInput')) {
 }
 
 document.getElementById('btnSaveTree').addEventListener('click', saveDecisionTree);
+document.getElementById('btnExportTree').addEventListener('click', exportDecisionTree);
 
 document.getElementById('btnGenerateTree').addEventListener('click', function() {
     if (!DT.productMap || Object.keys(DT.productMap).length === 0) return;
