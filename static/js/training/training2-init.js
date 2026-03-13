@@ -12,16 +12,26 @@ var DT = {
         l0: '#e94560',
         l1: '#f9c74f',
         l2: '#90be6d',
+        l3: '#43aa8b',
         pkg: '#00b4d8',
         brand: '#7209b7',
     },
-    FILTER_FIELDS: ['category_l0', 'category_l1', 'category_l2', 'package_type', 'brand'],
+    FILTER_FIELDS: ['category_l0', 'category_l1', 'category_l2', 'category_l3', 'package_type', 'brand'],
     FIELD_LABELS: {
         category_l0: 'L0',
         category_l1: 'L1',
         category_l2: 'L2',
+        category_l3: 'L3',
         package_type: 'Pkg',
         brand: 'Brand',
+    },
+    FIELD_TO_LEVEL: {
+        category_l0: 'l0',
+        category_l1: 'l1',
+        category_l2: 'l2',
+        category_l3: 'l3',
+        package_type: 'pkg',
+        brand: 'brand',
     },
 };
 
@@ -60,7 +70,24 @@ function countMatchingProducts(productMap, filterRules) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TREE BUILDER — generates tree with filter_rules from product map data
+// SPLIT CONFIG — defines the split field sequence per subtree
+// Keys are filter_rules conditions (JSON-stringified) or '*' for default.
+// Each value is an array of field names to split by, in order.
+// ═══════════════════════════════════════════════════════════════════════
+
+var DEFAULT_SPLIT_CONFIG = {
+    '*': ['category_l0', 'category_l1', 'category_l2', 'package_type', 'brand'],
+    'Кофе натуральный': ['category_l0', 'category_l1', 'category_l2', 'category_l3', 'brand'],
+};
+
+function getSplitSequence(parentRules, depth) {
+    var l2 = parentRules.category_l2 || '';
+    if (DEFAULT_SPLIT_CONFIG[l2]) return DEFAULT_SPLIT_CONFIG[l2];
+    return DEFAULT_SPLIT_CONFIG['*'];
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TREE BUILDER — configurable split logic per subtree
 // ═══════════════════════════════════════════════════════════════════════
 
 function buildDecisionTree(productMap) {
@@ -75,134 +102,73 @@ function buildDecisionTree(productMap) {
         children: [],
     };
 
-    var l0Groups = {};
-    Object.keys(productMap).forEach(function(pid) {
-        var p = productMap[pid];
-        var l0 = p.category_l0 || '(unknown)';
-        if (!l0Groups[l0]) l0Groups[l0] = [];
-        l0Groups[l0].push(p);
+    var allProducts = Object.keys(productMap).map(function(pid) { return productMap[pid]; });
+    buildLevel(root, allProducts, {}, 0, nextId);
+    return root;
+}
+
+function buildLevel(parentNode, products, parentRules, depth, nextId) {
+    var splitSeq = getSplitSequence(parentRules, depth);
+    if (depth >= splitSeq.length) return;
+
+    var field = splitSeq[depth];
+    var groups = {};
+
+    products.forEach(function(p) {
+        var val = p[field] || '';
+        if (!groups[val]) groups[val] = [];
+        groups[val].push(p);
     });
 
-    Object.keys(l0Groups).sort().forEach(function(l0Name) {
-        var l0Products = l0Groups[l0Name];
-        var l0Rules = l0Name === '(unknown)' ? {} : { category_l0: l0Name };
-        var l0Node = {
+    var sortedKeys = Object.keys(groups).sort();
+
+    sortedKeys.forEach(function(val) {
+        if (!val) return;
+        var childProducts = groups[val];
+        var childRules = Object.assign({}, parentRules);
+        childRules[field] = val;
+
+        var levelTag = DT.FIELD_TO_LEVEL[field] || field;
+        var childNode = {
             id: nextId(),
-            name: l0Name,
-            level: 'l0',
-            filter_rules: l0Rules,
+            name: val,
+            level: levelTag,
+            filter_rules: childRules,
             children: [],
         };
 
-        var l1Groups = {};
-        l0Products.forEach(function(p) {
-            var l1 = p.category_l1 || '(unknown)';
-            if (!l1Groups[l1]) l1Groups[l1] = [];
-            l1Groups[l1].push(p);
-        });
-
-        Object.keys(l1Groups).sort().forEach(function(l1Name) {
-            var l1Products = l1Groups[l1Name];
-            var l1Rules = Object.assign({}, l0Rules);
-            if (l1Name !== '(unknown)') l1Rules.category_l1 = l1Name;
-            var l1Node = {
-                id: nextId(),
-                name: l1Name,
-                level: 'l1',
-                filter_rules: l1Rules,
-                children: [],
-            };
-
-            var l2Groups = {};
-            l1Products.forEach(function(p) {
-                var l2 = p.category_l2 || '';
-                if (!l2Groups[l2]) l2Groups[l2] = [];
-                l2Groups[l2].push(p);
-            });
-
-            Object.keys(l2Groups).sort().forEach(function(l2Name) {
-                if (!l2Name) return;
-                var l2Products = l2Groups[l2Name];
-                var l2Rules = Object.assign({}, l1Rules, { category_l2: l2Name });
-                var l2Node = {
-                    id: nextId(),
-                    name: l2Name,
-                    level: 'l2',
-                    filter_rules: l2Rules,
-                    children: [],
-                };
-
-                var pkgGroups = {};
-                l2Products.forEach(function(p) {
-                    var pkg = p.package_type || '';
-                    if (!pkgGroups[pkg]) pkgGroups[pkg] = [];
-                    pkgGroups[pkg].push(p);
-                });
-
-                Object.keys(pkgGroups).sort().forEach(function(pkgName) {
-                    if (!pkgName) return;
-                    var pkgProducts = pkgGroups[pkgName];
-                    var pkgRules = Object.assign({}, l2Rules, { package_type: pkgName });
-                    var pkgNode = {
-                        id: nextId(),
-                        name: pkgName,
-                        level: 'pkg',
-                        filter_rules: pkgRules,
-                        children: [],
-                    };
-
-                    var brandGroups = {};
-                    pkgProducts.forEach(function(p) {
-                        var brand = p.brand || '';
-                        if (!brandGroups[brand]) brandGroups[brand] = [];
-                        brandGroups[brand].push(p);
-                    });
-
-                    Object.keys(brandGroups).sort().forEach(function(brandName) {
-                        if (!brandName) return;
-                        var brandRules = Object.assign({}, pkgRules, { brand: brandName });
-                        pkgNode.children.push({
-                            id: nextId(),
-                            name: brandName,
-                            level: 'brand',
-                            filter_rules: brandRules,
-                            children: [],
-                        });
-                    });
-
-                    l2Node.children.push(pkgNode);
-                });
-
-                l1Node.children.push(l2Node);
-            });
-
-            if (l2Groups['']) {
-                var pkgGroups2 = {};
-                l2Groups[''].forEach(function(p) {
-                    var pkg = p.package_type || '(no package)';
-                    if (!pkgGroups2[pkg]) pkgGroups2[pkg] = [];
-                    pkgGroups2[pkg].push(p);
-                });
-                Object.keys(pkgGroups2).sort().forEach(function(pkgName) {
-                    var pkgRules = Object.assign({}, l1Rules);
-                    if (pkgName !== '(no package)') pkgRules.package_type = pkgName;
-                    l1Node.children.push({
-                        id: nextId(),
-                        name: pkgName,
-                        level: 'pkg',
-                        filter_rules: pkgRules,
-                        children: [],
-                    });
-                });
-            }
-
-            l0Node.children.push(l1Node);
-        });
-
-        root.children.push(l0Node);
+        buildLevel(childNode, childProducts, childRules, depth + 1, nextId);
+        parentNode.children.push(childNode);
     });
 
-    return root;
+    if (groups[''] && groups[''].length > 0) {
+        var nextField = null;
+        for (var d = depth + 1; d < splitSeq.length; d++) {
+            nextField = splitSeq[d];
+            break;
+        }
+        if (nextField) {
+            var subGroups = {};
+            groups[''].forEach(function(p) {
+                var sv = p[nextField] || '(unknown)';
+                if (!subGroups[sv]) subGroups[sv] = [];
+                subGroups[sv].push(p);
+            });
+            Object.keys(subGroups).sort().forEach(function(sv) {
+                var subRules = Object.assign({}, parentRules);
+                if (sv !== '(unknown)') subRules[nextField] = sv;
+                var lt = DT.FIELD_TO_LEVEL[nextField] || nextField;
+                var subNode = {
+                    id: nextId(),
+                    name: sv,
+                    level: lt,
+                    filter_rules: subRules,
+                    children: [],
+                };
+                parentNode.children.push(subNode);
+            });
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -387,8 +353,8 @@ function applyTreeHighlight(node) {
             if (isMatch) {
                 el.classList.add('dt-match');
                 el.setAttribute('stroke', color);
-                el.setAttribute('fill', color + '30');
-                el.setAttribute('stroke-width', '8');
+                el.setAttribute('fill', color + '20');
+                el.setAttribute('stroke-width', '14');
             } else {
                 el.classList.add('dt-dimmed');
             }
@@ -650,6 +616,7 @@ function renderFullTree() {
         '<span class="dt-legend-item"><span class="dt-level-dot l0"></span> L0</span>' +
         '<span class="dt-legend-item"><span class="dt-level-dot l1"></span> L1</span>' +
         '<span class="dt-legend-item"><span class="dt-level-dot l2"></span> L2</span>' +
+        '<span class="dt-legend-item"><span class="dt-level-dot l3"></span> L3</span>' +
         '<span class="dt-legend-item"><span class="dt-level-dot pkg"></span> Package</span>' +
         '<span class="dt-legend-item"><span class="dt-level-dot brand"></span> Brand</span>';
     container.appendChild(legend);

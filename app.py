@@ -1608,7 +1608,7 @@ def product_map():
     try:
         rows = _supabase_get("test_coffee_product_map", {
             "select": "recognition_id,product_code,tiny_name,product_name,"
-                      "category_l0,category_l1,category_l2,"
+                      "category_l0,category_l1,category_l2,category_l3,"
                       "package_type,brand,weight_g",
         })
         result = {}
@@ -1623,6 +1623,7 @@ def product_map():
                 "category_l0": r.get("category_l0") or "",
                 "category_l1": r.get("category_l1") or "",
                 "category_l2": r.get("category_l2") or "",
+                "category_l3": r.get("category_l3") or "",
                 "package_type": r.get("package_type") or "",
                 "brand": r.get("brand") or "",
                 "weight_g": float(r["weight_g"]) if r.get("weight_g") else 0,

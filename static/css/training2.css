@@ -153,6 +153,7 @@
 .dt-level-dot.l0 { background: #e94560; }
 .dt-level-dot.l1 { background: #f9c74f; }
 .dt-level-dot.l2 { background: #90be6d; }
+.dt-level-dot.l3 { background: #43aa8b; }
 .dt-level-dot.pkg { background: #00b4d8; }
 .dt-level-dot.brand { background: #7209b7; }
 
@@ -305,6 +306,8 @@
    ============================================================ */
 .bbox-product.dt-match {
     opacity: 1 !important;
+    stroke-opacity: 1 !important;
+    filter: drop-shadow(0 0 6px currentColor);
 }
 
 .bbox-product.dt-dimmed {
