@@ -42,10 +42,11 @@ var DT = {
 function productMatchesRules(product, filterRules) {
     var keys = Object.keys(filterRules);
     if (keys.length === 0) return true;
+    var p = applyRemaps(product);
     for (var i = 0; i < keys.length; i++) {
         var field = keys[i];
         var expected = filterRules[field];
-        var actual = product[field] || '';
+        var actual = p[field] || '';
         if (actual !== expected) return false;
     }
     return true;
@@ -80,10 +81,34 @@ var DEFAULT_SPLIT_CONFIG = {
     'Кофе натуральный': ['category_l0', 'category_l1', 'category_l2', 'category_l3', 'brand'],
 };
 
+var PRODUCT_REMAPS = [
+    {
+        match: { category_l2: 'Кофейные напитки' },
+        set:   { category_l1: 'Какао, горячий шоколад' },
+    },
+];
+
 function getSplitSequence(parentRules, depth) {
     var l2 = parentRules.category_l2 || '';
     if (DEFAULT_SPLIT_CONFIG[l2]) return DEFAULT_SPLIT_CONFIG[l2];
     return DEFAULT_SPLIT_CONFIG['*'];
+}
+
+function applyRemaps(product) {
+    var p = Object.assign({}, product);
+    for (var i = 0; i < PRODUCT_REMAPS.length; i++) {
+        var rule = PRODUCT_REMAPS[i];
+        var matched = true;
+        var matchKeys = Object.keys(rule.match);
+        for (var j = 0; j < matchKeys.length; j++) {
+            if ((p[matchKeys[j]] || '') !== rule.match[matchKeys[j]]) {
+                matched = false;
+                break;
+            }
+        }
+        if (matched) Object.assign(p, rule.set);
+    }
+    return p;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -102,7 +127,7 @@ function buildDecisionTree(productMap) {
         children: [],
     };
 
-    var allProducts = Object.keys(productMap).map(function(pid) { return productMap[pid]; });
+    var allProducts = Object.keys(productMap).map(function(pid) { return applyRemaps(productMap[pid]); });
     buildLevel(root, allProducts, {}, 0, nextId);
     return root;
 }
