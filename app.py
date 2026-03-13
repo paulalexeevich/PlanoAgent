@@ -156,7 +156,7 @@ def _load_product_sizes() -> dict:
     Returns dict keyed by product_code → {width_cm, height_cm, name, tiny_name, recognition_id, brand}."""
     try:
         rows = _supabase_get("test_coffee_product_map", {
-            "select": "product_code,tiny_name,product_name,width_cm,height_cm,recognition_id,brand",
+            "select": "product_code,tiny_name,product_name,width_cm,height_cm,recognition_id,brand,package_type,weight_g",
         })
         return {
             r["product_code"]: {
@@ -166,6 +166,8 @@ def _load_product_sizes() -> dict:
                 "tiny_name": r.get("tiny_name") or "",
                 "recognition_id": r.get("recognition_id") or "",
                 "brand": r.get("brand") or "",
+                "package_type": r.get("package_type") or "",
+                "weight_g": float(r["weight_g"]) if r.get("weight_g") else 0,
             }
             for r in rows if r.get("product_code")
         }
@@ -238,7 +240,9 @@ def _build_planogram_from_supabase(store_id: str = "617533") -> Planogram:
                 "name": dims.get("tiny_name") or name or pid,
                 "brand": brand, "manufacturer": "Demo CSV",
                 "category": "Coffee", "subcategory": "Demo Import",
-                "beer_type": "N/A", "package_type": "pack_box",
+                "beer_type": "N/A",
+                "package_type": dims.get("package_type") or "pack_box",
+                "weight_g": dims.get("weight_g", 0),
                 "pack_size": 1, "unit_size_oz": 0.0,
                 "width_in": w_in, "height_in": h_in, "depth_in": 4.0,
                 "price": 0.0, "cost": 0.0, "abv": 0.0,
@@ -518,7 +522,8 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
                         "category": prod_info.get("category_name", "") or "Coffee",
                         "subcategory": prod_info.get("macro_category_name", "") or "",
                         "beer_type": "N/A",
-                        "package_type": "pack_box",
+                        "package_type": map_dims.get("package_type") or "pack_box",
+                        "weight_g": map_dims.get("weight_g", 0),
                         "pack_size": 1,
                         "unit_size_oz": 0.0,
                         "width_in": round(facing_w_in, 2),
@@ -2105,7 +2110,7 @@ def suggest_placement():
     # Load product map for category_l2 enrichment (recognition only has category_name)
     try:
         pm_rows = _supabase_get("test_coffee_product_map", {
-            "select": "product_code,recognition_id,category_l1,category_l2,brand",
+            "select": "product_code,recognition_id,category_l1,category_l2,brand,package_type,weight_g",
         })
     except Exception as e:
         pm_rows = []
@@ -2121,6 +2126,8 @@ def suggest_placement():
             "brand": brand,
             "product_code": r.get("product_code") or "",
             "recognition_id": rid or "",
+            "package_type": r.get("package_type") or "",
+            "weight_g": float(r["weight_g"]) if r.get("weight_g") else 0,
         }
         if rid:
             pm_by_recog[rid] = info

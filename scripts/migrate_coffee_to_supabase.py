@@ -15,6 +15,7 @@ Data flow:
 import csv
 import json
 import os
+import re
 import sys
 import time
 from collections import defaultdict
@@ -148,6 +149,54 @@ def fetch_recognition_info():
     return by_pid
 
 
+# ── Package / weight extraction ───────────────────────────────────────────────
+
+_PKG_PATTERNS = [
+    (re.compile(r'дой[\s-]?пак', re.I), 'дой-пак'),
+    (re.compile(r'стаб/бэг|ст/бэг', re.I), 'стабилбэг'),
+    (re.compile(r'ст/бан', re.I), 'стеклянная банка'),
+    (re.compile(r'Стеклянная бан', re.I), 'стеклянная банка'),
+    (re.compile(r'Стеклянная бут', re.I), 'стеклянная бутылка'),
+    (re.compile(r'ст/б(?!эг)', re.I), 'стеклянная банка'),
+    (re.compile(r'с/б\b', re.I), 'стеклянная банка'),
+    (re.compile(r'д/п', re.I), 'дой-пак'),
+    (re.compile(r'мяг/у', re.I), 'мягкая упаковка'),
+    (re.compile(r'м/уп', re.I), 'мягкая упаковка'),
+    (re.compile(r'\bм/у\b', re.I), 'мягкая упаковка'),
+    (re.compile(r'в/уп', re.I), 'вакуумная упаковка'),
+    (re.compile(r'\bв/у\b', re.I), 'вакуумная упаковка'),
+    (re.compile(r'к/уп', re.I), 'коробка'),
+    (re.compile(r'\bк/у\b', re.I), 'коробка'),
+    (re.compile(r'фл/п', re.I), 'флоу-пак'),
+    (re.compile(r'пл/б', re.I), 'пластиковая банка'),
+    (re.compile(r'\bкапс', re.I), 'коробка'),
+]
+_RE_WEIGHT_G = re.compile(r'(\d+[,.]?\d*)\s*г(?!о|л)', re.I)
+_RE_WEIGHT_KG = re.compile(r'(\d+[,.]?\d*)\s*кг', re.I)
+_RE_WEIGHT_DOT = re.compile(r',\s*\.(\d{2,4})\b')
+
+
+def _extract_package_type(text: str) -> str | None:
+    for pattern, pkg_type in _PKG_PATTERNS:
+        if pattern.search(text):
+            return pkg_type
+    return None
+
+
+def _extract_weight_g(text: str) -> float | None:
+    m = _RE_WEIGHT_KG.search(text)
+    if m:
+        return round(float(m.group(1).replace(',', '.')) * 1000, 1)
+    m = _RE_WEIGHT_G.search(text)
+    if m:
+        return round(float(m.group(1).replace(',', '.')), 1)
+    m = _RE_WEIGHT_DOT.search(text)
+    if m:
+        val = float(m.group(1))
+        return round(val * 1000 if val < 10 else val, 1)
+    return None
+
+
 # ── Step 3: Merge and upload ──────────────────────────────────────────────────
 
 def build_product_map(csv_map, products_db, sales_db, recog_db):
@@ -176,6 +225,7 @@ def build_product_map(csv_map, products_db, sales_db, recog_db):
         tiny = csv_info.get("tiny_name") or recog.get("tiny_name") or ""
         product_name = sale.get("product_name") or csv_info.get("name") or recog.get("full_name") or ""
 
+        name_for_parse = product_name or csv_info.get("name") or ""
         row = {
             "art_id": art_id or f"_EXT_{ext_id}",
             "product_code": ext_id,
@@ -190,6 +240,8 @@ def build_product_map(csv_map, products_db, sales_db, recog_db):
             "height_cm": csv_info.get("height_cm", 0),
             "miniature_url": recog.get("miniature_url") or None,
             "barcode": recog.get("barcode") or None,
+            "package_type": _extract_package_type(name_for_parse) or _extract_package_type(csv_info.get("name") or ""),
+            "weight_g": _extract_weight_g(name_for_parse) or _extract_weight_g(csv_info.get("name") or ""),
         }
         rows.append(row)
 
@@ -203,12 +255,13 @@ def build_product_map(csv_map, products_db, sales_db, recog_db):
         recog_id = sd.get("recognition_product_id")
         recog = recog_db.get(recog_id, {}) if recog_id else {}
 
+        sale_name = sd.get("product_name") or ""
         rows.append({
             "art_id": aid,
             "product_code": pc,
             "recognition_id": recog_id,
             "tiny_name": recog.get("tiny_name") or "",
-            "product_name": sd.get("product_name") or "",
+            "product_name": sale_name,
             "name_sku": prod.get("name_sku") or "",
             "category_l0": prod.get("category_l0") or "",
             "category_l1": prod.get("category_l1") or "",
@@ -217,6 +270,8 @@ def build_product_map(csv_map, products_db, sales_db, recog_db):
             "height_cm": 0,
             "miniature_url": recog.get("miniature_url") or None,
             "barcode": recog.get("barcode") or None,
+            "package_type": _extract_package_type(sale_name),
+            "weight_g": _extract_weight_g(sale_name),
         })
 
     print(f"\n  Merged product map: {len(rows)} rows")
