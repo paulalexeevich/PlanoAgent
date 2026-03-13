@@ -1,0 +1,330 @@
+/* TRAINING 2 — Decision Tree visualization styles */
+
+/* ============================================================
+   DECISION TREE HEADER
+   ============================================================ */
+.dt-header {
+    padding: 16px 20px 8px;
+}
+
+.dt-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 4px;
+}
+
+.dt-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.dt-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.dt-loading .btn-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid transparent;
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+/* ============================================================
+   TREE CONTAINER
+   ============================================================ */
+.dt-tree-container {
+    padding: 4px 12px 16px;
+    overflow-y: auto;
+    max-height: calc(100vh - 220px);
+}
+
+/* ============================================================
+   TREE LEVEL (collapsible group)
+   ============================================================ */
+.dt-level {
+    margin-bottom: 2px;
+}
+
+.dt-level .dt-level {
+    margin-left: 16px;
+    border-left: 1px solid var(--border);
+    padding-left: 8px;
+}
+
+/* ============================================================
+   TREE NODE BUTTON
+   ============================================================ */
+.dt-node-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 10px;
+    margin: 1px 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+    line-height: 1.3;
+}
+
+.dt-node-btn:hover {
+    background: rgba(74, 158, 255, 0.08);
+    border-color: rgba(74, 158, 255, 0.2);
+}
+
+.dt-node-btn.active {
+    background: rgba(74, 158, 255, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.dt-node-btn.has-children {
+    font-weight: 600;
+}
+
+/* Collapse/expand caret */
+.dt-caret {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    font-size: 8px;
+    color: var(--text-secondary);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+
+.dt-caret.expanded {
+    transform: rotate(90deg);
+}
+
+/* Node name */
+.dt-node-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Product count badge */
+.dt-node-count {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--bg-dark);
+    padding: 1px 6px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    min-width: 22px;
+    text-align: center;
+}
+
+.dt-node-btn.active .dt-node-count {
+    background: rgba(74, 158, 255, 0.2);
+    color: var(--accent);
+}
+
+/* Level indicator (colored dot) */
+.dt-level-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.dt-level-dot.l0 { background: #e94560; }
+.dt-level-dot.l1 { background: #f9c74f; }
+.dt-level-dot.l2 { background: #90be6d; }
+.dt-level-dot.pkg { background: #00b4d8; }
+.dt-level-dot.brand { background: #7209b7; }
+
+/* Children container (collapsible) */
+.dt-children {
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+}
+
+.dt-children.collapsed {
+    max-height: 0 !important;
+}
+
+/* ============================================================
+   ACTIVE FILTER BADGE (in toolbar)
+   ============================================================ */
+.dt-active-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    background: rgba(74, 158, 255, 0.12);
+    border: 1px solid rgba(74, 158, 255, 0.3);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--accent);
+}
+
+.dt-active-filter strong {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dt-clear-filter-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+}
+
+.dt-clear-filter-btn:hover {
+    opacity: 1;
+}
+
+/* ============================================================
+   STATS PANEL
+   ============================================================ */
+.dt-stats {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.dt-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.dt-stat-item {
+    padding: 6px 10px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.dt-stat-item .dt-stat-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-secondary);
+}
+
+.dt-stat-item .dt-stat-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-top: 2px;
+}
+
+/* ============================================================
+   AREA PERCENTAGE BAR
+   ============================================================ */
+.dt-area-bar {
+    margin-top: 12px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+}
+
+.dt-area-bar h4 {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin: 0 0 8px;
+}
+
+.dt-area-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-size: 11px;
+}
+
+.dt-area-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+
+.dt-area-pct {
+    flex-shrink: 0;
+    font-weight: 600;
+    width: 40px;
+    text-align: right;
+    color: var(--text-secondary);
+}
+
+.dt-area-bar-track {
+    width: 60px;
+    height: 6px;
+    background: var(--bg-dark);
+    border-radius: 3px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.dt-area-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+/* ============================================================
+   HIGHLIGHTED BOUNDING BOXES (tree filter active)
+   ============================================================ */
+.bbox-product.dt-match {
+    opacity: 1 !important;
+}
+
+.bbox-product.dt-dimmed {
+    opacity: 0.15 !important;
+    stroke: #555 !important;
+    fill: rgba(80, 80, 80, 0.08) !important;
+}
+
+/* Level label in tree header */
+.dt-level-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 20px 10px;
+}
+
+.dt-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--text-secondary);
+}

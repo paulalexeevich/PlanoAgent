@@ -1516,6 +1516,51 @@ def training():
     return render_template("training.html", photos=photos)
 
 
+@app.route("/training2")
+def training2():
+    """Serve Training 2 — Decision Tree visualization with product highlighting."""
+    try:
+        photos = _supabase_photo_list()
+    except Exception:
+        photos = []
+    return render_template("training2.html", photos=photos)
+
+
+@app.route("/api/product-map")
+def product_map():
+    """Return product map with category hierarchy for decision tree building.
+
+    Returns {recognition_id: {category_l0, category_l1, category_l2,
+    package_type, brand, tiny_name, product_name}} for all products.
+    """
+    try:
+        rows = _supabase_get("test_coffee_product_map", {
+            "select": "recognition_id,product_code,tiny_name,product_name,"
+                      "category_l0,category_l1,category_l2,"
+                      "package_type,brand,weight_g",
+        })
+        result = {}
+        for r in rows:
+            rid = r.get("recognition_id")
+            if not rid:
+                continue
+            result[rid] = {
+                "product_code": r.get("product_code") or "",
+                "tiny_name": r.get("tiny_name") or "",
+                "product_name": r.get("product_name") or "",
+                "category_l0": r.get("category_l0") or "",
+                "category_l1": r.get("category_l1") or "",
+                "category_l2": r.get("category_l2") or "",
+                "package_type": r.get("package_type") or "",
+                "brand": r.get("brand") or "",
+                "weight_g": float(r["weight_g"]) if r.get("weight_g") else 0,
+            }
+        return jsonify({"status": "success", "product_map": result, "count": len(result)})
+    except Exception as e:
+        print(f"[product-map] Error: {e}", flush=True)
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 @app.route("/api/debug/files")
 def debug_files():
     """Debug endpoint to list files in Demo data folder."""

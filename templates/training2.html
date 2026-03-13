@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Training 2 — Decision Tree</title>
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/photo-viewer.css">
+    <link rel="stylesheet" href="/static/css/training.css">
+    <link rel="stylesheet" href="/static/css/training2.css">
+</head>
+<body class="photo-viewer">
+    <div class="toolbar">
+        <a href="/" class="back-link">&larr; Back</a>
+        <div class="sep"></div>
+        <h1>Training 2 — Decision Tree</h1>
+        <div class="sep"></div>
+
+        <div class="settings-dropdown">
+            <button class="settings-btn">&#9881; Settings</button>
+            <div class="settings-menu" id="settingsMenu">
+                <div class="settings-section">
+                    <div class="settings-label">View Mode</div>
+                    <div class="view-toggle" id="viewModeToggle">
+                        <button class="active" data-view="all">All Photos</button>
+                        <button data-view="single">Single</button>
+                    </div>
+                    <select id="photoSelect" style="display:none;margin-top:8px;width:100%;font-size:11px;padding:5px 8px">
+                        {% for p in photos %}
+                        <option value="{{ p }}">{{ p }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-label">Zoom</div>
+                    <div class="zoom-controls">
+                        <button data-action="zoom-out" title="Zoom out">&minus;</button>
+                        <span class="zoom-label" id="zoomLabel">fit</span>
+                        <button data-action="zoom-in" title="Zoom in">+</button>
+                        <button data-action="zoom-fit" title="Fit to window">Fit</button>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-label">Display Layers</div>
+                    <label>
+                        <input type="checkbox" id="showProducts" checked>
+                        Products
+                    </label>
+                    <label>
+                        <input type="checkbox" id="showShelves">
+                        Shelves
+                    </label>
+                    <label>
+                        <input type="checkbox" id="showLabels">
+                        Labels
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="sep"></div>
+
+        <div class="stats-bar">
+            <span>Photos: <strong id="statPhotos">0</strong></span>
+            <span>Unique SKUs: <strong id="statUnique">0</strong></span>
+            <span>Facings: <strong id="statProducts">0</strong></span>
+            <span class="dt-active-filter" id="activeFilterBadge" style="display:none">
+                Filter: <strong id="activeFilterName">—</strong>
+                <button class="dt-clear-filter-btn" id="clearFilterBtn" title="Clear filter">&times;</button>
+            </span>
+        </div>
+    </div>
+
+    <div class="main-area">
+        <div class="photos-grid" id="photosGrid"></div>
+
+        <!-- Decision Tree side panel -->
+        <div class="side-panel open" id="sidePanel">
+            <div class="side-panel-header">
+                <div class="side-panel-tabs">
+                    <button class="side-panel-tab active" data-tab="tree">Decision Tree</button>
+                    <button class="side-panel-tab" data-tab="analytics">Analytics</button>
+                </div>
+                <button class="side-panel-close">&times;</button>
+            </div>
+
+            <!-- Decision Tree Tab -->
+            <div class="side-panel-body tab-content" id="tabTree">
+                <div class="dt-header">
+                    <h3>Category Decision Tree</h3>
+                    <p class="dt-subtitle">Click any node to highlight matching products on the photo</p>
+                </div>
+                <div class="dt-loading" id="dtLoading">
+                    <div class="btn-spinner"></div>
+                    <span>Loading product map...</span>
+                </div>
+                <div class="dt-tree-container" id="dtTreeContainer" style="display:none"></div>
+                <div class="dt-stats" id="dtStats" style="display:none"></div>
+            </div>
+
+            <!-- Analytics Tab (reused from photo-viewer) -->
+            <div class="side-panel-body tab-content" id="tabAnalytics" style="display:none">
+                <div id="detailContent">
+                    <div class="empty-state">Click a bounding box to see details</div>
+                </div>
+
+                <div class="product-list" id="productList">
+                    <h3>All products across photos</h3>
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search products...">
+                    <div class="filter-bar" id="filterBar">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                    </div>
+                    <div class="filter-counts" id="filterCounts"></div>
+                    <div id="productListItems"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>var _PHOTOS_INIT = {{ photos | tojson }};</script>
+    <script>var TRAINING_MODE = true;</script>
+    <script>var TRAINING2_MODE = true;</script>
+    <script>
+    function fetchAndRenderPlanograms() {}
+    function _applyPlanogramData() {}
+    function renderAllMiniPlanograms() {}
+    </script>
+    <script src="/static/js/photo-viewer/state.js"></script>
+    <script src="/static/js/photo-viewer/detail-panel.js"></script>
+    <script src="/static/js/photo-viewer/color-mode.js"></script>
+    <script src="/static/js/photo-viewer/overlay.js"></script>
+    <script src="/static/js/photo-viewer/product-list.js"></script>
+    <script src="/static/js/photo-viewer/zoom.js"></script>
+    <script src="/static/js/photo-viewer/data.js"></script>
+    <script>
+    var useMetric = true;
+    function dFmt(inches) {
+        return +(inches * 2.54).toFixed(1) + ' cm';
+    }
+    </script>
+    <script src="/static/js/training/training2-init.js"></script>
+</body>
+</html>
