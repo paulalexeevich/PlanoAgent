@@ -66,6 +66,7 @@
             <span>Facings: <strong id="statProducts">0</strong></span>
             <span class="dt-active-filter" id="activeFilterBadge" style="display:none">
                 Filter: <strong id="activeFilterName">—</strong>
+                <span class="dt-active-rules" id="activeFilterRules" style="display:none"></span>
                 <button class="dt-clear-filter-btn" id="clearFilterBtn" title="Clear filter">&times;</button>
             </span>
         </div>
@@ -88,8 +89,22 @@
             <div class="side-panel-body tab-content" id="tabTree">
                 <div class="dt-header">
                     <h3>Category Decision Tree</h3>
-                    <p class="dt-subtitle">Click any node to highlight matching products on the photo</p>
+                    <p class="dt-subtitle">Each node has filter rules — hover to see. Click to highlight.</p>
                 </div>
+
+                <div class="dt-toolbar">
+                    <input type="text" class="dt-save-name" id="dtSaveName" placeholder="Tree name..." value="Coffee Decision Tree">
+                    <button class="dt-toolbar-btn dt-btn-save" id="btnSaveTree" title="Save to Supabase">Save</button>
+                    <button class="dt-toolbar-btn dt-btn-regen" id="btnGenerateTree" title="Regenerate from product map">Regen</button>
+                </div>
+                <div class="dt-message" id="dtMessage" style="display:none"></div>
+                <div class="dt-saved-section">
+                    <div class="dt-saved-label">Saved Trees</div>
+                    <div class="dt-saved-list" id="dtSavedList">
+                        <div class="dt-no-saved">Loading...</div>
+                    </div>
+                </div>
+
                 <div class="dt-loading" id="dtLoading">
                     <div class="btn-spinner"></div>
                     <span>Loading product map...</span>

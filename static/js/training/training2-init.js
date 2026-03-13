@@ -1,11 +1,13 @@
-/* Training 2 — Decision Tree: interactive category tree with photo bounding-box highlighting.
+/* Training 2 — Decision Tree: standalone entity with filter rules per node.
+ * Each node carries filter_rules {field: value} that determine which products match.
+ * The tree is portable — can be saved and applied to any set of photos.
  * Loaded last — requires photo-viewer modules (state, overlay, data, zoom). */
 
 var DT = {
     productMap: {},
     treeData: null,
-    activeFilter: null,
-    matchingProductIds: new Set(),
+    activeNode: null,
+    savedTreeId: null,
     levelColors: {
         l0: '#e94560',
         l1: '#f9c74f',
@@ -13,102 +15,250 @@ var DT = {
         pkg: '#00b4d8',
         brand: '#7209b7',
     },
+    FILTER_FIELDS: ['category_l0', 'category_l1', 'category_l2', 'package_type', 'brand'],
+    FIELD_LABELS: {
+        category_l0: 'L0',
+        category_l1: 'L1',
+        category_l2: 'L2',
+        package_type: 'Pkg',
+        brand: 'Brand',
+    },
 };
 
-// ── Build tree from flat product map ──────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// FILTER RULES ENGINE — portable matching that works on any product map
+// ═══════════════════════════════════════════════════════════════════════
+
+function productMatchesRules(product, filterRules) {
+    var keys = Object.keys(filterRules);
+    if (keys.length === 0) return true;
+    for (var i = 0; i < keys.length; i++) {
+        var field = keys[i];
+        var expected = filterRules[field];
+        var actual = product[field] || '';
+        if (actual !== expected) return false;
+    }
+    return true;
+}
+
+function findMatchingProductIds(productMap, filterRules) {
+    var ids = new Set();
+    Object.keys(productMap).forEach(function(pid) {
+        if (productMatchesRules(productMap[pid], filterRules)) {
+            ids.add(pid);
+        }
+    });
+    return ids;
+}
+
+function countMatchingProducts(productMap, filterRules) {
+    var count = 0;
+    Object.keys(productMap).forEach(function(pid) {
+        if (productMatchesRules(productMap[pid], filterRules)) count++;
+    });
+    return count;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TREE BUILDER — generates tree with filter_rules from product map data
+// ═══════════════════════════════════════════════════════════════════════
 
 function buildDecisionTree(productMap) {
-    var root = { name: 'All Products', level: 'root', children: {}, productIds: new Set() };
+    var idCounter = 0;
+    function nextId() { return 'node_' + (++idCounter); }
 
+    var root = {
+        id: 'root',
+        name: 'All Products',
+        level: 'root',
+        filter_rules: {},
+        children: [],
+    };
+
+    var l0Groups = {};
     Object.keys(productMap).forEach(function(pid) {
         var p = productMap[pid];
-        root.productIds.add(pid);
-
         var l0 = p.category_l0 || '(unknown)';
-        var l1 = p.category_l1 || '(unknown)';
-        var l2 = p.category_l2 || '';
-        var pkg = p.package_type || '';
-        var brand = p.brand || '';
+        if (!l0Groups[l0]) l0Groups[l0] = [];
+        l0Groups[l0].push(p);
+    });
 
-        if (!root.children[l0]) {
-            root.children[l0] = { name: l0, level: 'l0', children: {}, productIds: new Set() };
-        }
-        root.children[l0].productIds.add(pid);
+    Object.keys(l0Groups).sort().forEach(function(l0Name) {
+        var l0Products = l0Groups[l0Name];
+        var l0Rules = l0Name === '(unknown)' ? {} : { category_l0: l0Name };
+        var l0Node = {
+            id: nextId(),
+            name: l0Name,
+            level: 'l0',
+            filter_rules: l0Rules,
+            children: [],
+        };
 
-        var l0Node = root.children[l0];
-        if (!l0Node.children[l1]) {
-            l0Node.children[l1] = { name: l1, level: 'l1', children: {}, productIds: new Set() };
-        }
-        l0Node.children[l1].productIds.add(pid);
+        var l1Groups = {};
+        l0Products.forEach(function(p) {
+            var l1 = p.category_l1 || '(unknown)';
+            if (!l1Groups[l1]) l1Groups[l1] = [];
+            l1Groups[l1].push(p);
+        });
 
-        var l1Node = l0Node.children[l1];
-        if (l2) {
-            if (!l1Node.children[l2]) {
-                l1Node.children[l2] = { name: l2, level: 'l2', children: {}, productIds: new Set() };
+        Object.keys(l1Groups).sort().forEach(function(l1Name) {
+            var l1Products = l1Groups[l1Name];
+            var l1Rules = Object.assign({}, l0Rules);
+            if (l1Name !== '(unknown)') l1Rules.category_l1 = l1Name;
+            var l1Node = {
+                id: nextId(),
+                name: l1Name,
+                level: 'l1',
+                filter_rules: l1Rules,
+                children: [],
+            };
+
+            var l2Groups = {};
+            l1Products.forEach(function(p) {
+                var l2 = p.category_l2 || '';
+                if (!l2Groups[l2]) l2Groups[l2] = [];
+                l2Groups[l2].push(p);
+            });
+
+            Object.keys(l2Groups).sort().forEach(function(l2Name) {
+                if (!l2Name) return;
+                var l2Products = l2Groups[l2Name];
+                var l2Rules = Object.assign({}, l1Rules, { category_l2: l2Name });
+                var l2Node = {
+                    id: nextId(),
+                    name: l2Name,
+                    level: 'l2',
+                    filter_rules: l2Rules,
+                    children: [],
+                };
+
+                var pkgGroups = {};
+                l2Products.forEach(function(p) {
+                    var pkg = p.package_type || '';
+                    if (!pkgGroups[pkg]) pkgGroups[pkg] = [];
+                    pkgGroups[pkg].push(p);
+                });
+
+                Object.keys(pkgGroups).sort().forEach(function(pkgName) {
+                    if (!pkgName) return;
+                    var pkgProducts = pkgGroups[pkgName];
+                    var pkgRules = Object.assign({}, l2Rules, { package_type: pkgName });
+                    var pkgNode = {
+                        id: nextId(),
+                        name: pkgName,
+                        level: 'pkg',
+                        filter_rules: pkgRules,
+                        children: [],
+                    };
+
+                    var brandGroups = {};
+                    pkgProducts.forEach(function(p) {
+                        var brand = p.brand || '';
+                        if (!brandGroups[brand]) brandGroups[brand] = [];
+                        brandGroups[brand].push(p);
+                    });
+
+                    Object.keys(brandGroups).sort().forEach(function(brandName) {
+                        if (!brandName) return;
+                        var brandRules = Object.assign({}, pkgRules, { brand: brandName });
+                        pkgNode.children.push({
+                            id: nextId(),
+                            name: brandName,
+                            level: 'brand',
+                            filter_rules: brandRules,
+                            children: [],
+                        });
+                    });
+
+                    l2Node.children.push(pkgNode);
+                });
+
+                l1Node.children.push(l2Node);
+            });
+
+            if (l2Groups['']) {
+                var pkgGroups2 = {};
+                l2Groups[''].forEach(function(p) {
+                    var pkg = p.package_type || '(no package)';
+                    if (!pkgGroups2[pkg]) pkgGroups2[pkg] = [];
+                    pkgGroups2[pkg].push(p);
+                });
+                Object.keys(pkgGroups2).sort().forEach(function(pkgName) {
+                    var pkgRules = Object.assign({}, l1Rules);
+                    if (pkgName !== '(no package)') pkgRules.package_type = pkgName;
+                    l1Node.children.push({
+                        id: nextId(),
+                        name: pkgName,
+                        level: 'pkg',
+                        filter_rules: pkgRules,
+                        children: [],
+                    });
+                });
             }
-            l1Node.children[l2].productIds.add(pid);
 
-            var l2Node = l1Node.children[l2];
-            if (pkg) {
-                if (!l2Node.children[pkg]) {
-                    l2Node.children[pkg] = { name: pkg, level: 'pkg', children: {}, productIds: new Set() };
-                }
-                l2Node.children[pkg].productIds.add(pid);
+            l0Node.children.push(l1Node);
+        });
 
-                var pkgNode = l2Node.children[pkg];
-                if (brand) {
-                    if (!pkgNode.children[brand]) {
-                        pkgNode.children[brand] = { name: brand, level: 'brand', children: {}, productIds: new Set() };
-                    }
-                    pkgNode.children[brand].productIds.add(pid);
-                }
-            } else if (brand) {
-                if (!l2Node.children[brand]) {
-                    l2Node.children[brand] = { name: brand, level: 'brand', children: {}, productIds: new Set() };
-                }
-                l2Node.children[brand].productIds.add(pid);
-            }
-        } else if (pkg) {
-            if (!l1Node.children[pkg]) {
-                l1Node.children[pkg] = { name: pkg, level: 'pkg', children: {}, productIds: new Set() };
-            }
-            l1Node.children[pkg].productIds.add(pid);
-        }
+        root.children.push(l0Node);
     });
 
     return root;
 }
 
-// ── Render tree as nested buttons ─────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// TREE SERIALIZATION — convert to/from JSON-safe format
+// ═══════════════════════════════════════════════════════════════════════
+
+function serializeTree(node) {
+    return {
+        id: node.id,
+        name: node.name,
+        level: node.level,
+        filter_rules: node.filter_rules,
+        children: (node.children || []).map(serializeTree),
+    };
+}
+
+function deserializeTree(data) {
+    return {
+        id: data.id || 'root',
+        name: data.name || '',
+        level: data.level || 'root',
+        filter_rules: data.filter_rules || {},
+        children: (data.children || []).map(deserializeTree),
+    };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// RENDER TREE — nested collapsible buttons with filter rules tooltip
+// ═══════════════════════════════════════════════════════════════════════
 
 function renderTree(container, node, depth) {
-    var childKeys = Object.keys(node.children).sort();
-    if (childKeys.length === 0) return;
+    if (!node.children || node.children.length === 0) return;
 
-    childKeys.forEach(function(key) {
-        var child = node.children[key];
-        var hasChildren = Object.keys(child.children).length > 0;
-        var count = child.productIds.size;
+    node.children.forEach(function(child) {
+        var hasChildren = child.children && child.children.length > 0;
+        var count = countMatchingProducts(DT.productMap, child.filter_rules);
 
         var level = document.createElement('div');
         level.className = 'dt-level';
 
         var btn = document.createElement('button');
         btn.className = 'dt-node-btn' + (hasChildren ? ' has-children' : '');
-        btn.setAttribute('data-node-path', getNodePath(child, node, key));
+        btn.setAttribute('data-node-id', child.id);
         btn.setAttribute('data-level', child.level);
 
-        var caret = '';
-        if (hasChildren) {
-            caret = '<span class="dt-caret expanded">&#9654;</span>';
-        } else {
-            caret = '<span style="width:14px;display:inline-block"></span>';
-        }
+        var rulesTitle = formatFilterRules(child.filter_rules);
+        btn.setAttribute('title', rulesTitle || 'All products');
+
+        var caret = hasChildren
+            ? '<span class="dt-caret expanded">&#9654;</span>'
+            : '<span style="width:14px;display:inline-block"></span>';
 
         btn.innerHTML =
             caret +
             '<span class="dt-level-dot ' + child.level + '"></span>' +
-            '<span class="dt-node-name" title="' + escHtml(child.name) + '">' + escHtml(child.name) + '</span>' +
+            '<span class="dt-node-name">' + escHtml(child.name) + '</span>' +
             '<span class="dt-node-count">' + count + '</span>';
 
         btn.addEventListener('click', function(e) {
@@ -117,7 +267,7 @@ function renderTree(container, node, depth) {
                 toggleChildren(level);
                 return;
             }
-            selectTreeNode(child, key);
+            selectTreeNode(child);
         });
 
         level.appendChild(btn);
@@ -133,8 +283,13 @@ function renderTree(container, node, depth) {
     });
 }
 
-function getNodePath(child, parent, key) {
-    return child.level + ':' + key;
+function formatFilterRules(rules) {
+    var keys = Object.keys(rules);
+    if (keys.length === 0) return 'No filter (all products)';
+    return keys.map(function(k) {
+        var label = DT.FIELD_LABELS[k] || k;
+        return label + ' = "' + rules[k] + '"';
+    }).join('\n');
 }
 
 function toggleChildren(levelEl) {
@@ -162,39 +317,46 @@ function escHtml(str) {
     return div.innerHTML;
 }
 
-// ── Node selection & highlighting ─────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// NODE SELECTION & BOUNDING BOX HIGHLIGHTING
+// ═══════════════════════════════════════════════════════════════════════
 
-function selectTreeNode(node, key) {
-    var filterKey = node.level + ':' + node.name;
-
-    if (DT.activeFilter === filterKey) {
+function selectTreeNode(node) {
+    if (DT.activeNode && DT.activeNode.id === node.id) {
         clearTreeFilter();
         return;
     }
 
-    DT.activeFilter = filterKey;
-    DT.matchingProductIds = node.productIds;
+    DT.activeNode = node;
 
     document.querySelectorAll('.dt-node-btn.active').forEach(function(el) {
         el.classList.remove('active');
     });
-    var allBtns = document.querySelectorAll('.dt-node-btn');
-    allBtns.forEach(function(btn) {
-        if (btn.getAttribute('data-node-path') === node.level + ':' + key) {
-            btn.classList.add('active');
-        }
-    });
+    var targetBtn = document.querySelector('.dt-node-btn[data-node-id="' + node.id + '"]');
+    if (targetBtn) targetBtn.classList.add('active');
 
     document.getElementById('activeFilterBadge').style.display = '';
     document.getElementById('activeFilterName').textContent = node.name;
 
-    applyTreeHighlight();
+    var rulesEl = document.getElementById('activeFilterRules');
+    if (rulesEl) {
+        var ruleKeys = Object.keys(node.filter_rules);
+        if (ruleKeys.length > 0) {
+            rulesEl.textContent = ruleKeys.map(function(k) {
+                return (DT.FIELD_LABELS[k] || k) + '=' + node.filter_rules[k];
+            }).join(', ');
+            rulesEl.style.display = '';
+        } else {
+            rulesEl.style.display = 'none';
+        }
+    }
+
+    applyTreeHighlight(node);
     updateAreaStats(node);
 }
 
 function clearTreeFilter() {
-    DT.activeFilter = null;
-    DT.matchingProductIds = new Set();
+    DT.activeNode = null;
 
     document.querySelectorAll('.dt-node-btn.active').forEach(function(el) {
         el.classList.remove('active');
@@ -205,31 +367,25 @@ function clearTreeFilter() {
     hideAreaStats();
 }
 
-function applyTreeHighlight() {
-    var matchSet = DT.matchingProductIds;
-    if (!matchSet || matchSet.size === 0) {
-        removeTreeHighlight();
-        return;
-    }
+function applyTreeHighlight(node) {
+    if (!node) { removeTreeHighlight(); return; }
+
+    var matchSet = findMatchingProductIds(DT.productMap, node.filter_rules);
+    var color = DT.levelColors[node.level] || '#4a9eff';
 
     PV.photos.forEach(function(name) {
         var data = PV.photoData[name];
         if (!data) return;
 
         document.querySelectorAll('#svg-' + CSS.escape(name) + ' .bbox-product').forEach(function(el) {
-            var productId = el.getAttribute('data-art');
-            var externalPid = '';
             var idx = parseInt(el.getAttribute('data-product-idx'));
-            if (data.products[idx]) {
-                externalPid = data.products[idx].product_id || '';
-            }
-
-            var isMatch = matchSet.has(productId) || matchSet.has(externalPid);
+            var p = data.products[idx];
+            if (!p) return;
+            var isMatch = matchSet.has(p.art) || matchSet.has(p.product_id);
 
             el.classList.remove('dt-match', 'dt-dimmed');
             if (isMatch) {
                 el.classList.add('dt-match');
-                var color = DT.levelColors[getActiveLevel()] || '#4a9eff';
                 el.setAttribute('stroke', color);
                 el.setAttribute('fill', color + '30');
                 el.setAttribute('stroke-width', '8');
@@ -269,16 +425,13 @@ function removeTreeHighlight() {
     renderAllOverlays();
 }
 
-function getActiveLevel() {
-    if (!DT.activeFilter) return '';
-    return DT.activeFilter.split(':')[0];
-}
-
-// ── Area stats (how much shelf space does this node occupy) ───────────
+// ═══════════════════════════════════════════════════════════════════════
+// AREA STATS — how much shelf space this node occupies
+// ═══════════════════════════════════════════════════════════════════════
 
 function updateAreaStats(node) {
     var statsEl = document.getElementById('dtStats');
-    var matchSet = node.productIds;
+    var matchSet = findMatchingProductIds(DT.productMap, node.filter_rules);
     var totalProducts = 0;
     var matchProducts = 0;
     var totalArea = 0;
@@ -305,39 +458,29 @@ function updateAreaStats(node) {
 
     var areaPct = totalArea > 0 ? (matchArea / totalArea * 100) : 0;
     var facingPct = totalProducts > 0 ? (matchProducts / totalProducts * 100) : 0;
-
     var color = DT.levelColors[node.level] || '#4a9eff';
 
     statsEl.innerHTML =
         '<div class="dt-stats-grid">' +
-        '<div class="dt-stat-item">' +
-        '<div class="dt-stat-label">Matched Facings</div>' +
-        '<div class="dt-stat-value">' + matchProducts + ' <span style="font-size:11px;color:var(--text-secondary)">/ ' + totalProducts + '</span></div>' +
-        '</div>' +
-        '<div class="dt-stat-item">' +
-        '<div class="dt-stat-label">Facing Share</div>' +
-        '<div class="dt-stat-value" style="color:' + color + '">' + facingPct.toFixed(1) + '%</div>' +
-        '</div>' +
-        '<div class="dt-stat-item">' +
-        '<div class="dt-stat-label">Unique SKUs</div>' +
-        '<div class="dt-stat-value">' + matchSet.size + '</div>' +
-        '</div>' +
-        '<div class="dt-stat-item">' +
-        '<div class="dt-stat-label">Area Share</div>' +
-        '<div class="dt-stat-value" style="color:' + color + '">' + areaPct.toFixed(1) + '%</div>' +
-        '</div>' +
+        '<div class="dt-stat-item"><div class="dt-stat-label">Matched Facings</div>' +
+        '<div class="dt-stat-value">' + matchProducts + ' <span style="font-size:11px;color:var(--text-secondary)">/ ' + totalProducts + '</span></div></div>' +
+        '<div class="dt-stat-item"><div class="dt-stat-label">Facing Share</div>' +
+        '<div class="dt-stat-value" style="color:' + color + '">' + facingPct.toFixed(1) + '%</div></div>' +
+        '<div class="dt-stat-item"><div class="dt-stat-label">Unique SKUs</div>' +
+        '<div class="dt-stat-value">' + matchSet.size + '</div></div>' +
+        '<div class="dt-stat-item"><div class="dt-stat-label">Area Share</div>' +
+        '<div class="dt-stat-value" style="color:' + color + '">' + areaPct.toFixed(1) + '%</div></div>' +
         '</div>';
 
     statsEl.style.display = '';
-
     renderAreaBreakdown(node);
 }
 
 function renderAreaBreakdown(node) {
-    var childKeys = Object.keys(node.children).sort();
-    if (childKeys.length === 0) return;
+    if (!node.children || node.children.length === 0) return;
 
     var container = document.getElementById('dtStats');
+    var parentMatchSet = findMatchingProductIds(DT.productMap, node.filter_rules);
     var totalArea = 0;
     var childAreas = {};
 
@@ -347,17 +490,17 @@ function renderAreaBreakdown(node) {
 
         data.products.forEach(function(p) {
             if (p.is_duplicated) return;
-            if (!node.productIds.has(p.art) && !node.productIds.has(p.product_id)) return;
+            if (!parentMatchSet.has(p.art) && !parentMatchSet.has(p.product_id)) return;
 
             var w = Math.abs(p.x2 - p.x1);
             var h = Math.abs(p.y2 - p.y1);
             var area = w * h;
             totalArea += area;
 
-            childKeys.forEach(function(key) {
-                var child = node.children[key];
-                if (child.productIds.has(p.art) || child.productIds.has(p.product_id)) {
-                    childAreas[key] = (childAreas[key] || 0) + area;
+            node.children.forEach(function(child) {
+                var childSet = findMatchingProductIds(DT.productMap, child.filter_rules);
+                if (childSet.has(p.art) || childSet.has(p.product_id)) {
+                    childAreas[child.id] = (childAreas[child.id] || 0) + area;
                 }
             });
         });
@@ -365,22 +508,19 @@ function renderAreaBreakdown(node) {
 
     if (totalArea === 0) return;
 
-    var childLevel = node.children[childKeys[0]] ? node.children[childKeys[0]].level : 'l0';
-    var color = DT.levelColors[childLevel] || '#4a9eff';
-
     var html = '<div class="dt-area-bar"><h4>Children Area Share</h4>';
-    childKeys.forEach(function(key) {
-        var pct = totalArea > 0 ? ((childAreas[key] || 0) / totalArea * 100) : 0;
+    node.children.forEach(function(child) {
+        var pct = totalArea > 0 ? ((childAreas[child.id] || 0) / totalArea * 100) : 0;
+        var color = DT.levelColors[child.level] || '#4a9eff';
         html +=
             '<div class="dt-area-row">' +
-            '<span class="dt-level-dot ' + childLevel + '"></span>' +
-            '<span class="dt-area-name">' + escHtml(key) + '</span>' +
+            '<span class="dt-level-dot ' + child.level + '"></span>' +
+            '<span class="dt-area-name">' + escHtml(child.name) + '</span>' +
             '<span class="dt-area-pct">' + pct.toFixed(1) + '%</span>' +
             '<span class="dt-area-bar-track"><span class="dt-area-bar-fill" style="width:' + pct + '%;background:' + color + '"></span></span>' +
             '</div>';
     });
     html += '</div>';
-
     container.innerHTML += html;
 }
 
@@ -388,62 +528,180 @@ function hideAreaStats() {
     document.getElementById('dtStats').style.display = 'none';
 }
 
-// ── Initialize ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// SAVE / LOAD — persist decision tree to Supabase
+// ═══════════════════════════════════════════════════════════════════════
+
+function saveDecisionTree() {
+    if (!DT.treeData) return;
+
+    var nameInput = document.getElementById('dtSaveName');
+    var name = (nameInput && nameInput.value.trim()) || 'Coffee Decision Tree';
+
+    var payload = {
+        name: name,
+        description: 'Auto-generated from product map',
+        tree_data: serializeTree(DT.treeData),
+    };
+
+    var saveBtn = document.getElementById('btnSaveTree');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+
+    fetch('/api/coffee-decision-tree/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status === 'success') {
+            DT.savedTreeId = data.saved.id;
+            showTreeMessage('Saved! ID: ' + data.saved.id, 'success');
+            loadTreeList();
+        } else {
+            showTreeMessage('Save failed: ' + (data.error || 'unknown'), 'error');
+        }
+    })
+    .catch(function(err) {
+        showTreeMessage('Save error: ' + err.message, 'error');
+    })
+    .finally(function() {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Tree'; }
+    });
+}
+
+function loadDecisionTreeById(treeId) {
+    var loadingEl = document.getElementById('dtLoading');
+    loadingEl.style.display = '';
+    loadingEl.innerHTML = '<div class="btn-spinner"></div><span>Loading saved tree...</span>';
+    document.getElementById('dtTreeContainer').style.display = 'none';
+
+    fetch('/api/coffee-decision-tree/load/' + treeId)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status !== 'success') {
+            loadingEl.innerHTML = '<span style="color:var(--accent-red)">Load failed: ' + (data.error || 'unknown') + '</span>';
+            return;
+        }
+
+        DT.treeData = deserializeTree(data.tree.tree_data);
+        DT.savedTreeId = data.tree.id;
+        renderFullTree();
+        showTreeMessage('Loaded: ' + data.tree.name, 'success');
+    })
+    .catch(function(err) {
+        loadingEl.innerHTML = '<span style="color:var(--accent-red)">Error: ' + err.message + '</span>';
+    });
+}
+
+function loadTreeList() {
+    fetch('/api/coffee-decision-tree/list')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var listEl = document.getElementById('dtSavedList');
+        if (!listEl || data.status !== 'success') return;
+
+        if (data.trees.length === 0) {
+            listEl.innerHTML = '<div class="dt-no-saved">No saved trees</div>';
+            return;
+        }
+
+        var html = '';
+        data.trees.forEach(function(t) {
+            var dateStr = new Date(t.updated_at).toLocaleDateString();
+            html +=
+                '<div class="dt-saved-item" data-tree-id="' + t.id + '">' +
+                '<span class="dt-saved-name">' + escHtml(t.name) + '</span>' +
+                '<span class="dt-saved-date">' + dateStr + '</span>' +
+                '</div>';
+        });
+        listEl.innerHTML = html;
+
+        listEl.querySelectorAll('.dt-saved-item').forEach(function(item) {
+            item.addEventListener('click', function() {
+                loadDecisionTreeById(parseInt(item.getAttribute('data-tree-id')));
+            });
+        });
+    });
+}
+
+function showTreeMessage(msg, type) {
+    var el = document.getElementById('dtMessage');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'dt-message dt-message-' + type;
+    el.style.display = '';
+    setTimeout(function() { el.style.display = 'none'; }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// RENDER FULL TREE UI
+// ═══════════════════════════════════════════════════════════════════════
+
+function renderFullTree() {
+    document.getElementById('dtLoading').style.display = 'none';
+    var container = document.getElementById('dtTreeContainer');
+    container.style.display = '';
+    container.innerHTML = '';
+
+    var legend = document.createElement('div');
+    legend.className = 'dt-level-legend';
+    legend.innerHTML =
+        '<span class="dt-legend-item"><span class="dt-level-dot l0"></span> L0</span>' +
+        '<span class="dt-legend-item"><span class="dt-level-dot l1"></span> L1</span>' +
+        '<span class="dt-legend-item"><span class="dt-level-dot l2"></span> L2</span>' +
+        '<span class="dt-legend-item"><span class="dt-level-dot pkg"></span> Package</span>' +
+        '<span class="dt-legend-item"><span class="dt-level-dot brand"></span> Brand</span>';
+    container.appendChild(legend);
+
+    renderTree(container, DT.treeData, 0);
+
+    var total = countMatchingProducts(DT.productMap, {});
+    var mapped = Object.keys(DT.productMap).length;
+    console.log('[DT] Tree rendered:', mapped, 'products in map,',
+        DT.treeData.children.length, 'top-level nodes');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// INITIALIZE — load product map, build tree, setup events
+// ═══════════════════════════════════════════════════════════════════════
 
 function initDecisionTree() {
     fetch('/api/product-map')
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.status !== 'success') {
-                document.getElementById('dtLoading').innerHTML =
-                    '<span style="color:var(--accent-red)">Failed to load product map: ' + (data.error || 'unknown') + '</span>';
-                return;
-            }
-
-            DT.productMap = data.product_map;
-            DT.treeData = buildDecisionTree(DT.productMap);
-
-            document.getElementById('dtLoading').style.display = 'none';
-            var container = document.getElementById('dtTreeContainer');
-            container.style.display = '';
-            container.innerHTML = '';
-
-            var legend = document.createElement('div');
-            legend.className = 'dt-level-legend';
-            legend.innerHTML =
-                '<span class="dt-legend-item"><span class="dt-level-dot l0"></span> Category L0</span>' +
-                '<span class="dt-legend-item"><span class="dt-level-dot l1"></span> Category L1</span>' +
-                '<span class="dt-legend-item"><span class="dt-level-dot l2"></span> Category L2</span>' +
-                '<span class="dt-legend-item"><span class="dt-level-dot pkg"></span> Package</span>' +
-                '<span class="dt-legend-item"><span class="dt-level-dot brand"></span> Brand</span>';
-            container.appendChild(legend);
-
-            renderTree(container, DT.treeData, 0);
-
-            console.log('[DT] Decision tree built:', data.count, 'products',
-                Object.keys(DT.treeData.children).length, 'L0 categories');
-        })
-        .catch(function(err) {
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status !== 'success') {
             document.getElementById('dtLoading').innerHTML =
-                '<span style="color:var(--accent-red)">Error: ' + err.message + '</span>';
-        });
+                '<span style="color:var(--accent-red)">Failed to load product map: ' + (data.error || 'unknown') + '</span>';
+            return;
+        }
+
+        DT.productMap = data.product_map;
+        DT.treeData = buildDecisionTree(DT.productMap);
+        renderFullTree();
+        loadTreeList();
+    })
+    .catch(function(err) {
+        document.getElementById('dtLoading').innerHTML =
+            '<span style="color:var(--accent-red)">Error: ' + err.message + '</span>';
+    });
 }
 
-// ── Re-apply highlight after overlay re-render ────────────────────────
-
+// Re-apply highlight after overlay re-render
 var _origRenderAllOverlays = window.renderAllOverlays;
 window.renderAllOverlays = function() {
     _origRenderAllOverlays();
-    if (DT.activeFilter && DT.matchingProductIds.size > 0) {
-        setTimeout(applyTreeHighlight, 10);
+    if (DT.activeNode) {
+        setTimeout(function() { applyTreeHighlight(DT.activeNode); }, 10);
     }
 };
 
-// ── Panel & tab switching ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// PANEL & TAB SWITCHING
+// ═══════════════════════════════════════════════════════════════════════
 
 function openPanelTab(tab) {
-    var panel = document.getElementById('sidePanel');
-    panel.classList.add('open');
+    document.getElementById('sidePanel').classList.add('open');
     switchTab(tab);
     setTimeout(zoomFitAll, 280);
 }
@@ -461,7 +719,9 @@ function switchTab(tab) {
     document.getElementById('tabAnalytics').style.display = tab === 'analytics' ? '' : 'none';
 }
 
-// ── Grid builder (reuse training mode — photos only, no planogram) ────
+// ═══════════════════════════════════════════════════════════════════════
+// GRID BUILDER (photos only, no planogram section)
+// ═══════════════════════════════════════════════════════════════════════
 
 function buildTrainingGrid(photoNames) {
     var grid = document.getElementById('photosGrid');
@@ -473,9 +733,7 @@ function buildTrainingGrid(photoNames) {
         card.className = 'photo-card';
         card.id = 'card-' + name;
         card.innerHTML =
-            '<div class="photo-header">' +
-            '<span class="photo-title">' + name + '</span>' +
-            '</div>' +
+            '<div class="photo-header"><span class="photo-title">' + name + '</span></div>' +
             '<div class="canvas-inner" id="canvas-' + name + '">' +
             '<img id="img-' + name + '" alt="' + name + '">' +
             '<svg id="svg-' + name + '" xmlns="http://www.w3.org/2000/svg"></svg>' +
@@ -487,9 +745,7 @@ function buildTrainingGrid(photoNames) {
             PV.naturalSizes[name] = { w: img.naturalWidth, h: img.naturalHeight };
             fetchPhotoData(name);
             loadedCount++;
-            if (loadedCount === photoNames.length) {
-                setTimeout(zoomFitAll, 50);
-            }
+            if (loadedCount === photoNames.length) setTimeout(zoomFitAll, 50);
         };
         img.src = '/demo-images/' + name + '.jpg';
     });
@@ -500,24 +756,19 @@ function buildTrainingGrid(photoNames) {
     window.buildGrid = function(photoNames) {
         if (typeof TRAINING2_MODE !== 'undefined' && TRAINING2_MODE) {
             buildTrainingGrid(photoNames);
-        } else if (typeof TRAINING_MODE !== 'undefined' && TRAINING_MODE) {
-            origBuildGrid(photoNames);
         } else {
             origBuildGrid(photoNames);
         }
     };
 })();
 
-// ── Toolbar & settings ────────────────────────────────────────────────
-
-function toggleSettings(event) {
-    event.stopPropagation();
-    document.getElementById('settingsMenu').classList.toggle('open');
-}
+// ═══════════════════════════════════════════════════════════════════════
+// TOOLBAR & SETTINGS — event wiring
+// ═══════════════════════════════════════════════════════════════════════
 
 document.querySelector('.settings-btn').addEventListener('click', function(e) {
     e.stopPropagation();
-    toggleSettings(e);
+    document.getElementById('settingsMenu').classList.toggle('open');
 });
 
 document.getElementById('viewModeToggle').addEventListener('click', function(e) {
@@ -542,21 +793,30 @@ document.querySelectorAll('.side-panel-tab').forEach(function(btn) {
 });
 
 document.querySelector('.side-panel-close').addEventListener('click', closeSidePanel);
-
 document.getElementById('clearFilterBtn').addEventListener('click', clearTreeFilter);
 
 if (document.getElementById('searchInput')) {
     document.getElementById('searchInput').addEventListener('input', filterProductList);
 }
 
-// ── Grid events (drag, zoom, click) ───────────────────────────────────
+document.getElementById('btnSaveTree').addEventListener('click', saveDecisionTree);
 
-document.getElementById('photosGrid').addEventListener('wheel', function(e) {
+document.getElementById('btnGenerateTree').addEventListener('click', function() {
+    if (!DT.productMap || Object.keys(DT.productMap).length === 0) return;
+    DT.treeData = buildDecisionTree(DT.productMap);
+    DT.savedTreeId = null;
+    clearTreeFilter();
+    renderFullTree();
+    showTreeMessage('Tree regenerated from product map', 'success');
+});
+
+// Grid events
+var grid = document.getElementById('photosGrid');
+
+grid.addEventListener('wheel', function(e) {
     e.preventDefault();
     zoomAll(e.deltaY > 0 ? -0.02 : 0.02);
 }, { passive: false });
-
-var grid = document.getElementById('photosGrid');
 
 grid.addEventListener('mousedown', function(e) {
     if (e.target.closest('.bbox-product') || e.target.closest('.bbox-shelf')) return;
@@ -576,10 +836,7 @@ window.addEventListener('mousemove', function(e) {
 });
 
 window.addEventListener('mouseup', function() {
-    if (PV.drag.active) {
-        PV.drag.active = false;
-        grid.classList.remove('dragging');
-    }
+    if (PV.drag.active) { PV.drag.active = false; grid.classList.remove('dragging'); }
 });
 
 grid.addEventListener('mousedown', function() { PV.drag.distance = 0; });
@@ -599,11 +856,12 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// ── Initial load ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// INITIAL LOAD
+// ═══════════════════════════════════════════════════════════════════════
 
 PV.planogramFacings = {};
 PV.salesData = {};
 
 if (PV.photos.length > 0) loadAllPhotos();
-
 setTimeout(initDecisionTree, 300);

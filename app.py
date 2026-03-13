@@ -1214,6 +1214,78 @@ def get_decision_tree():
     return jsonify({"error": f"No decision tree for category: {category}"}), 404
 
 
+@app.route("/api/coffee-decision-tree/save", methods=["POST"])
+def save_coffee_decision_tree():
+    """Save a coffee category decision tree to Supabase."""
+    data = request.json or {}
+    name = data.get("name", "Coffee Decision Tree")
+    description = data.get("description", "")
+    tree_data = data.get("tree_data")
+    if not tree_data:
+        return jsonify({"status": "error", "error": "tree_data required"}), 400
+
+    try:
+        row = {
+            "name": name,
+            "description": description,
+            "tree_data": tree_data,
+            "source_store": "617533",
+            "is_active": True,
+        }
+        result = _supabase_post("decision_trees", row)
+        return jsonify({"status": "success", "saved": result})
+    except Exception as e:
+        print(f"[decision-tree] Save error: {e}", flush=True)
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/coffee-decision-tree/list")
+def list_coffee_decision_trees():
+    """List saved decision trees."""
+    try:
+        rows = _supabase_get("decision_trees", {
+            "select": "id,name,description,source_store,is_active,created_at,updated_at",
+            "order": "updated_at.desc",
+            "limit": "20",
+        })
+        return jsonify({"status": "success", "trees": rows})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/coffee-decision-tree/load/<int:tree_id>")
+def load_coffee_decision_tree(tree_id):
+    """Load a single decision tree by ID."""
+    try:
+        rows = _supabase_get("decision_trees", {
+            "select": "*",
+            "id": f"eq.{tree_id}",
+            "limit": "1",
+        })
+        if not rows:
+            return jsonify({"status": "error", "error": "Not found"}), 404
+        return jsonify({"status": "success", "tree": rows[0]})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/coffee-decision-tree/update/<int:tree_id>", methods=["PATCH"])
+def update_coffee_decision_tree(tree_id):
+    """Update an existing decision tree."""
+    data = request.json or {}
+    allowed = {"name", "description", "tree_data", "is_active"}
+    update = {k: v for k, v in data.items() if k in allowed}
+    if not update:
+        return jsonify({"status": "error", "error": "No valid fields"}), 400
+    try:
+        from datetime import datetime, timezone
+        update["updated_at"] = datetime.now(timezone.utc).isoformat()
+        result = _supabase_patch("decision_trees", {"id": f"eq.{tree_id}"}, update)
+        return jsonify({"status": "success", "tree": result})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 @app.route("/api/products", methods=["GET"])
 def get_products():
     """Return products for the currently loaded planogram.

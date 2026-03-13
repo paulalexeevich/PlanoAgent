@@ -328,3 +328,166 @@
     font-size: 10px;
     color: var(--text-secondary);
 }
+
+/* ============================================================
+   TOOLBAR (save / load / regenerate)
+   ============================================================ */
+.dt-toolbar {
+    display: flex;
+    gap: 6px;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+}
+
+.dt-save-name {
+    flex: 1;
+    min-width: 0;
+    padding: 5px 8px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text-primary);
+    font-size: 11px;
+    outline: none;
+}
+
+.dt-save-name:focus {
+    border-color: var(--accent);
+}
+
+.dt-toolbar-btn {
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--bg-dark);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.dt-toolbar-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.dt-btn-save {
+    color: var(--accent-green);
+    border-color: rgba(52, 211, 153, 0.3);
+}
+
+.dt-btn-save:hover {
+    border-color: var(--accent-green);
+    background: rgba(52, 211, 153, 0.1);
+}
+
+.dt-btn-regen {
+    color: var(--accent-orange);
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.dt-btn-regen:hover {
+    border-color: var(--accent-orange);
+    background: rgba(245, 158, 11, 0.1);
+}
+
+/* ============================================================
+   MESSAGES
+   ============================================================ */
+.dt-message {
+    padding: 6px 16px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.dt-message-success {
+    color: var(--accent-green);
+    background: rgba(52, 211, 153, 0.08);
+}
+
+.dt-message-error {
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.08);
+}
+
+/* ============================================================
+   SAVED TREES LIST
+   ============================================================ */
+.dt-saved-section {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.dt-saved-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.dt-saved-list {
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+.dt-no-saved {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: 4px 0;
+}
+
+.dt-saved-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 11px;
+}
+
+.dt-saved-item:hover {
+    background: rgba(74, 158, 255, 0.1);
+}
+
+.dt-saved-name {
+    color: var(--accent);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.dt-saved-date {
+    color: var(--text-secondary);
+    font-size: 10px;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+/* ============================================================
+   FILTER RULES DISPLAY (in toolbar badge)
+   ============================================================ */
+.dt-active-rules {
+    font-size: 9px;
+    color: rgba(74, 158, 255, 0.7);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ============================================================
+   TREE CONTAINER — adjust max-height for toolbar
+   ============================================================ */
+.dt-tree-container {
+    max-height: calc(100vh - 360px);
+}
