@@ -53,13 +53,22 @@
             loadSinglePhoto(e.target.value);
         });
 
-        // Zoom controls
+        // Zoom controls - override for Training 3 planogram zoom
+        PV.planoZoom = 1.0;
+        
         document.querySelectorAll('.zoom-controls button').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var action = btn.dataset.action;
-                if (action === 'zoom-in') zoomIn();
-                else if (action === 'zoom-out') zoomOut();
-                else if (action === 'zoom-fit') zoomFitAll();
+                if (action === 'zoom-in') {
+                    PV.planoZoom = Math.min(2.0, PV.planoZoom + 0.1);
+                } else if (action === 'zoom-out') {
+                    PV.planoZoom = Math.max(0.3, PV.planoZoom - 0.1);
+                } else if (action === 'zoom-fit') {
+                    PV.planoZoom = 1.0;
+                }
+                document.getElementById('zoomLabel').textContent = Math.round(PV.planoZoom * 100) + '%';
+                renderAllRealograms();
+                renderAllPlanograms();
             });
         });
 
@@ -748,10 +757,14 @@
 
     // ── HELPER FUNCTIONS ───────────────────────────────────────────
     function getPlanoScaleForPhoto(photoName, bayWidthIn) {
-        // Use fixed scale since photo is hidden
-        // Adjust target width based on layout mode
+        // Use global zoom scale if set, otherwise use default
         var isSideBySide = document.body.classList.contains('layout-side-by-side');
-        var targetWidth = isSideBySide ? 220 : 300;
+        var baseWidth = isSideBySide ? 220 : 300;
+        
+        // Apply global zoom factor if available
+        var zoomFactor = PV.planoZoom || 1.0;
+        var targetWidth = baseWidth * zoomFactor;
+        
         return targetWidth / bayWidthIn;
     }
 

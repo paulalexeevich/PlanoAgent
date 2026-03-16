@@ -179,10 +179,17 @@ def init_default_planogram():
 
 
 def _load_products_json() -> list:
-    """Load raw product dicts from JSON file."""
+    """Load raw product dicts from Supabase or JSON file."""
+    # Try Supabase first
+    rows = _supabase_get("beer_products", {"order": "weekly_units_sold.desc"})
+    if rows:
+        return rows
+    # Fallback to local file
     products_file = os.path.join(os.path.dirname(__file__), "data", "beer_products.json")
-    with open(products_file, 'r') as f:
-        return json.load(f)
+    if os.path.exists(products_file):
+        with open(products_file, 'r') as f:
+            return json.load(f)
+    return []
 
 
 def _full_catalog_size() -> int:
@@ -190,7 +197,8 @@ def _full_catalog_size() -> int:
     Uses the current planogram's own product list when it's not the beer default."""
     if current_planogram and current_planogram.category != "Beer":
         return len(current_planogram.products)
-    return len(_load_products_json())
+    products = _load_products_json()
+    return len(products) if products else 50  # Default fallback
 
 
 def _stable_color_from_text(text: str) -> str:

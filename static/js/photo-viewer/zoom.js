@@ -18,7 +18,8 @@ function scheduleReRenderPlanograms() {
 
 function zoomAll(delta) {
     if (PV.globalScale === null) PV.globalScale = 0.3;
-    PV.globalScale = Math.max(0.05, Math.min(2, PV.globalScale + delta));
+    var minZoom = window.TRAINING3_MODE ? 0.02 : 0.05;
+    PV.globalScale = Math.max(minZoom, Math.min(2, PV.globalScale + delta));
     PV.photos.forEach(name => {
         if (document.getElementById(`canvas-${name}`)) {
             applyScaleToPhoto(name, PV.globalScale);

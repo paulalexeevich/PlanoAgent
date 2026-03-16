@@ -400,7 +400,7 @@
    TRAINING 3 - PHOTO CARDS WITHOUT IMAGE
    ============================================================ */
 body.photo-viewer .photo-card {
-    min-width: 320px;
+    min-width: 150px;
 }
 
 body.photo-viewer .dual-plano-container {
@@ -443,7 +443,7 @@ body.photo-viewer.layout-side-by-side .plano-section-header .section-badge {
 }
 
 body.photo-viewer.layout-side-by-side .photo-card {
-    min-width: 500px;
+    min-width: 280px;
 }
 
 body.photo-viewer.layout-side-by-side .product-block {
