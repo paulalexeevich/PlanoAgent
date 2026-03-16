@@ -177,14 +177,25 @@ def _load_product_sizes() -> dict:
 
 
 def _build_image_map() -> dict:
-    """Build external_product_id → miniature_url from test_coffee_product_map."""
+    """Build external_product_id → {image_url, image_no_bg_url} from test_coffee_product_map.
+    Returns both URLs so the frontend can use image_no_bg_url for transparent backgrounds."""
     try:
         rows = _supabase_get("test_coffee_product_map", {
-            "select": "product_code,miniature_url",
-            "miniature_url": "not.is.null",
+            "select": "product_code,miniature_url,image_no_bg_url",
         })
-        return {r["product_code"]: r["miniature_url"]
-                for r in rows if r.get("product_code") and r.get("miniature_url")}
+        result = {}
+        for r in rows:
+            pc = r.get("product_code")
+            if not pc:
+                continue
+            no_bg = r.get("image_no_bg_url") or ""
+            mini = r.get("miniature_url") or ""
+            if no_bg or mini:
+                result[pc] = {
+                    "image_url": no_bg or mini,
+                    "image_no_bg_url": no_bg,
+                }
+        return result
     except Exception as e:
         print(f"[image_map] Supabase failed: {e}", flush=True)
         return {}
@@ -250,7 +261,9 @@ def _build_planogram_from_supabase(store_id: str = "617533") -> Planogram:
                 "weekly_units_sold": 0,
             }
             if eid in image_map:
-                prod_entry["image_url"] = image_map[eid]
+                prod_entry["image_url"] = image_map[eid]["image_url"]
+                if image_map[eid]["image_no_bg_url"]:
+                    prod_entry["image_no_bg_url"] = image_map[eid]["image_no_bg_url"]
             products.append(prod_entry)
         else:
             dims = size_map.get(eid, {})
@@ -638,7 +651,9 @@ def _load_coffee_planogram(source: str = "auto"):
                 for prod in planogram_data.get("products", []):
                     upc = prod.get("upc", "")
                     if upc and upc in image_map:
-                        prod["image_url"] = image_map[upc]
+                        prod["image_url"] = image_map[upc]["image_url"]
+                        if image_map[upc]["image_no_bg_url"]:
+                            prod["image_no_bg_url"] = image_map[upc]["image_no_bg_url"]
                 _apply(Planogram.from_dict(planogram_data),
                        "Loaded coffee planogram from Supabase planograms table")
                 return
@@ -1704,12 +1719,13 @@ def planogram_facings():
         sz = size_map.get(ext_id, {})
 
         if tiny not in facings:
+            img_info = image_map.get(ext_id, {})
             facings[tiny] = {
                 "facings_wide": 0,
                 "positions": 0,
                 "name": r.get("external_product_name", ""),
                 "brand": "",
-                "image_url": image_map.get(ext_id, ""),
+                "image_url": img_info.get("image_url", "") if isinstance(img_info, dict) else "",
                 "width_cm": sz.get("width_cm", 0),
                 "height_cm": sz.get("height_cm", 0),
             }

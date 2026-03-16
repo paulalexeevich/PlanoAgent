@@ -111,35 +111,32 @@ function renderPlanogram() {
                         block.style.left   = leftPx + 'px';
                         block.style.top    = (shelfTopPx + shelfHeight - blockHeight) + 'px';
 
-                        const labelEl = document.createElement('div');
-                        labelEl.className = 'product-label';
-
                         if (isDtLayer && dtLevelName) {
                             const groups   = dtPositionMap[pos.product_id];
                             const groupVal = groups ? (groups[dtLevelName] || '?') : '?';
                             const color    = dtPalette[groupVal] || '#666';
                             block.style.backgroundColor = color;
+                            const labelEl = document.createElement('div');
+                            labelEl.className = 'product-label';
                             labelEl.textContent = groupVal;
                             block.appendChild(labelEl);
-                        } else if (product.image_url && blockHeight > 18 && widthPx > 14) {
-                            block.classList.add('product-block-image');
-                            const imgEl = document.createElement('img');
-                            imgEl.src = product.image_url;
-                            imgEl.className = 'product-image';
-                            imgEl.alt = product.name || '';
-                            imgEl.draggable = false;
-                            block.appendChild(imgEl);
-                            labelEl.textContent = product.name || product.brand;
-                            block.appendChild(labelEl);
                         } else {
-                            block.style.backgroundColor = product.color_hex || '#666';
-                            labelEl.textContent = product.name || product.brand;
-                            block.appendChild(labelEl);
-                            if (blockHeight > 25) {
-                                const priceEl = document.createElement('div');
-                                priceEl.className = 'product-price';
-                                priceEl.textContent = cFmt(product.price);
-                                block.appendChild(priceEl);
+                            const hasNoBg = !!product.image_no_bg_url;
+                            const imgSrc = product.image_no_bg_url || product.image_url;
+
+                            if (imgSrc && blockHeight > 14 && widthPx > 10) {
+                                block.classList.add('product-block-image');
+                                if (hasNoBg) {
+                                    block.classList.add('product-no-bg');
+                                }
+                                const imgEl = document.createElement('img');
+                                imgEl.src = imgSrc;
+                                imgEl.className = 'product-image';
+                                imgEl.alt = product.name || '';
+                                imgEl.draggable = false;
+                                block.appendChild(imgEl);
+                            } else {
+                                block.style.backgroundColor = product.color_hex || '#666';
                             }
                         }
 
