@@ -171,6 +171,14 @@
 - **API**: `/api/build-from-recognition` (POST, optional `shelf_width_cm` in body).
 - **LESSON**: Use median (not mean) for per-shelf scale to resist outliers from misrecognized products. Filter products with `h_px > 20 and h_cm > 1` before scale calculation.
 
+## Realogram vs Planogram Comparison (Training 3)
+- **Key matching**: Both realogram products and planogram facings must use the same key (tiny_name) for accurate comparison.
+- **Bug pattern**: Realogram products were using `display_name` or `art` or `product_id` as names, while planogram facings API was keyed by `tiny_name`. This caused 0% compliance even with many matching products.
+- **Fix**: 
+  1. `_build_planogram_from_recognition()` now prioritizes `map_dims.get("tiny_name")` for product names.
+  2. `_enrich_product_names()` fixes saved realograms on-the-fly when loaded.
+- **LESSON**: When comparing two data sources, verify they use the **same key format**. Log sample keys from both sides during debugging.
+
 ## Known Issues & TODOs
 - Fill target is 99% but achievable ~96% due to fractional inch gaps (product widths don't evenly divide shelf width).
 - `ComplianceReport` uses `.overall_pct` not `.overall_score` — always check attribute names.
