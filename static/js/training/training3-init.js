@@ -80,6 +80,23 @@
             });
         });
 
+        // Layout toggle (stacked vs side-by-side)
+        document.getElementById('layoutToggle').addEventListener('click', function(e) {
+            if (e.target.tagName === 'BUTTON') {
+                var layout = e.target.dataset.layout;
+                document.querySelectorAll('#layoutToggle button').forEach(function(btn) {
+                    btn.classList.toggle('active', btn.dataset.layout === layout);
+                });
+                document.body.classList.toggle('layout-side-by-side', layout === 'side-by-side');
+                
+                // Re-render planograms with new scale
+                setTimeout(function() {
+                    renderAllRealograms();
+                    renderAllPlanograms();
+                }, 50);
+            }
+        });
+
         // Load initial data
         loadAllPhotos();
 
@@ -732,8 +749,9 @@
     // ── HELPER FUNCTIONS ───────────────────────────────────────────
     function getPlanoScaleForPhoto(photoName, bayWidthIn) {
         // Use fixed scale since photo is hidden
-        // Target width ~300px for each planogram
-        var targetWidth = 300;
+        // Adjust target width based on layout mode
+        var isSideBySide = document.body.classList.contains('layout-side-by-side');
+        var targetWidth = isSideBySide ? 220 : 300;
         return targetWidth / bayWidthIn;
     }
 

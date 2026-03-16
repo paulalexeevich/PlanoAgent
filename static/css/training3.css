@@ -410,3 +410,47 @@ body.photo-viewer .dual-plano-container {
 body.photo-viewer .plano-section .planogram-container {
     min-height: 200px;
 }
+
+/* ============================================================
+   SIDE BY SIDE LAYOUT
+   ============================================================ */
+body.photo-viewer.layout-side-by-side .dual-plano-container {
+    flex-direction: row;
+}
+
+body.photo-viewer.layout-side-by-side .plano-section {
+    flex: 1;
+    min-width: 0;
+}
+
+body.photo-viewer.layout-side-by-side .plano-section + .plano-section {
+    border-top: none;
+    border-left: 1px solid var(--border);
+}
+
+body.photo-viewer.layout-side-by-side .plano-section .planogram-container {
+    min-height: 150px;
+}
+
+body.photo-viewer.layout-side-by-side .plano-section-header {
+    padding: 3px 8px;
+    font-size: 9px;
+}
+
+body.photo-viewer.layout-side-by-side .plano-section-header .section-badge {
+    font-size: 8px;
+    padding: 1px 4px;
+}
+
+body.photo-viewer.layout-side-by-side .photo-card {
+    min-width: 500px;
+}
+
+body.photo-viewer.layout-side-by-side .product-block {
+    transform-origin: bottom left;
+}
+
+/* Scale down products in compact view */
+body.photo-viewer.layout-side-by-side .planogram-container {
+    transform-origin: top left;
+}
