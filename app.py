@@ -702,6 +702,23 @@ def index():
     return render_template("index.html", mode=mode)
 
 
+def _enrich_products_with_images(planogram_dict: dict) -> dict:
+    """Enrich products with fresh image URLs from Supabase.
+    Always uses latest image_no_bg_url when available."""
+    if planogram_dict.get("category") != "Coffee":
+        return planogram_dict
+    
+    image_map = _build_image_map()
+    products = planogram_dict.get("products", [])
+    for prod in products:
+        upc = prod.get("upc", "")
+        if upc and upc in image_map:
+            prod["image_url"] = image_map[upc]["image_url"]
+            if image_map[upc]["image_no_bg_url"]:
+                prod["image_no_bg_url"] = image_map[upc]["image_no_bg_url"]
+    return planogram_dict
+
+
 @app.route("/api/planogram", methods=["GET"])
 def get_planogram():
     """Return current planogram data as JSON."""
@@ -717,8 +734,12 @@ def get_planogram():
         if current_planogram is None:
             if not _load_saved_state():
                 init_default_planogram()
+    
+    planogram_data = current_planogram.to_dict()
+    planogram_data = _enrich_products_with_images(planogram_data)
+    
     return jsonify({
-        "planogram": current_planogram.to_dict(),
+        "planogram": planogram_data,
         "summary": current_summary,
         "decision_tree": current_decision_tree.to_dict() if hasattr(current_decision_tree, 'to_dict') and current_decision_tree else current_decision_tree,
         "compliance": current_compliance.to_dict() if hasattr(current_compliance, 'to_dict') and current_compliance else current_compliance,
