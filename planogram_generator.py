@@ -17,23 +17,96 @@ from planogram_schema import (
     Planogram, Equipment, Bay, Shelf, Position, Product
 )
 
+try:
+    import requests as http_requests
+except ImportError:
+    http_requests = None
+
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 DEFAULT_EQUIPMENT_FILE = os.path.join(DATA_DIR, "default_equipment.json")
 CURRENT_PLANOGRAM_FILE = os.path.join(DATA_DIR, "current_planogram.json")
 
+# Supabase configuration (same as app.py)
+SUPABASE_URL = os.environ.get(
+    "SUPABASE_URL", "https://zcciroutarcpkwpnynyh.supabase.co"
+).strip()
+SUPABASE_KEY = os.environ.get(
+    "SUPABASE_KEY",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjY2lyb3V0YXJjcGt3cG55bnloIiwi"
+    "cm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjIzMTAsImV4cCI6MjA4ODI5ODMxMH0."
+    "LFnJ8WoxlNhZ06MBQm-1mmJK4mtkBLZAPd4UoPtGrkE"
+).strip()
+
+
+def _supabase_get(table: str, params: dict | None = None) -> list:
+    """GET rows from Supabase table via REST API."""
+    if not http_requests:
+        return []
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    try:
+        resp = http_requests.get(url, headers=headers, params=params, timeout=5)
+        if resp.ok:
+            return resp.json()
+    except Exception as e:
+        print(f"[supabase] GET {table} failed: {e}", flush=True)
+    return []
+
 
 def load_default_equipment_config() -> dict:
-    """Load default equipment config from data/default_equipment.json."""
-    with open(DEFAULT_EQUIPMENT_FILE, 'r') as f:
-        return json.load(f)
+    """Load default equipment config from Supabase, fallback to local file."""
+    # Try Supabase first
+    rows = _supabase_get("default_equipment_config", {"is_active": "eq.true", "limit": "1"})
+    if rows:
+        r = rows[0]
+        return {
+            "equipment_type": r.get("equipment_type", "gondola"),
+            "num_bays": r.get("num_bays", 3),
+            "num_shelves": r.get("num_shelves", 5),
+            "bay_width": float(r.get("bay_width", 48.0)),
+            "bay_height": float(r.get("bay_height", 72.0)),
+            "bay_depth": float(r.get("bay_depth", 24.0)),
+            "bays_config": r.get("bays_config"),
+        }
+    # Fallback to local file
+    if os.path.exists(DEFAULT_EQUIPMENT_FILE):
+        with open(DEFAULT_EQUIPMENT_FILE, 'r') as f:
+            return json.load(f)
+    # Ultimate fallback
+    return {
+        "equipment_type": "gondola",
+        "num_bays": 3,
+        "num_shelves": 5,
+        "bay_width": 48.0,
+        "bay_height": 72.0,
+        "bay_depth": 24.0,
+    }
 
 
-def load_products(filepath: str) -> list:
-    """Load products from JSON file."""
-    with open(filepath, 'r') as f:
-        data = json.load(f)
-    return [Product(**p) for p in data]
+def load_products_from_supabase() -> list:
+    """Load beer products from Supabase."""
+    rows = _supabase_get("beer_products", {"order": "weekly_units_sold.desc"})
+    if not rows:
+        return []
+    return [Product(**{k: v for k, v in r.items() if k != "created_at"}) for r in rows]
+
+
+def load_products(filepath: str = None) -> list:
+    """Load products from Supabase or JSON file."""
+    # Try Supabase first
+    products = load_products_from_supabase()
+    if products:
+        return products
+    # Fallback to local file
+    if filepath is None:
+        filepath = os.path.join(DATA_DIR, "beer_products.json")
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+        return [Product(**p) for p in data]
+    return []
 
 
 def create_default_equipment(
@@ -250,10 +323,8 @@ def generate_planogram(
         Complete Planogram object with products placed on shelves
     """
 
-    # Load products
+    # Load products (tries Supabase first, then local file)
     if products is None:
-        if products_file is None:
-            products_file = os.path.join(os.path.dirname(__file__), "data", "beer_products.json")
         products = load_products(products_file)
 
     # Create equipment

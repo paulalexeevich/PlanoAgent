@@ -48,8 +48,9 @@ current_decision_tree = None  # Decision tree definition
 
 
 def _save_state(also_supabase: bool = False):
-    """Persist current planogram + summary + decision tree + compliance to disk.
+    """Persist current planogram + summary + decision tree + compliance.
 
+    Saves to Supabase app_state table (primary) and local file (backup).
     When also_supabase=True, also push to the Supabase planograms table.
     """
     if current_planogram is None:
@@ -65,11 +66,16 @@ def _save_state(also_supabase: bool = False):
         "decision_tree": _as_dict(current_decision_tree),
         "compliance": _as_dict(current_compliance),
     }
+    
+    # Save to Supabase app_state (primary storage)
+    _save_app_state("current_planogram", payload)
+    
+    # Also save locally as backup
     try:
         with open(CURRENT_PLANOGRAM_FILE, 'w') as f:
             json.dump(payload, f, indent=2, default=str)
     except Exception as e:
-        print(f"[save] Failed to write {CURRENT_PLANOGRAM_FILE}: {e}", flush=True)
+        print(f"[save] Failed to write local backup: {e}", flush=True)
 
     if also_supabase:
         _save_planogram_to_supabase(
@@ -77,18 +83,67 @@ def _save_state(also_supabase: bool = False):
         )
 
 
+def _save_app_state(state_key: str, state_data: dict) -> bool:
+    """Save app state to Supabase app_state table."""
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/app_state"
+        headers = {
+            **_SUPABASE_HEADERS,
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates",
+        }
+        payload = {
+            "state_key": state_key,
+            "state_data": state_data,
+            "updated_at": "now()",
+        }
+        resp = http_requests.post(url, headers=headers, json=payload, timeout=10)
+        if resp.ok:
+            print(f"[save] Saved state '{state_key}' to Supabase", flush=True)
+            return True
+        print(f"[save] Supabase save failed: {resp.status_code} {resp.text}", flush=True)
+    except Exception as e:
+        print(f"[save] Supabase save error: {e}", flush=True)
+    return False
+
+
+def _load_app_state(state_key: str) -> dict | None:
+    """Load app state from Supabase app_state table."""
+    try:
+        rows = _supabase_get("app_state", {"state_key": f"eq.{state_key}", "limit": "1"})
+        if rows and rows[0].get("state_data"):
+            return rows[0]["state_data"]
+    except Exception as e:
+        print(f"[load] Supabase load error: {e}", flush=True)
+    return None
+
+
 def _load_saved_state() -> bool:
-    """Try to load state from data/current_planogram.json. Returns True on success."""
+    """Try to load state from Supabase app_state, fallback to local file."""
     global current_planogram, current_summary, current_equipment
     global current_compliance, current_decision_tree
 
-    if not os.path.exists(CURRENT_PLANOGRAM_FILE):
+    payload = None
+    source = None
+    
+    # Try Supabase first
+    payload = _load_app_state("current_planogram")
+    if payload:
+        source = "Supabase"
+    
+    # Fallback to local file
+    if not payload and os.path.exists(CURRENT_PLANOGRAM_FILE):
+        try:
+            with open(CURRENT_PLANOGRAM_FILE, 'r') as f:
+                payload = json.load(f)
+            source = "local file"
+        except Exception as e:
+            print(f"[init] Could not load local state: {e}", flush=True)
+    
+    if not payload:
         return False
 
     try:
-        with open(CURRENT_PLANOGRAM_FILE, 'r') as f:
-            payload = json.load(f)
-
         current_planogram = Planogram.from_dict(payload["planogram"])
         current_summary = generate_summary(current_planogram, _full_catalog_size())
 
@@ -101,10 +156,10 @@ def _load_saved_state() -> bool:
             current_compliance = validate_compliance(
                 current_planogram.to_dict(), decision_tree
             )
-        print(f"[init] Loaded saved state from {CURRENT_PLANOGRAM_FILE}", flush=True)
+        print(f"[init] Loaded saved state from {source}", flush=True)
         return True
     except Exception as e:
-        print(f"[init] Could not load saved state: {e}", flush=True)
+        print(f"[init] Could not parse saved state: {e}", flush=True)
         return False
 
 
