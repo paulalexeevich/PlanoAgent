@@ -43,13 +43,18 @@ SUPABASE_KEY = os.environ.get(
 def _supabase_get(table: str, params: dict | None = None) -> list:
     """GET rows from Supabase table via REST API."""
     if not http_requests:
+        print(f"[supabase] requests module not available", flush=True)
         return []
     headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     try:
-        resp = http_requests.get(url, headers=headers, params=params, timeout=5)
+        resp = http_requests.get(url, headers=headers, params=params, timeout=10)
         if resp.ok:
-            return resp.json()
+            data = resp.json()
+            print(f"[supabase] GET {table}: {len(data)} rows", flush=True)
+            return data
+        else:
+            print(f"[supabase] GET {table} HTTP {resp.status_code}: {resp.text[:200]}", flush=True)
     except Exception as e:
         print(f"[supabase] GET {table} failed: {e}", flush=True)
     return []
@@ -326,6 +331,9 @@ def generate_planogram(
     # Load products (tries Supabase first, then local file)
     if products is None:
         products = load_products(products_file)
+    
+    if not products:
+        print("[generate_planogram] WARNING: No products loaded, creating empty planogram", flush=True)
 
     # Create equipment
     if equipment_config:
