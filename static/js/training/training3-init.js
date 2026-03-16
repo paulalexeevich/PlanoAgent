@@ -115,7 +115,7 @@
                 '<div class="photo-header">' +
                     '<span class="photo-title">' + name + '</span>' +
                 '</div>' +
-                '<div class="canvas-inner" id="canvas-' + name + '">' +
+                '<div class="canvas-inner" id="canvas-' + name + '" style="display:none">' +
                     '<img id="img-' + name + '" alt="' + name + '">' +
                     '<svg id="svg-' + name + '" xmlns="http://www.w3.org/2000/svg"></svg>' +
                 '</div>' +
@@ -731,11 +731,10 @@
 
     // ── HELPER FUNCTIONS ───────────────────────────────────────────
     function getPlanoScaleForPhoto(photoName, bayWidthIn) {
-        var img = document.getElementById('img-' + photoName);
-        if (!img) return 3;
-        var photoDisplayW = img.offsetWidth || img.clientWidth;
-        if (photoDisplayW < 20) return 3;
-        return photoDisplayW / bayWidthIn;
+        // Use fixed scale since photo is hidden
+        // Target width ~300px for each planogram
+        var targetWidth = 300;
+        return targetWidth / bayWidthIn;
     }
 
     // Override the original function

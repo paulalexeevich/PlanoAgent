@@ -395,3 +395,18 @@
     background: rgba(74, 158, 255, 0.15);
     border-color: var(--accent);
 }
+
+/* ============================================================
+   TRAINING 3 - PHOTO CARDS WITHOUT IMAGE
+   ============================================================ */
+body.photo-viewer .photo-card {
+    min-width: 320px;
+}
+
+body.photo-viewer .dual-plano-container {
+    border-top: none;
+}
+
+body.photo-viewer .plano-section .planogram-container {
+    min-height: 200px;
+}
