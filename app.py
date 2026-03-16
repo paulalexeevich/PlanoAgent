@@ -526,10 +526,17 @@ def _build_planogram_from_recognition(shelf_width_cm: float = 125.0) -> Planogra
                     prod_info = p
                     brand = map_dims.get("brand") or prod_info.get("brand_name", "") or "Unknown"
                     no_bg_url = no_bg_map.get(pid, "")
+                    # Use tiny_name from product map for consistent matching with planogram facings
+                    product_name = (
+                        map_dims.get("tiny_name")
+                        or prod_info.get("display_name", "")
+                        or prod_info.get("art", "")
+                        or pid
+                    )
                     all_products_dict[pid] = {
                         "id": pid,
                         "upc": prod_info.get("barcode", "") or pid,
-                        "name": prod_info.get("display_name", "") or prod_info.get("art", "") or pid,
+                        "name": product_name,
                         "brand": brand,
                         "manufacturer": prod_info.get("brand_owner_name", "") or "Recognition",
                         "category": prod_info.get("category_name", "") or "Coffee",
@@ -1740,10 +1747,12 @@ def planogram_facings():
         return jsonify({})
 
     facings = {}
+    skipped_no_tiny = 0
     for r in rows:
         ext_id = r.get("external_product_id", "")
         tiny = ext_to_tiny.get(ext_id, "")
         if not tiny:
+            skipped_no_tiny += 1
             continue
 
         fw = int(r.get("faces_width", 1) or 1)
@@ -1763,7 +1772,8 @@ def planogram_facings():
         facings[tiny]["facings_wide"] += fw
         facings[tiny]["positions"] += 1
 
-    print(f"[planogram-facings] Loaded {len(facings)} products from planogram positions", flush=True)
+    print(f"[planogram-facings] Loaded {len(facings)} products from planogram positions "
+          f"(skipped {skipped_no_tiny} without tiny_name)", flush=True)
     return jsonify(facings)
 
 
@@ -2137,12 +2147,40 @@ def load_realogram():
     """Load the latest pre-saved realogram for the photo-viewer."""
     row = _load_realogram_from_supabase()
     if row and row.get("planogram_data"):
+        planogram_data = row["planogram_data"]
+        # Enrich product names with tiny_name for consistent planogram comparison
+        _enrich_product_names(planogram_data)
         return jsonify({
             "status": "success",
-            "planogram": row["planogram_data"],
+            "planogram": planogram_data,
             "source": "saved",
         })
     return jsonify({"status": "not_found", "planogram": None}), 404
+
+
+def _enrich_product_names(planogram_data: dict) -> None:
+    """Update product names in planogram_data to use tiny_name for comparison consistency.
+    
+    This ensures realogram product names match the keys used in /api/planogram-facings.
+    """
+    raw_size_map = _load_product_sizes()
+    # Build recognition_id → tiny_name mapping
+    recog_to_tiny = {}
+    for _code, info in raw_size_map.items():
+        rid = info.get("recognition_id")
+        tiny = info.get("tiny_name")
+        if rid and tiny:
+            recog_to_tiny[rid] = tiny
+    
+    if not recog_to_tiny:
+        return
+    
+    # Update product names in the products list
+    for product in planogram_data.get("products", []):
+        pid = product.get("id", "")
+        tiny = recog_to_tiny.get(pid)
+        if tiny and product.get("name") != tiny:
+            product["name"] = tiny
 
 
 @app.route("/api/realogram/positions")
