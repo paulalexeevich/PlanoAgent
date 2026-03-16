@@ -1,0 +1,397 @@
+/* TRAINING 3 — Realogram vs Planogram Comparison */
+
+/* ============================================================
+   COMPARISON PANEL HEADER
+   ============================================================ */
+.compare-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.compare-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 6px 0;
+}
+
+.compare-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin: 0;
+}
+
+/* ============================================================
+   LEGEND
+   ============================================================ */
+.compare-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 20px;
+    background: var(--bg-dark);
+    border-bottom: 1px solid var(--border);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.legend-color {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.legend-match { background: rgba(52, 211, 153, 0.6); border: 1px solid rgba(52, 211, 153, 0.8); }
+.legend-extra { background: rgba(239, 68, 68, 0.5); border: 1px solid rgba(239, 68, 68, 0.7); }
+.legend-missing { background: rgba(245, 158, 11, 0.5); border: 1px solid rgba(245, 158, 11, 0.7); }
+.legend-wrong-qty { background: rgba(168, 85, 247, 0.5); border: 1px solid rgba(168, 85, 247, 0.7); }
+
+/* ============================================================
+   SUMMARY STATS
+   ============================================================ */
+.compare-summary {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.compare-loading {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+}
+
+.compare-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.compare-stat-card {
+    padding: 12px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    text-align: center;
+}
+
+.compare-stat-card.highlight-green {
+    border-color: rgba(52, 211, 153, 0.4);
+    background: rgba(52, 211, 153, 0.08);
+}
+
+.compare-stat-card.highlight-red {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.compare-stat-card.highlight-orange {
+    border-color: rgba(245, 158, 11, 0.4);
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.compare-stat-card.highlight-purple {
+    border-color: rgba(168, 85, 247, 0.4);
+    background: rgba(168, 85, 247, 0.08);
+}
+
+.compare-stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.compare-stat-card.highlight-green .compare-stat-value { color: var(--accent-green); }
+.compare-stat-card.highlight-red .compare-stat-value { color: var(--accent-red); }
+.compare-stat-card.highlight-orange .compare-stat-value { color: var(--accent-orange); }
+.compare-stat-card.highlight-purple .compare-stat-value { color: #a78bfa; }
+
+.compare-stat-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+}
+
+/* ============================================================
+   DETAILS LIST
+   ============================================================ */
+.compare-details {
+    padding: 12px 16px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.compare-section {
+    margin-bottom: 16px;
+}
+
+.compare-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+}
+
+.compare-section-count {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: var(--bg-dark);
+}
+
+.compare-section.extra .compare-section-count { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+.compare-section.missing .compare-section-count { background: rgba(245, 158, 11, 0.2); color: var(--accent-orange); }
+.compare-section.wrong-qty .compare-section-count { background: rgba(168, 85, 247, 0.2); color: #a78bfa; }
+
+.compare-product-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.compare-product-item:hover {
+    background: rgba(74, 158, 255, 0.08);
+    border-color: rgba(74, 158, 255, 0.3);
+}
+
+.compare-product-thumb {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: var(--bg-shelf);
+    flex-shrink: 0;
+}
+
+.compare-product-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.compare-product-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.compare-product-meta {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.compare-product-qty {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.compare-product-item.extra .compare-product-qty {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--accent-red);
+}
+
+.compare-product-item.missing .compare-product-qty {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--accent-orange);
+}
+
+.compare-product-item.wrong-qty .compare-product-qty {
+    background: rgba(168, 85, 247, 0.15);
+    color: #a78bfa;
+}
+
+/* ============================================================
+   DUAL PLANOGRAM DISPLAY (Photo card with both)
+   ============================================================ */
+.dual-plano-container {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border);
+}
+
+.plano-section {
+    background: var(--bg-dark);
+}
+
+.plano-section + .plano-section {
+    border-top: 1px solid var(--border);
+}
+
+.plano-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    gap: 8px;
+}
+
+.plano-section-header.realogram {
+    color: var(--accent);
+}
+
+.plano-section-header.planogram {
+    color: var(--accent-green);
+}
+
+.plano-section-header .section-badge {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.plano-section-header.realogram .section-badge {
+    background: rgba(74, 158, 255, 0.15);
+    color: var(--accent);
+}
+
+.plano-section-header.planogram .section-badge {
+    background: rgba(52, 211, 153, 0.15);
+    color: var(--accent-green);
+}
+
+/* ============================================================
+   COMPARISON HIGHLIGHT ON PRODUCTS
+   ============================================================ */
+.product-block.compare-match {
+    box-shadow: inset 0 0 0 2px rgba(52, 211, 153, 0.6);
+}
+
+.product-block.compare-extra {
+    box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.7);
+}
+
+.product-block.compare-missing {
+    opacity: 0.4;
+    box-shadow: inset 0 0 0 2px rgba(245, 158, 11, 0.7);
+}
+
+.product-block.compare-wrong-qty {
+    box-shadow: inset 0 0 0 2px rgba(168, 85, 247, 0.7);
+}
+
+/* Planogram empty placeholder for missing products */
+.product-block-placeholder {
+    position: absolute;
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(245, 158, 11, 0.1),
+        rgba(245, 158, 11, 0.1) 4px,
+        transparent 4px,
+        transparent 8px
+    );
+    border: 2px dashed rgba(245, 158, 11, 0.5);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: var(--accent-orange);
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+/* ============================================================
+   COMPLIANCE SCORE
+   ============================================================ */
+.compliance-score {
+    padding: 16px 20px;
+    text-align: center;
+    background: var(--bg-dark);
+    border-bottom: 1px solid var(--border);
+}
+
+.compliance-value {
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.compliance-value.high { color: var(--accent-green); }
+.compliance-value.medium { color: var(--accent-orange); }
+.compliance-value.low { color: var(--accent-red); }
+
+.compliance-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+}
+
+/* ============================================================
+   SELECTED PRODUCT HIGHLIGHT
+   ============================================================ */
+.product-block.selected-compare {
+    z-index: 10;
+    transform: scale(1.05);
+    box-shadow: 0 0 0 3px var(--accent), 0 4px 12px rgba(74, 158, 255, 0.4) !important;
+    transition: all 0.2s ease;
+}
+
+@keyframes pulseHighlight {
+    0%, 100% { box-shadow: 0 0 0 3px var(--accent), 0 4px 12px rgba(74, 158, 255, 0.4); }
+    50% { box-shadow: 0 0 0 5px var(--accent), 0 4px 16px rgba(74, 158, 255, 0.6); }
+}
+
+.product-block.selected-compare {
+    animation: pulseHighlight 1.5s ease-in-out infinite;
+}
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+.plano-empty-state {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 20px 10px;
+    font-style: italic;
+}
+
+/* ============================================================
+   COMPARISON ITEM HIGHLIGHT
+   ============================================================ */
+.compare-product-item.highlighted {
+    background: rgba(74, 158, 255, 0.15);
+    border-color: var(--accent);
+}

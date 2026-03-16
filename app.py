@@ -1634,6 +1634,16 @@ def training2():
     return render_template("training2.html", photos=photos)
 
 
+@app.route("/training3")
+def training3():
+    """Serve Training 3 — Compare Realogram vs Planogram side by side."""
+    try:
+        photos = _supabase_photo_list()
+    except Exception:
+        photos = []
+    return render_template("training3.html", photos=photos)
+
+
 @app.route("/api/product-map")
 def product_map():
     """Return product map with category hierarchy for decision tree building.
