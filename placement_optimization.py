@@ -287,13 +287,13 @@ def _compute_fit(shelf: dict, needed_cm: float) -> Optional[dict]:
     Returns a fit dict or None if no space is available even after reductions.
     """
     if shelf["free_cm"] >= needed_cm:
-        return {"space_source": "free_space", "reductions": [], "time_min": 2}
+        return {"space_source": "free_space", "reductions": [], "time_min": 1}
 
     if shelf["net_available_cm"] < needed_cm:
         return None
 
     reductions = []
-    time_min = 2
+    time_min = 1
     still_needed = round(needed_cm - shelf["free_cm"], 2)
     simulated: Dict[str, int] = {}
 
@@ -312,9 +312,9 @@ def _compute_fit(shelf: dict, needed_cm: float) -> Optional[dict]:
             "reduce_from": cand["photo_facings"] - already,
             "reduce_to": cand["photo_facings"] - already - take,
             "freed_cm": freed,
-            "time_min": take * 2,
+            "time_min": take * 1,
         })
-        time_min += take * 2
+        time_min += take * 1
         simulated[cand["product_code"]] = already + take
         still_needed = round(still_needed - freed, 2)
 
@@ -461,9 +461,9 @@ def _run_strategy(
         shelf = shelves[shelf_key]
         shelf_groups_before = list(shelf["tree_groups"])
 
-        # Recalculate time: 2 min per facing installed + reduction removal time
-        reduction_time = sum(r.get("time_min", 2) for r in best.get("reductions", []))
-        best["time_min"] = reduction_time + 2 * install_facings
+        # Recalculate time: 1 min per facing installed + reduction removal time
+        reduction_time = sum(r.get("time_min", 1) for r in best.get("reductions", []))
+        best["time_min"] = reduction_time + 1 * install_facings
 
         _apply_fit(shelf, best, needed_cm)
 
@@ -596,11 +596,17 @@ def _parse_shelf_label(label: str) -> Tuple[Optional[int], Optional[int]]:
 def apply_placement_plan(
     shelf_state: Dict[ShelfKey, dict],
     placed_products: list,
+    product_attrs: Optional[Dict[str, dict]] = None,
 ) -> Dict[ShelfKey, dict]:
     """Apply a placement plan to produce a new (proposed) shelf state.
 
     Does NOT mutate the original shelf_state — returns a deep copy.
+
+    When product_attrs is provided, new products are inserted adjacent to
+    existing products of the same brand so that brand blocks stay together.
     """
+    attrs = product_attrs or {}
+
     new_state = copy.deepcopy(shelf_state)
     shelf_prod_index: Dict[ShelfKey, Dict[str, dict]] = {
         key: {p["product_code"]: p for p in shelf["products"]}
@@ -625,7 +631,7 @@ def apply_placement_plan(
             shelf["used_cm"] = round(shelf["used_cm"] - delta_cm, 2)
             shelf["free_cm"] = round(shelf["free_cm"] + delta_cm, 2)
 
-    # Pass 2: install new products
+    # Pass 2: install new products, grouped next to same-brand neighbours
     for placement in placed_products:
         bay_num, shelf_num = _parse_shelf_label(placement.get("actual_shelf", ""))
         shelf = new_state.get((bay_num, shelf_num))
@@ -634,8 +640,9 @@ def apply_placement_plan(
         install_facings = placement.get("install_facings", 1)
         unit_width_cm   = placement.get("unit_width_cm", placement["needed_cm"])
         total_width_cm  = placement["needed_cm"]
+        new_code = placement["product_code"]
         new_prod = {
-            "product_code": placement["product_code"],
+            "product_code": new_code,
             "tiny_name": placement["tiny_name"],
             "planogram_facings": install_facings,
             "photo_facings": install_facings,
@@ -643,8 +650,36 @@ def apply_placement_plan(
             "avg_sale_amount": placement["avg_sale_amount"],
             "is_new": True,
         }
-        shelf["products"].append(new_prod)
-        shelf_prod_index[(bay_num, shelf_num)][placement["product_code"]] = new_prod
+
+        # Find the best insertion index: right after the last product that
+        # shares the same brand as the new product.  This keeps brand blocks
+        # contiguous in the proposed planogram visual.
+        #
+        # Matching strategy (in order):
+        #   1. brand_name exact match (case-insensitive) — covers most cases.
+        #   2. tiny_name prefix (first 3 chars) fallback — handles Latin/Cyrillic
+        #      brand-name variants (e.g. "NESCAFE" vs "НЕСКАФЕ").
+        new_brand = attrs.get(new_code, {}).get("brand_name", "").strip().lower()
+        raw_prefix = placement.get("tiny_name", "")[:3]
+        # Only use prefix matching when the prefix has real brand characters
+        # (not just underscores, which are placeholder codes).
+        new_prefix = raw_prefix.lower() if raw_prefix.replace("_", "") else ""
+        insert_idx = None
+        for i, p in enumerate(shelf["products"]):
+            p_brand = attrs.get(p["product_code"], {}).get("brand_name", "").strip().lower()
+            raw_p_prefix = p.get("tiny_name", "")[:3]
+            p_prefix = raw_p_prefix.lower() if raw_p_prefix.replace("_", "") else ""
+            brand_match  = new_brand and p_brand and p_brand == new_brand
+            prefix_match = new_prefix and p_prefix and p_prefix == new_prefix
+            if brand_match or prefix_match:
+                insert_idx = i + 1  # keep scanning to find the last match
+
+        if insert_idx is not None:
+            shelf["products"].insert(insert_idx, new_prod)
+        else:
+            shelf["products"].append(new_prod)
+
+        shelf_prod_index[(bay_num, shelf_num)][new_code] = new_prod
         shelf["used_cm"] = round(shelf["used_cm"] + total_width_cm, 2)
         shelf["free_cm"] = round(shelf["free_cm"] - total_width_cm, 2)
 
@@ -787,7 +822,7 @@ def run_optimization(
     all_runs = run_all_strategies(actions, shelf_state, planogram_target, product_attrs)
     best = next((r for r in all_runs if r.get("recommended")), all_runs[0])
 
-    new_state = apply_placement_plan(shelf_state, best["placed"])
+    new_state = apply_placement_plan(shelf_state, best["placed"], product_attrs)
     bays = build_visual(new_state, shelf_state, best["placed"], product_attrs)
 
     # Build merged actions list for the frontend

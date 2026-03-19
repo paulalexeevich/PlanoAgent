@@ -3,6 +3,25 @@
 
 var Training = { step: 1 };
 
+function enableStepCollapse(stepNum) {
+    var btn  = document.getElementById('collapseStep' + stepNum);
+    var body = document.getElementById('trainStep' + stepNum + 'Body');
+    var hdr  = document.getElementById('trainStep' + stepNum + 'Header');
+    if (!btn || !body) return;
+    btn.style.display = '';
+    // clicking the header (or button) toggles
+    function toggle() {
+        var collapsed = body.classList.toggle('collapsed');
+        btn.classList.toggle('collapsed', collapsed);
+    }
+    hdr.addEventListener('click', function(e) {
+        // Don't collapse if clicking inside an input/button inside the body
+        if (e.target.closest('.step-collapsible')) return;
+        toggle();
+    });
+    btn.addEventListener('click', function(e) { e.stopPropagation(); toggle(); });
+}
+
 function openPanelTab(tab) {
     var panel = document.getElementById('sidePanel');
     panel.classList.add('open');
@@ -38,6 +57,7 @@ function setTrainingStep(step) {
         step2El.classList.remove('locked');
         step2El.classList.add('active');
         document.getElementById('btnBuildRealogram').disabled = false;
+        enableStepCollapse(1);
     }
 }
 
@@ -121,6 +141,8 @@ document.getElementById('btnBuildRealogram').addEventListener('click', function(
             '</div>';
 
         document.getElementById('step2Indicator').classList.add('completed');
+        document.getElementById('trainStep2').classList.add('completed');
+        enableStepCollapse(2);
     })
     .catch(function(err) {
         resultEl.innerHTML = '<div class="eq-summary has-mismatch">Error: ' + err.message + '</div>';

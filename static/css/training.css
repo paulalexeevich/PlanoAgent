@@ -100,12 +100,45 @@
     gap: 10px;
     margin-bottom: 10px;
 }
+.training-step.completed .training-step-header {
+    cursor: pointer;
+    margin-bottom: 0;
+}
+.training-step.completed .training-step-header:hover h3 {
+    color: var(--accent-blue);
+}
 
 .training-step-header h3 {
     font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
     margin: 0;
+    flex: 1;
+}
+
+.step-collapse-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+    transition: transform 0.2s ease, color 0.15s;
+    margin-left: auto;
+}
+.step-collapse-btn:hover { color: var(--text-primary); }
+.step-collapse-btn.collapsed { transform: rotate(-90deg); }
+
+.step-collapsible {
+    overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+    max-height: 2000px;
+    opacity: 1;
+}
+.step-collapsible.collapsed {
+    max-height: 0;
+    opacity: 0;
 }
 
 .training-step-badge {

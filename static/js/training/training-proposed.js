@@ -103,6 +103,8 @@
             btn.disabled = false;
 
             document.getElementById('step3Indicator').classList.add('completed');
+            document.getElementById('trainStep3').classList.add('completed');
+            if (typeof enableStepCollapse === 'function') enableStepCollapse(3);
         } catch (e) {
             spinEl.style.display = 'none';
             resultEl.innerHTML = `<div class="training-error">Failed: ${e.message}</div>`;
@@ -148,10 +150,7 @@
 
             const secHeader = document.createElement('div');
             secHeader.className = 'plano-bay-header proposed-bay-header';
-            secHeader.innerHTML = `<span>Proposed Planogram</span><span class="pp-legend-mini">
-                <span class="legend-dot ld-new"></span>New
-                <span class="legend-dot ld-reduced"></span>Reduced
-            </span>`;
+            secHeader.innerHTML = `<span>Proposed Planogram</span>`;
             section.appendChild(secHeader);
 
             // Outer scroll wrapper — same pattern as .plano-mini

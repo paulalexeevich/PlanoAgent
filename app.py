@@ -2657,7 +2657,7 @@ def optimize_placement():
         coffee_tree = COFFEE_DECISION_TREE
         for run in runs:
             try:
-                new_state = apply_placement_plan(shelf_state, run["placed"])
+                new_state = apply_placement_plan(shelf_state, run["placed"], product_attrs)
                 feasibility = validate_feasibility(new_state)
                 plano_dict = build_compliance_planogram(new_state, product_attrs, [])
                 compliance_report = validate_compliance(plano_dict, coffee_tree)
