@@ -281,4 +281,14 @@ function buildTrainingGrid(photoNames) {
 PV.planogramFacings = {};
 PV.salesData = {};
 
+fetch('/api/planogram-facings')
+    .then(function(r) { return r.json(); })
+    .then(function(facings) {
+        PV.planogramFacings = facings || {};
+        console.log('[training] Loaded planogram facings:', Object.keys(PV.planogramFacings).length);
+    })
+    .catch(function(err) {
+        console.warn('[training] Could not load planogram facings:', err);
+    });
+
 if (PV.photos.length > 0) loadAllPhotos();

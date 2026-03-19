@@ -12,6 +12,8 @@ while Gemini AI decides "where to place" (merchandising logic).
 
 import json
 import copy
+import hashlib
+import re as _re
 from collections import OrderedDict
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Optional, Tuple
@@ -1387,3 +1389,711 @@ def _shelf_capacity_summary(equipment_json: dict) -> str:
             h = shelf.get("height_in", 12)
             lines.append(f"Bay {bn} / Shelf {sn}: width={w}in, height={h}in")
     return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Out-of-Shelf Placement Optimization
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def build_shelf_state(
+    pos_rows: list,
+    photo_facings_map: dict,
+    size_map: dict,
+    sales_map: dict,
+) -> dict:
+    """Build per-shelf state for out-of-shelf placement optimization.
+
+    Args:
+        pos_rows: rows from test_coffee_planogram_positions
+        photo_facings_map: tiny_name → total photo facing count
+        size_map: product_code → {width_cm, height_cm, tiny_name, ...}
+        sales_map: tiny_name → {avg_sale_amount}
+
+    Returns:
+        dict mapping (eq_num, shelf_number) → shelf state dict
+    """
+    shelves: Dict[Tuple, dict] = {}
+
+    for row in pos_rows:
+        key = (row["eq_num_in_scene_group"], row["shelf_number"])
+        if key not in shelves:
+            shelves[key] = {
+                "eq_num": row["eq_num_in_scene_group"],
+                "shelf_number": row["shelf_number"],
+                "total_width_cm": 0.0,
+                "used_cm": 0.0,
+                "free_cm": 0.0,
+                "total_freeable_cm": 0.0,
+                "products": [],
+                "reduction_candidates": [],
+                "tree_groups": [],
+            }
+
+        eid = row["external_product_id"]
+        sz = size_map.get(eid, {})
+        width_cm = max(1.0, float(sz.get("width_cm") or 8.5))
+        tiny_name = sz.get("tiny_name", "")
+        plano_facings = max(1, int(row.get("faces_width") or 1))
+        photo_facings = photo_facings_map.get(tiny_name, 0)
+        avg_sale = float((sales_map.get(tiny_name) or {}).get("avg_sale_amount", 0))
+
+        shelves[key]["total_width_cm"] += width_cm * plano_facings
+
+        if photo_facings > 0:
+            shelves[key]["used_cm"] += width_cm * photo_facings
+            shelves[key]["products"].append({
+                "product_code": eid,
+                "tiny_name": tiny_name,
+                "planogram_facings": plano_facings,
+                "photo_facings": photo_facings,
+                "width_cm": width_cm,
+                "avg_sale_amount": avg_sale,
+            })
+            excess = photo_facings - plano_facings
+            if excess > 0:
+                shelves[key]["reduction_candidates"].append({
+                    "product_code": eid,
+                    "tiny_name": tiny_name,
+                    "photo_facings": photo_facings,
+                    "planogram_facings": plano_facings,
+                    "excess_facings": excess,
+                    "width_cm": width_cm,
+                    "freeable_cm": round(excess * width_cm, 1),
+                    "avg_sale_amount": avg_sale,
+                })
+
+    for shelf in shelves.values():
+        shelf["total_width_cm"] = round(shelf["total_width_cm"], 1)
+        shelf["used_cm"] = round(shelf["used_cm"], 1)
+        shelf["free_cm"] = max(0.0, round(shelf["total_width_cm"] - shelf["used_cm"], 1))
+        shelf["pre_overflow_cm"] = max(0.0, round(shelf["used_cm"] - shelf["total_width_cm"], 1))
+        shelf["reduction_candidates"].sort(key=lambda x: x["avg_sale_amount"])
+        reducible = round(sum(c["freeable_cm"] for c in shelf["reduction_candidates"]), 1)
+        shelf["total_freeable_cm"] = round(shelf["free_cm"] + reducible, 1)
+        shelf["net_available_cm"] = round(
+            shelf["total_width_cm"] - shelf["used_cm"] + reducible, 1
+        )
+
+    return shelves
+
+
+def build_planogram_target(pos_rows: list, size_map: dict) -> dict:
+    """Map product_code → (eq_num, shelf_number) from planogram positions."""
+    target: Dict[str, Tuple] = {}
+    for row in pos_rows:
+        eid = row["external_product_id"]
+        if eid not in target:
+            target[eid] = (row["eq_num_in_scene_group"], row["shelf_number"])
+    return target
+
+
+def _score_tree_insertion(prod_groups: tuple, shelf_tree_groups: list) -> int:
+    """Score how well a product fits a shelf from a decision tree perspective.
+
+    Returns: 2=perfect match, 1=compatible category, 0=category break
+    """
+    if not shelf_tree_groups:
+        return 1
+    if prod_groups in shelf_tree_groups:
+        return 2
+    prod_cat = prod_groups[0] if prod_groups else ""
+    shelf_cats = {g[0] for g in shelf_tree_groups if g}
+    if prod_cat and prod_cat in shelf_cats:
+        return 1
+    return 0
+
+
+def _compute_fit(shelf: dict, needed_cm: float) -> Optional[dict]:
+    """Evaluate whether a product fits on a shelf WITHOUT mutating shelf state."""
+    if shelf["free_cm"] >= needed_cm:
+        return {"space_source": "free_space", "reductions": [], "time_min": 2}
+
+    if shelf["net_available_cm"] < needed_cm:
+        return None
+
+    reductions = []
+    time_min = 2
+    still_needed = round(needed_cm - shelf["free_cm"], 2)
+    simulated: Dict[str, int] = {}
+
+    for cand in shelf["reduction_candidates"]:
+        if still_needed <= 0:
+            break
+        already = simulated.get(cand["product_code"], 0)
+        available = cand["excess_facings"] - already
+        if available <= 0:
+            continue
+        take = min(available, max(1, -(-int(still_needed / cand["width_cm"]))))
+        freed = round(take * cand["width_cm"], 1)
+        reductions.append({
+            "product_code": cand["product_code"],
+            "tiny_name": cand["tiny_name"],
+            "reduce_from": cand["photo_facings"] - already,
+            "reduce_to": cand["photo_facings"] - already - take,
+            "freed_cm": freed,
+            "time_min": take * 2,
+        })
+        time_min += take * 2
+        simulated[cand["product_code"]] = already + take
+        still_needed = round(still_needed - freed, 2)
+
+    return {"space_source": "excess_facings", "reductions": reductions, "time_min": time_min}
+
+
+def _apply_fit(shelf: dict, fit: dict, needed_cm: float) -> None:
+    """Apply a computed fit to the real shelf state (mutates in place)."""
+    if fit["space_source"] == "free_space":
+        shelf["free_cm"] = round(shelf["free_cm"] - needed_cm, 2)
+        shelf["used_cm"] = round(shelf["used_cm"] + needed_cm, 2)
+        shelf["total_freeable_cm"] = round(shelf["total_freeable_cm"] - needed_cm, 2)
+        shelf["net_available_cm"] = round(shelf["net_available_cm"] - needed_cm, 2)
+    else:
+        still_needed = round(needed_cm - shelf["free_cm"], 2)
+        shelf["used_cm"] = round(shelf["used_cm"] + shelf["free_cm"], 2)
+        shelf["free_cm"] = 0.0
+
+        for red in fit["reductions"]:
+            take = red["reduce_from"] - red["reduce_to"]
+            for cand in shelf["reduction_candidates"]:
+                if cand["product_code"] == red["product_code"]:
+                    cand["photo_facings"] -= take
+                    cand["excess_facings"] -= take
+                    cand["freeable_cm"] = round(cand["freeable_cm"] - red["freed_cm"], 1)
+                    break
+
+        total_freed = sum(r["freed_cm"] for r in fit["reductions"])
+        shelf["free_cm"] = max(0.0, round(total_freed - still_needed, 2))
+        shelf["used_cm"] = round(shelf["used_cm"] + needed_cm, 2)
+        remaining = round(sum(c["freeable_cm"] for c in shelf["reduction_candidates"]), 1)
+        shelf["total_freeable_cm"] = round(shelf["free_cm"] + remaining, 1)
+        shelf["net_available_cm"] = round(
+            shelf["total_width_cm"] - shelf["used_cm"] + remaining, 1
+        )
+        shelf["pre_overflow_cm"] = max(0.0, round(shelf["used_cm"] - shelf["total_width_cm"], 1))
+
+
+def _run_placement_strategy(
+    actions: list,
+    shelf_state: dict,
+    planogram_target: dict,
+    product_attrs: dict,
+    strategy: str,
+) -> dict:
+    """Run a single placement strategy pass.
+
+    Evaluates ALL fitting candidate shelves and picks the slot with the best
+    decision tree score, then cheapest time.
+    """
+    shelves = copy.deepcopy(shelf_state)
+
+    if strategy in ("sales_first_strict", "sales_first_flexible"):
+        sorted_actions = sorted(
+            actions, key=lambda x: float(x.get("avg_sale_amount") or 0), reverse=True
+        )
+    elif strategy == "tree_first":
+        sorted_actions = sorted(
+            actions,
+            key=lambda x: (
+                product_attrs.get(x.get("product_code", ""), {}).get("category_name", "zzz"),
+                -float(x.get("avg_sale_amount") or 0),
+            ),
+        )
+    elif strategy == "min_time":
+        def _min_time_key(a):
+            tgt = planogram_target.get(a.get("product_code", ""))
+            needed = float(a.get("width_cm") or 8.5)
+            if tgt and shelves.get(tgt, {}).get("free_cm", 0) >= needed:
+                return (0, -float(a.get("avg_sale_amount") or 0))
+            return (1, -float(a.get("avg_sale_amount") or 0))
+        sorted_actions = sorted(actions, key=_min_time_key)
+    else:
+        sorted_actions = list(actions)
+
+    placed = []
+    unplaced = []
+
+    for action in sorted_actions:
+        product_code = action.get("product_code", "")
+        tiny_name = action.get("tiny_name", "")
+        needed_cm = max(1.0, float(action.get("width_cm") or 8.5))
+        avg_sale = float(action.get("avg_sale_amount") or 0)
+
+        target_key = planogram_target.get(product_code)
+        if not target_key:
+            unplaced.append({
+                "product_code": product_code,
+                "tiny_name": tiny_name,
+                "avg_sale_amount": avg_sale,
+                "reason": "No planogram position found",
+            })
+            continue
+
+        eq_num, shelf_num = target_key
+
+        if strategy == "sales_first_strict":
+            candidate_keys = [target_key]
+        else:
+            candidate_keys = [
+                k for k in [
+                    (eq_num, shelf_num),
+                    (eq_num, shelf_num - 1),
+                    (eq_num, shelf_num + 1),
+                ]
+                if k in shelves
+            ]
+
+        attrs = product_attrs.get(product_code, {})
+        prod_groups = (
+            attrs.get("category_name", ""),
+            attrs.get("brand_owner_name", ""),
+            attrs.get("brand_name", ""),
+        )
+
+        options = []
+        for shelf_key in candidate_keys:
+            shelf = shelves[shelf_key]
+            fit = _compute_fit(shelf, needed_cm)
+            if fit is None:
+                continue
+            tree_score = _score_tree_insertion(prod_groups, shelf["tree_groups"])
+            options.append({
+                "shelf_key": shelf_key,
+                "shelf_delta": abs(shelf_key[1] - shelf_num),
+                "tree_score": tree_score,
+                **fit,
+            })
+
+        if not options:
+            unplaced.append({
+                "product_code": product_code,
+                "tiny_name": tiny_name,
+                "avg_sale_amount": avg_sale,
+                "reason": "Insufficient space after all excess facing reductions exhausted",
+            })
+            continue
+
+        best = max(options, key=lambda o: (o["tree_score"], -o["time_min"]))
+        shelf_key = best["shelf_key"]
+        shelf = shelves[shelf_key]
+
+        # Capture groups already on shelf BEFORE placing this product (for explanation)
+        shelf_groups_before = list(shelf["tree_groups"])
+
+        _apply_fit(shelf, best, needed_cm)
+
+        if prod_groups not in shelf["tree_groups"]:
+            shelf["tree_groups"].append(prod_groups)
+
+        tree_group_label = " > ".join(g for g in prod_groups if g) or "(unknown category)"
+
+        # Human-readable explanation of tree score
+        ts = best["tree_score"]
+        if not shelf_groups_before:
+            tree_reason = "Empty shelf — no conflict"
+        elif ts == 2:
+            tree_reason = "Exact group match on shelf"
+        elif ts == 1:
+            tree_reason = "Same category, different brand"
+        else:
+            shelf_cats = ", ".join(
+                sorted({g[0] for g in shelf_groups_before if g and g[0]})
+            ) or "other"
+            tree_reason = f"Category break — shelf has: {shelf_cats}"
+
+        shelf_groups_label = "; ".join(
+            " > ".join(g for g in grp if g)
+            for grp in shelf_groups_before
+        ) or "—"
+
+        placed.append({
+            "product_code": product_code,
+            "tiny_name": tiny_name,
+            "avg_sale_amount": avg_sale,
+            "planogram_shelf": f"Bay {eq_num}, Shelf {shelf_num}",
+            "actual_shelf": f"Bay {shelf_key[0]}, Shelf {shelf_key[1]}",
+            "shelf_delta": best["shelf_delta"],
+            "allocated_facings": 1,
+            "needed_cm": round(needed_cm, 1),
+            "space_source": best["space_source"],
+            "tree_score": ts,
+            "tree_score_max": 2,
+            "tree_group": tree_group_label,
+            "tree_follows_dt": ts >= 1,
+            "tree_reason": tree_reason,
+            "shelf_groups_before": shelf_groups_label,
+            "time_min": best["time_min"],
+            "reductions_required": best["reductions"],
+        })
+
+    total_facings_removed = sum(
+        sum(r["reduce_from"] - r["reduce_to"] for r in p["reductions_required"])
+        for p in placed
+    )
+    installed_sales = sum(p["avg_sale_amount"] for p in placed)
+    total_time = sum(p["time_min"] for p in placed)
+    tree_scores = [p["tree_score"] for p in placed]
+    tree_compliance_pct = round(
+        sum(tree_scores) / max(len(tree_scores) * 2, 1) * 100, 1
+    )
+    follows_dt_count = sum(1 for p in placed if p["tree_follows_dt"])
+
+    return {
+        "placed": placed,
+        "unplaced": unplaced,
+        "summary": {
+            "total_out_of_shelf": len(actions),
+            "placed_count": len(placed),
+            "unplaced_count": len(unplaced),
+            "placed_via_free_space": sum(1 for p in placed if p["space_source"] == "free_space"),
+            "placed_via_reduction": sum(1 for p in placed if p["space_source"] == "excess_facings"),
+            "total_facings_removed": total_facings_removed,
+            "total_time_min": total_time,
+            "time_free_space_min": sum(p["time_min"] for p in placed if p["space_source"] == "free_space"),
+            "time_reductions_min": sum(p["time_min"] for p in placed if p["space_source"] == "excess_facings"),
+            "installed_sales_value": round(installed_sales, 1),
+            "tree_compliance_pct": tree_compliance_pct,
+            "follows_dt_count": follows_dt_count,
+            "violates_dt_count": len(placed) - follows_dt_count,
+        },
+    }
+
+
+def run_all_strategies(
+    actions: list,
+    shelf_state: dict,
+    planogram_target: dict,
+    product_attrs: dict,
+) -> list:
+    """Run all 4 placement strategies and return them ranked by combined score.
+
+    Combined score = 0.4 * revenue_ratio + 0.3 * tree_compliance + 0.3 * time_efficiency
+    """
+    STRATEGIES = [
+        ("sales_first_strict", "Sales-First (Strict Shelf)"),
+        ("sales_first_flexible", "Sales-First (±1 Shelf)"),
+        ("tree_first", "Tree-Compliance First"),
+        ("min_time", "Minimum Time"),
+    ]
+
+    max_possible_sales = max(
+        sum(float(a.get("avg_sale_amount") or 0) for a in actions), 1
+    )
+    max_possible_time = max(len(actions) * (5 * 2 + 2), 1)
+
+    results = []
+
+    for strategy_key, strategy_name in STRATEGIES:
+        result = _run_placement_strategy(
+            actions, shelf_state, planogram_target, product_attrs, strategy_key
+        )
+        summary = result["summary"]
+
+        revenue_ratio = summary["installed_sales_value"] / max_possible_sales
+        tree_ratio = summary["tree_compliance_pct"] / 100
+        time_ratio = max(0.0, 1.0 - summary["total_time_min"] / max_possible_time)
+
+        combined_score = round(
+            0.4 * revenue_ratio + 0.3 * tree_ratio + 0.3 * time_ratio, 3
+        )
+
+        results.append({
+            "strategy": strategy_key,
+            "strategy_name": strategy_name,
+            "combined_score": combined_score,
+            "recommended": False,
+            **result,
+        })
+
+    results.sort(key=lambda r: r["combined_score"], reverse=True)
+    if results:
+        results[0]["recommended"] = True
+
+    return results
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# New-Realogram Generation & Validation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _parse_shelf_label(label: str) -> Tuple[Optional[int], Optional[int]]:
+    """Parse 'Bay X, Shelf Y' → (bay_num, shelf_num), or (None, None) on failure."""
+    m = _re.search(r"Bay\s+(\d+)[,\s]+Shelf\s+(\d+)", label, _re.IGNORECASE)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    return None, None
+
+
+def apply_placement_plan(shelf_state: dict, placed_products: list) -> dict:
+    """Apply a placement plan to produce a new realogram state.
+
+    Applies all facing reductions and product installations from a strategy run,
+    starting from the original (pre-run) shelf_state.
+    """
+    new_state = copy.deepcopy(shelf_state)
+
+    shelf_prod_index: Dict[Tuple, Dict[str, dict]] = {}
+    for key, shelf in new_state.items():
+        shelf_prod_index[key] = {p["product_code"]: p for p in shelf["products"]}
+
+    for placement in placed_products:
+        shelf_label = placement.get("actual_shelf", "")
+        bay_num, shelf_num = _parse_shelf_label(shelf_label)
+        shelf_key = (bay_num, shelf_num)
+        shelf = new_state.get(shelf_key)
+        if shelf is None:
+            continue
+        prod_idx = shelf_prod_index.get(shelf_key, {})
+        for red in placement.get("reductions_required", []):
+            prod = prod_idx.get(red["product_code"])
+            if prod is None:
+                continue
+            old_facings = prod["photo_facings"]
+            new_facings = max(red["reduce_to"], prod.get("planogram_facings", 1))
+            delta_cm = (old_facings - new_facings) * prod["width_cm"]
+            prod["photo_facings"] = new_facings
+            shelf["used_cm"] = round(shelf["used_cm"] - delta_cm, 2)
+            shelf["free_cm"] = round(shelf["free_cm"] + delta_cm, 2)
+
+    for placement in placed_products:
+        shelf_label = placement.get("actual_shelf", "")
+        bay_num, shelf_num = _parse_shelf_label(shelf_label)
+        shelf_key = (bay_num, shelf_num)
+        shelf = new_state.get(shelf_key)
+        if shelf is None:
+            continue
+        width_cm = placement["needed_cm"]
+        new_prod = {
+            "product_code": placement["product_code"],
+            "tiny_name": placement["tiny_name"],
+            "planogram_facings": 1,
+            "photo_facings": 1,
+            "width_cm": width_cm,
+            "avg_sale_amount": placement["avg_sale_amount"],
+            "is_new": True,
+        }
+        shelf["products"].append(new_prod)
+        shelf_prod_index[shelf_key][placement["product_code"]] = new_prod
+        shelf["used_cm"] = round(shelf["used_cm"] + width_cm, 2)
+        shelf["free_cm"] = round(shelf["free_cm"] - width_cm, 2)
+
+    return new_state
+
+
+def validate_feasibility(new_shelf_state: dict) -> dict:
+    """Check whether the new realogram state is physically feasible (no overflow)."""
+    shelf_details = []
+    overflow_count = 0
+
+    for key in sorted(new_shelf_state):
+        shelf = new_shelf_state[key]
+        actual_used = round(
+            sum(p["photo_facings"] * p["width_cm"] for p in shelf["products"]), 1
+        )
+        total_w = shelf["total_width_cm"]
+        overflow_cm = round(max(0.0, actual_used - total_w), 1)
+        fill_pct = round(actual_used / max(total_w, 1) * 100, 1)
+        status = "overflow" if overflow_cm > 0 else "ok"
+        if overflow_cm > 0:
+            overflow_count += 1
+
+        shelf_details.append({
+            "shelf": f"Bay {shelf['eq_num']}, Shelf {shelf['shelf_number']}",
+            "total_width_cm": total_w,
+            "used_cm": actual_used,
+            "free_cm": round(total_w - actual_used, 1),
+            "fill_pct": fill_pct,
+            "overflow_cm": overflow_cm,
+            "status": status,
+            "sku_count": sum(1 for p in shelf["products"] if p["photo_facings"] > 0),
+        })
+
+    return {
+        "feasible": overflow_count == 0,
+        "total_shelves": len(shelf_details),
+        "shelves_ok": len(shelf_details) - overflow_count,
+        "shelves_overflow": overflow_count,
+        "shelf_details": shelf_details,
+    }
+
+
+def build_compliance_planogram(
+    new_shelf_state: dict,
+    product_attrs: dict,
+    pos_rows: list,
+) -> dict:
+    """Build a planogram-format dict from a realogram state for compliance scoring."""
+    order_map: Dict[Tuple, int] = {}
+    for row in pos_rows:
+        k = (row["external_product_id"], row["eq_num_in_scene_group"], row["shelf_number"])
+        order_map[k] = int(row.get("on_shelf_position") or 999)
+
+    products_seen: Dict[str, dict] = {}
+    bays_dict: Dict[int, Dict[int, dict]] = {}
+
+    for shelf_key in sorted(new_shelf_state):
+        eq_num, shelf_num = shelf_key
+        shelf = new_shelf_state[shelf_key]
+
+        if eq_num not in bays_dict:
+            bays_dict[eq_num] = {}
+
+        def _order_key(p):
+            return order_map.get((p["product_code"], eq_num, shelf_num), 9999)
+
+        existing = [p for p in shelf["products"] if not p.get("is_new") and p["photo_facings"] > 0]
+        new_prods = [p for p in shelf["products"] if p.get("is_new") and p["photo_facings"] > 0]
+        sorted_prods = sorted(existing, key=_order_key) + new_prods
+
+        positions = []
+        x_cursor = 0.0
+
+        for prod in sorted_prods:
+            if prod["photo_facings"] <= 0:
+                continue
+            pid = f"RELO-{prod['product_code']}"
+            attrs = product_attrs.get(prod["product_code"], {})
+
+            if pid not in products_seen:
+                products_seen[pid] = {
+                    "id": pid,
+                    "name": prod["tiny_name"],
+                    "brand": attrs.get("brand_name", ""),
+                    "manufacturer": attrs.get("brand_owner_name", ""),
+                    "category": "Coffee",
+                    "subcategory": attrs.get("category_name", ""),
+                    "category_name": attrs.get("category_name", ""),
+                    "brand_owner_name": attrs.get("brand_owner_name", ""),
+                    "brand_name": attrs.get("brand_name", ""),
+                    "package_type": "pack_box",
+                    "weekly_units_sold": int(prod.get("avg_sale_amount", 0)),
+                }
+
+            positions.append({
+                "product_id": pid,
+                "x_position": round(x_cursor, 2),
+                "facings_wide": prod["photo_facings"],
+                "facings_high": 1,
+                "facings_deep": 1,
+            })
+            x_cursor += prod["width_cm"] * prod["photo_facings"]
+
+        bays_dict[eq_num][shelf_num] = {
+            "shelf_number": shelf_num,
+            "width_in": round(shelf["total_width_cm"] / 2.54, 1),
+            "height_in": 8.0,
+            "depth_in": 8.0,
+            "y_position": float(shelf_num * 8),
+            "positions": positions,
+            "shelf_type": "standard",
+        }
+
+    bays_list = [
+        {
+            "bay_number": bay_num,
+            "width_in": 48.0,
+            "height_in": 72.0,
+            "depth_in": 8.0,
+            "shelves": list(shelves_dict.values()),
+            "glued_right": False,
+        }
+        for bay_num, shelves_dict in sorted(bays_dict.items())
+    ]
+
+    return {
+        "id": "RELO-COMPLIANCE-CHECK",
+        "products": list(products_seen.values()),
+        "equipment": {"bays": bays_list},
+    }
+
+
+def build_proposed_planogram_visual(
+    new_state: dict,
+    product_attrs: dict,
+    placed_products: list,
+    original_state: dict,
+) -> dict:
+    """Build a simplified bay/shelf/product structure for frontend visualization.
+
+    Compares new_state against original_state to classify each product as
+    "new", "reduced", or "existing".
+    """
+    original_facings: dict = {}
+    for key, shelf in original_state.items():
+        for prod in shelf.get("products", []):
+            original_facings[(key[0], key[1], prod["product_code"])] = prod["photo_facings"]
+
+    new_product_codes = {p["product_code"] for p in placed_products}
+
+    def _product_color(product_code: str) -> str:
+        h = int(hashlib.md5(product_code.encode()).hexdigest()[:6], 16)
+        hue = h % 360
+        return f"hsl({hue}, 55%, 55%)"
+
+    bays_dict: dict = {}
+    for key in sorted(new_state.keys()):
+        eq_num, shelf_num = key
+        shelf = new_state[key]
+
+        if eq_num not in bays_dict:
+            bays_dict[eq_num] = {}
+
+        products_out = []
+        for prod in shelf.get("products", []):
+            code = prod["product_code"]
+            facings = prod["photo_facings"]
+            width_cm = prod.get("width_cm", 8.5)
+            orig_facings = original_facings.get((eq_num, shelf_num, code))
+
+            if prod.get("is_new") or (orig_facings is None and code in new_product_codes):
+                change_type = "new"
+            elif orig_facings is not None and facings < orig_facings:
+                change_type = "reduced"
+            else:
+                change_type = "existing"
+
+            attrs = product_attrs.get(code, {})
+            entry: dict = {
+                "product_code": code,
+                "tiny_name": prod.get("tiny_name", code),
+                "product_name": attrs.get("product_name") or prod.get("tiny_name", code),
+                "facings": facings,
+                "width_cm": round(width_cm, 2),
+                "total_width_cm": round(width_cm * facings, 2),
+                "avg_sale_amount": prod.get("avg_sale_amount", 0),
+                "change_type": change_type,
+                "color": _product_color(code),
+                "image_url": attrs.get("image_url") or "",
+                "recognition_id": attrs.get("recognition_id") or "",
+            }
+            if change_type == "reduced" and orig_facings is not None:
+                entry["reduced_from"] = orig_facings
+
+            if attrs.get("brand_name"):
+                entry["brand_name"] = attrs["brand_name"]
+
+            products_out.append(entry)
+
+        bays_dict[eq_num][shelf_num] = {
+            "shelf_number": shelf_num,
+            "width_cm": shelf["total_width_cm"],
+            "used_cm": round(shelf.get("used_cm", 0.0), 1),
+            "free_cm": round(shelf.get("free_cm", 0.0), 1),
+            "products": products_out,
+        }
+
+    bays_list = []
+    for eq_num in sorted(bays_dict.keys()):
+        shelves_list = [
+            bays_dict[eq_num][sn]
+            for sn in sorted(bays_dict[eq_num].keys())
+        ]
+        total_width = max((s["width_cm"] for s in shelves_list), default=120.0)
+        bays_list.append({
+            "bay_number": eq_num,
+            "width_cm": round(total_width, 1),
+            "shelves": shelves_list,
+        })
+
+    return {"bays": bays_list}

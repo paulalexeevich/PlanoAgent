@@ -871,5 +871,16 @@ document.addEventListener('click', function(e) {
 PV.planogramFacings = {};
 PV.salesData = {};
 
+// Load planogram facings so product analytics shows Less / Equal / More correctly
+fetch('/api/planogram-facings')
+    .then(function(r) { return r.json(); })
+    .then(function(facings) {
+        PV.planogramFacings = facings || {};
+        console.log('[training2] Loaded planogram facings:', Object.keys(PV.planogramFacings).length);
+    })
+    .catch(function(err) {
+        console.warn('[training2] Could not load planogram facings:', err);
+    });
+
 if (PV.photos.length > 0) loadAllPhotos();
 setTimeout(initDecisionTree, 300);

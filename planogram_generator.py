@@ -40,7 +40,7 @@ SUPABASE_KEY = os.environ.get(
 ).strip()
 
 
-def _supabase_get(table: str, params: dict | None = None) -> list:
+def _supabase_get(table: str, params=None) -> list:
     """GET rows from Supabase table via REST API."""
     if not http_requests:
         print(f"[supabase] requests module not available", flush=True)

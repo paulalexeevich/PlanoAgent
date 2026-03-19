@@ -173,9 +173,33 @@ BEER_DECISION_TREE = DecisionTree(
     ],
 )
 
+COFFEE_DECISION_TREE = DecisionTree(
+    category="Coffee",
+    name="Coffee Standard",
+    description=(
+        "Shoppers navigate: Subcategory (instant/ground/bean) → "
+        "Brand Owner (corporate group) → Brand"
+    ),
+    levels=[
+        DecisionTreeLevel(
+            name="Subcategory",
+            attribute="category_name",
+        ),
+        DecisionTreeLevel(
+            name="BrandOwner",
+            attribute="brand_owner_name",
+        ),
+        DecisionTreeLevel(
+            name="Brand",
+            attribute="brand_name",
+        ),
+    ],
+)
+
 # Registry of all pre-built trees, keyed by category name
 CATEGORY_TREES: Dict[str, DecisionTree] = {
     "Beer": BEER_DECISION_TREE,
+    "Coffee": COFFEE_DECISION_TREE,
 }
 
 

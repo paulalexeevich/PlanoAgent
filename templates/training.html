@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/static/css/bay-renderer.css">
     <link rel="stylesheet" href="/static/css/planogram.css">
     <link rel="stylesheet" href="/static/css/photo-viewer.css">
-    <link rel="stylesheet" href="/static/css/training.css">
+    <link rel="stylesheet" href="/static/css/training.css?v=4">
 </head>
 <body class="photo-viewer">
     <div class="toolbar">
@@ -27,6 +27,11 @@
             <div class="step" id="step2Indicator" data-step="2">
                 <span class="step-num">2</span>
                 <span class="step-label">Build Realogram</span>
+            </div>
+            <div class="step-arrow">&rarr;</div>
+            <div class="step" id="step3Indicator" data-step="3">
+                <span class="step-num">3</span>
+                <span class="step-label">Proposed Planogram</span>
             </div>
         </div>
 
@@ -133,6 +138,30 @@
                     </button>
                     <div id="buildResult" class="training-result"></div>
                 </div>
+
+                <!-- Step 3: Proposed Planogram -->
+                <div class="training-step locked" id="trainStep3">
+                    <div class="training-step-header">
+                        <span class="training-step-badge">Step 3</span>
+                        <h3>Proposed Planogram</h3>
+                    </div>
+                    <p class="training-step-desc">
+                        Run out-of-shelf optimization to place missing products.
+                        Shows the best strategy result with new installations (green)
+                        and reduced facings (orange).
+                    </p>
+                    <button class="btn-training" id="btnProposedPlanogram" disabled>
+                        <span id="proposedLabel">Generate Proposed Planogram</span>
+                        <span id="proposedSpinner" class="btn-spinner" style="display:none"></span>
+                    </button>
+                    <div id="proposedResult" class="training-result"></div>
+                    <div id="proposedStats" class="pp-stats-inline" style="display:none"></div>
+                    <div id="proposedLegend" class="pp-legend-inline" style="display:none">
+                        <span class="legend-item"><span class="legend-dot ld-new"></span> New</span>
+                        <span class="legend-item"><span class="legend-dot ld-reduced"></span> Reduced</span>
+                        <span class="legend-item"><span class="legend-dot ld-existing"></span> Unchanged</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Analytics Tab (reused from photo-viewer) -->
@@ -176,6 +205,7 @@
     <script src="/static/js/bay-renderer.js"></script>
     <script src="/static/js/photo-viewer/planogram-mini.js"></script>
     <script src="/static/js/training/training-equipment.js"></script>
-    <script src="/static/js/training/training-init.js"></script>
+    <script src="/static/js/training/training-init.js?v=2"></script>
+    <script src="/static/js/training/training-proposed.js?v=4"></script>
 </body>
 </html>

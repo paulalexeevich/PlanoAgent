@@ -31,9 +31,14 @@ from product_logic import (
     compute_facings_for_ai, get_total_shelf_width, phase1_capacity_check,
     phase2_optimal_facings, validate_and_fix_shelves,
     recover_missing_products, boost_underused_shelves, fill_shelf_gaps,
+    build_shelf_state, build_planogram_target, run_all_strategies,
+    apply_placement_plan, validate_feasibility, build_compliance_planogram,
+    build_proposed_planogram_visual,
 )
+from placement_optimization import run_optimization as _run_placement_optimization
 from decision_tree import (
-    get_tree_for_category, validate_compliance, BEER_DECISION_TREE
+    get_tree_for_category, validate_compliance, BEER_DECISION_TREE,
+    COFFEE_DECISION_TREE,
 )
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -107,7 +112,7 @@ def _save_app_state(state_key: str, state_data: dict) -> bool:
     return False
 
 
-def _load_app_state(state_key: str) -> dict | None:
+def _load_app_state(state_key: str):
     """Load app state from Supabase app_state table."""
     try:
         rows = _supabase_get("app_state", {"state_key": f"eq.{state_key}", "limit": "1"})
@@ -1420,7 +1425,7 @@ _SUPABASE_HEADERS = {
 }
 
 
-def _supabase_get(table: str, params: dict | None = None) -> list:
+def _supabase_get(table: str, params=None) -> list:
     """GET rows from a Supabase table via REST API."""
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     resp = http_requests.get(url, headers=_SUPABASE_HEADERS, params=params, timeout=5)
@@ -1451,7 +1456,7 @@ def _supabase_patch(table: str, params: dict, data: dict) -> dict:
 # ── Supabase Store Equipment ──────────────────────────────────────────────────
 
 
-def _get_store_equipment() -> dict | None:
+def _get_store_equipment():
     """Fetch the active store equipment config from Supabase.
 
     Returns the first active row from store_equipment, or None.
@@ -1470,7 +1475,7 @@ def _get_store_equipment() -> dict | None:
     return None
 
 
-def _save_store_equipment(data: dict) -> dict | None:
+def _save_store_equipment(data: dict):
     """Create or update store equipment in Supabase."""
     try:
         existing = _get_store_equipment()
@@ -1492,7 +1497,7 @@ def _save_store_equipment(data: dict) -> dict | None:
 
 def _save_planogram_to_supabase(
     planogram_obj, summary=None, decision_tree=None, compliance=None
-) -> dict | None:
+):
     """Save (upsert) current planogram to the planograms table.
 
     Uses planogram_id to decide insert vs update: if a row with matching
@@ -1559,7 +1564,7 @@ def _list_planograms_from_supabase(limit: int = 50) -> list:
         return []
 
 
-def _load_planogram_from_supabase(row_id: int) -> dict | None:
+def _load_planogram_from_supabase(row_id: int):
     """Load a single planogram (full data) by row id."""
     try:
         rows = _supabase_get("planograms", {
@@ -2076,7 +2081,7 @@ def delete_cloud_planogram(row_id):
 # ── Supabase Realogram Persistence ────────────────────────────────────────────
 
 
-def _save_realogram_to_supabase(planogram_obj: Planogram) -> dict | None:
+def _save_realogram_to_supabase(planogram_obj: Planogram):
     """Save a realogram to both realograms (parent) and realogram_positions tables.
 
     Inserts the full planogram JSON for rendering, plus individual position
@@ -2173,7 +2178,7 @@ def _save_realogram_to_supabase(planogram_obj: Planogram) -> dict | None:
         return None
 
 
-def _load_realogram_from_supabase() -> dict | None:
+def _load_realogram_from_supabase():
     """Load the latest realogram's full planogram_data from Supabase."""
     try:
         rows = _supabase_get("realograms", {
@@ -2519,6 +2524,416 @@ def suggest_placement():
         "score": best["score"],
         "reason": "; ".join(reasons) if reasons else "Best available shelf",
     })
+
+
+# ── Out-of-Shelf Optimization ────────────────────────────────────────────────
+
+
+def _load_optimization_data(planogram_id="PLN-CSV-COFFEE-617533"):
+    """Load all Supabase data needed for out-of-shelf placement optimization.
+
+    Returns:
+        (pos_rows, size_map, photo_facings, sales_map, actions, product_attrs)
+    """
+    pos_rows = _supabase_get("test_coffee_planogram_positions", {
+        "select": "eq_num_in_scene_group,shelf_number,external_product_id,on_shelf_position,faces_width",
+        "store_id": "eq.617533",
+        "order": "eq_num_in_scene_group,shelf_number,on_shelf_position",
+    })
+
+    product_map_rows = _supabase_get("test_coffee_product_map", {
+        "select": "product_code,tiny_name,product_name,width_cm,height_cm",
+    })
+    size_map = {
+        r["product_code"]: {
+            "width_cm": float(r.get("width_cm") or 8.5),
+            "height_cm": float(r.get("height_cm") or 20.0),
+            "tiny_name": r.get("tiny_name") or "",
+            "name": r.get("product_name") or "",
+        }
+        for r in product_map_rows if r.get("product_code")
+    }
+    tiny_to_code = {
+        r["tiny_name"]: r["product_code"]
+        for r in product_map_rows if r.get("tiny_name") and r.get("product_code")
+    }
+
+    photos = _supabase_get("recognition_photos", {"select": "photo_name"})
+    photo_facings = defaultdict(int)
+    product_attrs = {}
+
+    for photo in photos:
+        assortment = _supabase_get("recognition_assortment", {
+            "select": "product_info,facing",
+            "photo_name": f"eq.{photo['photo_name']}",
+        })
+        for item in assortment:
+            pi = item.get("product_info") or {}
+            if isinstance(pi, str):
+                try:
+                    pi = json.loads(pi)
+                except Exception:
+                    continue
+            tiny = pi.get("tiny_name", "")
+            if not tiny:
+                continue
+
+            facing = item.get("facing") or {}
+            if isinstance(facing, str):
+                try:
+                    facing = json.loads(facing)
+                except Exception:
+                    facing = {}
+            fact = max(1, int(facing.get("fact", 1) or 1))
+            photo_facings[tiny] += fact
+
+            code = tiny_to_code.get(tiny, "")
+            if code and code not in product_attrs:
+                product_attrs[code] = {
+                    "category_name": pi.get("category_name", ""),
+                    "brand_name": pi.get("brand_name", ""),
+                    "brand_owner_name": pi.get("brand_owner_name", ""),
+                }
+
+    sales_rows = _supabase_get("source_data_617533", {
+        "select": "product_code,sale_amount",
+    })
+    sales_agg = defaultdict(list)
+    for r in sales_rows:
+        code = r.get("product_code", "")
+        tiny = size_map.get(code, {}).get("tiny_name", "")
+        if tiny and r.get("sale_amount") is not None:
+            sales_agg[tiny].append(float(r["sale_amount"]))
+    sales_map = {
+        tiny: {"avg_sale_amount": round(sum(vals) / len(vals), 2)}
+        for tiny, vals in sales_agg.items() if vals
+    }
+
+    actions = _supabase_get("planogram_actions", {
+        "select": "*",
+        "planogram_id": f"eq.{planogram_id}",
+        "photo_facings": "eq.0",
+        "order": "avg_sale_amount.desc.nullslast",
+    })
+
+    return pos_rows, size_map, dict(photo_facings), sales_map, actions, product_attrs
+
+
+@app.route("/api/actions/optimize-placement")
+def optimize_placement():
+    """Run out-of-shelf placement optimization with all 4 strategies.
+
+    Uses the saved realogram as the starting point.
+    """
+    try:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return jsonify({"status": "error", "error": "Supabase not configured."}), 503
+
+        planogram_id = request.args.get("planogram_id", "PLN-CSV-COFFEE-617533")
+        print(f"[optimize-placement] Loading realogram-based data...", flush=True)
+
+        shelf_state, planogram_target, product_attrs, size_map, sales_map = (
+            _build_shelf_state_from_realogram()
+        )
+
+        actions = _supabase_get("planogram_actions", {
+            "select": "*",
+            "planogram_id": f"eq.{planogram_id}",
+            "photo_facings": "eq.0",
+            "order": "avg_sale_amount.desc.nullslast",
+        })
+
+        if not actions:
+            return jsonify({
+                "status": "success",
+                "planogram_id": planogram_id,
+                "total_out_of_shelf": 0,
+                "runs": [],
+                "message": "No out-of-shelf actions found for this planogram.",
+            })
+
+        runs = run_all_strategies(actions, shelf_state, planogram_target, product_attrs)
+
+        coffee_tree = COFFEE_DECISION_TREE
+        for run in runs:
+            try:
+                new_state = apply_placement_plan(shelf_state, run["placed"])
+                feasibility = validate_feasibility(new_state)
+                plano_dict = build_compliance_planogram(new_state, product_attrs, [])
+                compliance_report = validate_compliance(plano_dict, coffee_tree)
+                run["validation"] = {
+                    "feasibility": feasibility,
+                    "compliance": compliance_report.to_dict(),
+                }
+            except Exception as ve:
+                run["validation"] = {"error": str(ve)}
+
+        return jsonify({
+            "status": "success",
+            "planogram_id": planogram_id,
+            "total_out_of_shelf": len(actions),
+            "runs": runs,
+        })
+
+    except Exception as e:
+        print(f"[optimize-placement] Error: {e}", flush=True)
+        traceback.print_exc()
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+def _build_shelf_state_from_realogram():
+    """Build shelf_state from the saved realogram (realogram_positions table).
+
+    This uses the actual recognition-based shelf layout instead of the planogram
+    positions, so the optimization starts from what's really on the shelf.
+
+    Returns:
+        (shelf_state, planogram_target, product_attrs, size_map, sales_map)
+    """
+    # Load realogram positions
+    realo_rows = _supabase_get("realogram_positions", {
+        "select": "*",
+        "order": "bay_number,shelf_number,position_index",
+    })
+    if not realo_rows:
+        raise ValueError("No saved realogram found — run Build Realogram (Step 2) first")
+
+    print(f"[proposed] Loaded {len(realo_rows)} realogram positions", flush=True)
+
+    # Load product map for sizes, tiny_name, and images
+    product_map_rows = _supabase_get("test_coffee_product_map", {
+        "select": "product_code,tiny_name,product_name,width_cm,height_cm,recognition_id,image_no_bg_url",
+    })
+    size_map = {}
+    recog_to_code = {}
+    no_bg_by_code = {}
+    for r in product_map_rows:
+        code = r.get("product_code")
+        rid = r.get("recognition_id")
+        if code:
+            size_map[code] = {
+                "width_cm": float(r.get("width_cm") or 8.5),
+                "height_cm": float(r.get("height_cm") or 20.0),
+                "tiny_name": r.get("tiny_name") or "",
+                "name": r.get("product_name") or "",
+            }
+            img = r.get("image_no_bg_url") or ""
+            if img:
+                no_bg_by_code[code] = img
+            # Also index by recognition_id for direct lookup
+            if rid and img:
+                no_bg_by_code[rid] = img
+        if rid and code:
+            recog_to_code[rid] = code
+
+    # Load sales
+    sales_rows = _supabase_get("source_data_617533", {"select": "product_code,sale_amount"})
+    sales_agg = defaultdict(list)
+    for r in sales_rows:
+        code = r.get("product_code", "")
+        tiny = size_map.get(code, {}).get("tiny_name", "")
+        if tiny and r.get("sale_amount") is not None:
+            sales_agg[tiny].append(float(r["sale_amount"]))
+    sales_map = {
+        tiny: {"avg_sale_amount": round(sum(vals) / len(vals), 2)}
+        for tiny, vals in sales_agg.items() if vals
+    }
+
+    # Load planogram positions (for planogram_target — where products SHOULD be)
+    plano_rows = _supabase_get("test_coffee_planogram_positions", {
+        "select": "eq_num_in_scene_group,shelf_number,external_product_id,faces_width",
+        "store_id": "eq.617533",
+        "order": "eq_num_in_scene_group,shelf_number",
+    })
+    planogram_target = {}
+    for row in plano_rows:
+        eid = row["external_product_id"]
+        if eid not in planogram_target:
+            planogram_target[eid] = (row["eq_num_in_scene_group"], row["shelf_number"])
+    # Also map recognition_id → planogram target for products not in code map
+    for rid, code in recog_to_code.items():
+        if rid not in planogram_target and code in planogram_target:
+            planogram_target[rid] = planogram_target[code]
+
+    # Build planogram facings (how many facings SHOULD be there)
+    plano_facings = {}
+    for row in plano_rows:
+        eid = row["external_product_id"]
+        plano_facings[eid] = plano_facings.get(eid, 0) + max(1, int(row.get("faces_width") or 1))
+
+    # Build shelf_state from realogram positions
+    shelves = {}
+    product_attrs = {}
+
+    for row in realo_rows:
+        bay_num = row["bay_number"]
+        shelf_num = row["shelf_number"]
+        key = (bay_num, shelf_num)
+
+        if key not in shelves:
+            shelf_width_cm = round(row.get("shelf_width_in", 48.0) * 2.54, 1)
+            shelves[key] = {
+                "eq_num": bay_num,
+                "shelf_number": shelf_num,
+                "total_width_cm": shelf_width_cm,
+                "used_cm": 0.0,
+                "free_cm": 0.0,
+                "total_freeable_cm": 0.0,
+                "products": [],
+                "reduction_candidates": [],
+                "tree_groups": [],
+            }
+
+        pid = row["product_id"]
+        product_code = recog_to_code.get(pid, pid)
+        sz = size_map.get(product_code, {})
+        width_cm = round(row.get("width_in", 0) * 2.54, 2) or max(1.0, float(sz.get("width_cm") or 8.5))
+        tiny_name = sz.get("tiny_name") or row.get("product_name", "") or pid
+        photo_facings = max(1, int(row.get("facings_wide", 1)))
+        pf = plano_facings.get(product_code, plano_facings.get(pid, 0))
+        avg_sale = float((sales_map.get(tiny_name) or {}).get("avg_sale_amount", 0))
+
+        shelves[key]["used_cm"] += width_cm * photo_facings
+        shelves[key]["products"].append({
+            "product_code": product_code,
+            "tiny_name": tiny_name,
+            "planogram_facings": pf if pf > 0 else photo_facings,
+            "photo_facings": photo_facings,
+            "width_cm": width_cm,
+            "avg_sale_amount": avg_sale,
+        })
+
+        excess = photo_facings - pf if pf > 0 else 0
+        if excess > 0:
+            shelves[key]["reduction_candidates"].append({
+                "product_code": product_code,
+                "tiny_name": tiny_name,
+                "photo_facings": photo_facings,
+                "planogram_facings": pf,
+                "excess_facings": excess,
+                "width_cm": width_cm,
+                "freeable_cm": round(excess * width_cm, 1),
+                "avg_sale_amount": avg_sale,
+            })
+
+        if product_code not in product_attrs:
+            image_url = (
+                no_bg_by_code.get(product_code)
+                or no_bg_by_code.get(pid)
+                or ""
+            )
+            product_attrs[product_code] = {
+                "category_name": row.get("category", ""),
+                "brand_name": row.get("brand", ""),
+                "brand_owner_name": row.get("brand", ""),
+                "image_url": image_url,
+                "product_name": sz.get("name") or row.get("product_name", "") or tiny_name,
+                # Keep the recognition_id so the frontend can look up the full product
+                # (including miniature_url fallback) in PV.recog.productsMap
+                "recognition_id": pid,
+            }
+
+    # Finalize shelf metrics
+    for shelf in shelves.values():
+        shelf["used_cm"] = round(shelf["used_cm"], 1)
+        shelf["free_cm"] = max(0.0, round(shelf["total_width_cm"] - shelf["used_cm"], 1))
+        shelf["pre_overflow_cm"] = max(0.0, round(shelf["used_cm"] - shelf["total_width_cm"], 1))
+        shelf["reduction_candidates"].sort(key=lambda x: x["avg_sale_amount"])
+        reducible = round(sum(c["freeable_cm"] for c in shelf["reduction_candidates"]), 1)
+        shelf["total_freeable_cm"] = round(shelf["free_cm"] + reducible, 1)
+        shelf["net_available_cm"] = round(
+            shelf["total_width_cm"] - shelf["used_cm"] + reducible, 1
+        )
+
+    print(
+        f"[proposed] Built shelf_state from realogram: {len(shelves)} shelves, "
+        f"{sum(len(s['products']) for s in shelves.values())} products",
+        flush=True,
+    )
+
+    return shelves, planogram_target, product_attrs, size_map, sales_map
+
+
+@app.route("/api/actions/proposed-planogram")
+def proposed_planogram():
+    """Return proposed planogram visual data for the best placement strategy.
+
+    Uses the saved realogram (from Step 2) as the starting point.
+    All optimization logic lives in placement_optimization.py.
+    """
+    try:
+        if not SUPABASE_URL or not SUPABASE_KEY:
+            return jsonify({"status": "error", "error": "Supabase not configured."}), 503
+
+        planogram_id = request.args.get("planogram_id", "PLN-CSV-COFFEE-617533")
+        print(f"[proposed-planogram] Loading data...", flush=True)
+
+        # ── Fetch all raw data ─────────────────────────────────────────────────
+        realogram_positions = _supabase_get("realogram_positions", {
+            "select": "*",
+            "order": "bay_number,shelf_number,position_index",
+        })
+        if not realogram_positions:
+            return jsonify({
+                "status": "error",
+                "error": "No saved realogram found — run Build Realogram (Step 2) first",
+            }), 400
+
+        product_map_rows = _supabase_get("test_coffee_product_map", {
+            "select": "product_code,tiny_name,product_name,width_cm,height_cm,recognition_id,image_no_bg_url",
+        })
+        planogram_rows = _supabase_get("test_coffee_planogram_positions", {
+            "select": "eq_num_in_scene_group,shelf_number,external_product_id,faces_width",
+            "store_id": "eq.617533",
+            "order": "eq_num_in_scene_group,shelf_number",
+        })
+        sales_rows = _supabase_get("source_data_617533", {
+            "select": "product_code,sale_amount",
+        })
+        actions = _supabase_get("planogram_actions", {
+            "select": "*",
+            "planogram_id": f"eq.{planogram_id}",
+            "photo_facings": "eq.0",
+            "order": "avg_sale_amount.desc.nullslast",
+        })
+
+        print(
+            f"[proposed-planogram] realogram={len(realogram_positions)} positions, "
+            f"{len(actions)} out-of-shelf actions",
+            flush=True,
+        )
+
+        # ── Run optimization (entirely in placement_optimization.py) ──────────
+        result = _run_placement_optimization(
+            realogram_positions=realogram_positions,
+            product_map_rows=product_map_rows,
+            planogram_rows=planogram_rows,
+            sales_rows=sales_rows,
+            actions=actions,
+        )
+
+        print(
+            f"[proposed-planogram] Best: '{result.strategy}' "
+            f"score={result.combined_score} "
+            f"placed={result.summary.get('placed_count', 0)}/{len(actions)}",
+            flush=True,
+        )
+
+        return jsonify({
+            "status": "success",
+            "planogram_id": planogram_id,
+            "strategy": result.strategy,
+            "combined_score": result.combined_score,
+            "summary": result.summary,
+            "actions": result.actions,
+            "bays": result.bays,
+            "all_runs": result.all_runs,
+        })
+
+    except Exception as e:
+        print(f"[proposed-planogram] Error: {e}", flush=True)
+        traceback.print_exc()
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 
 # Load persisted state on startup; fall back to generating from defaults
