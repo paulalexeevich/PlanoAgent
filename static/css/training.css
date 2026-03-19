@@ -3,6 +3,24 @@
 /* ============================================================
    STEP INDICATOR (toolbar)
    ============================================================ */
+.toolbar-link-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    font-size: 12px;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.toolbar-link-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
 .step-indicator {
     display: flex;
     align-items: center;
