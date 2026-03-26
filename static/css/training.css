@@ -715,6 +715,9 @@
 .pal-facings { font-size: 10px; background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.4); color: #818cf8; border-radius: 3px; padding: 0 5px; }
 .pal-reductions { font-size: 10px; color: #fb923c; margin-top: 2px; }
 .pal-red-item { background: rgba(251,146,60,0.15); border: 1px solid rgba(251,146,60,0.35); border-radius: 3px; padding: 0 4px; margin-right: 3px; white-space: nowrap; }
+.pal-trace { margin-top: 4px; font-size: 10px; color: var(--text-secondary); }
+.pal-trace summary { cursor: pointer; color: #93c5fd; }
+.pal-trace-line { margin-top: 2px; }
 
 .pal-location { color: #34d399; font-weight: 600; }
 .pal-shifted  { color: var(--text-secondary); font-weight: 400; font-style: italic; }

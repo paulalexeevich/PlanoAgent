@@ -486,9 +486,54 @@ def _compute_fit(shelf: dict, needed_cm: float) -> Optional[dict]:
     return {"space_source": "excess_facings", "reductions": reductions, "time_min": time_min}
 
 
-def _apply_fit(shelf: dict, fit: dict, needed_cm: float) -> None:
-    """Apply a computed fit to the real shelf state (mutates in place)."""
-    if fit["space_source"] == "free_space":
+def _apply_fit(
+    shelves: Dict[ShelfKey, dict],
+    shelf_key: ShelfKey,
+    fit: dict,
+    needed_cm: float,
+    product_attrs: Dict[str, dict],
+) -> None:
+    """Apply a selected fit to shelf state (mutates only selected path)."""
+    shelf = shelves[shelf_key]
+
+    # Apply planned relocations first (selected option only).
+    for rel in fit.get("relocations", []):
+        from_key = tuple(rel["from_key"])
+        to_key = tuple(rel["to_key"])
+        code = rel["product_code"]
+        moved_facings = int(rel.get("moved_facings", 1))
+        width_cm = float(rel.get("width_cm") or 0)
+        if width_cm <= 0 or moved_facings <= 0:
+            continue
+
+        src = shelves.get(from_key)
+        dst = shelves.get(to_key)
+        if not src or not dst:
+            continue
+
+        src_prod = next((p for p in src.get("products", []) if p.get("product_code") == code), None)
+        if not src_prod:
+            continue
+        src_prod["photo_facings"] = max(0, int(src_prod.get("photo_facings", 0)) - moved_facings)
+        src["used_cm"] = round(src.get("used_cm", 0) - width_cm * moved_facings, 2)
+        src["free_cm"] = round(src.get("free_cm", 0) + width_cm * moved_facings, 2)
+
+        dst_prod = next((p for p in dst.get("products", []) if p.get("product_code") == code), None)
+        if dst_prod:
+            dst_prod["photo_facings"] = int(dst_prod.get("photo_facings", 0)) + moved_facings
+        else:
+            moved = copy.deepcopy(src_prod)
+            moved["photo_facings"] = moved_facings
+            dst.setdefault("products", []).append(moved)
+            attrs = product_attrs.get(code, {})
+            grp = _group_for_attrs(attrs)
+            if any(g for g in grp) and grp not in dst.get("tree_groups", []):
+                dst.setdefault("tree_groups", []).append(grp)
+
+        dst["used_cm"] = round(dst.get("used_cm", 0) + width_cm * moved_facings, 2)
+        dst["free_cm"] = round(dst.get("free_cm", 0) - width_cm * moved_facings, 2)
+
+    if fit["space_source"] in ("free_space", "relocation", "opportunistic_free_space", "opportunistic_relocation"):
         shelf["free_cm"] = round(shelf["free_cm"] - needed_cm, 2)
         shelf["used_cm"] = round(shelf["used_cm"] + needed_cm, 2)
         shelf["total_freeable_cm"] = round(shelf["total_freeable_cm"] - needed_cm, 2)
@@ -542,10 +587,17 @@ def _try_relocation_fit(
         return None
 
     relocations = []
+    source_free = float(source.get("free_cm", 0))
+    source_products = {
+        p.get("product_code"): int(p.get("photo_facings", 0))
+        for p in source.get("products", [])
+        if p.get("product_code")
+    }
     same_shelf_dest = sorted(
         [k for k in shelves.keys() if k[1] == source_key[1] and k[0] != source_key[0]],
         key=lambda k: abs(k[0] - source_key[0]),
     )
+    dest_free = {k: float(shelves[k].get("free_cm", 0)) for k in same_shelf_dest}
 
     for prod in movable:
         width_cm = float(prod.get("width_cm") or 0)
@@ -553,46 +605,31 @@ def _try_relocation_fit(
             continue
 
         # Find destination bay on same shelf with enough free space.
-        dest_key = next(
-            (k for k in same_shelf_dest if shelves[k].get("free_cm", 0) >= width_cm),
-            None,
-        )
+        dest_key = next((k for k in same_shelf_dest if dest_free.get(k, 0) >= width_cm), None)
         if not dest_key:
             continue
 
-        dest = shelves[dest_key]
         code = prod.get("product_code")
         if not code:
             continue
 
-        # Move exactly one facing.
-        prod["photo_facings"] -= 1
-        source["used_cm"] = round(source.get("used_cm", 0) - width_cm, 2)
-        source["free_cm"] = round(source.get("free_cm", 0) + width_cm, 2)
-
-        existing = next((p for p in dest.get("products", []) if p.get("product_code") == code), None)
-        if existing:
-            existing["photo_facings"] = int(existing.get("photo_facings", 0)) + 1
-        else:
-            moved = copy.deepcopy(prod)
-            moved["photo_facings"] = 1
-            dest.setdefault("products", []).append(moved)
-            attrs = product_attrs.get(code, {})
-            grp = _group_for_attrs(attrs)
-            if any(g for g in grp) and grp not in dest.get("tree_groups", []):
-                dest.setdefault("tree_groups", []).append(grp)
-
-        dest["used_cm"] = round(dest.get("used_cm", 0) + width_cm, 2)
-        dest["free_cm"] = round(dest.get("free_cm", 0) - width_cm, 2)
+        if source_products.get(code, 0) < 1:
+            continue
+        source_products[code] -= 1
+        source_free += width_cm
+        dest_free[dest_key] -= width_cm
 
         relocations.append({
             "product_code": code,
+            "from_key": [source_key[0], source_key[1]],
+            "to_key": [dest_key[0], dest_key[1]],
             "from_shelf": f"Bay {source_key[0]}, Shelf {source_key[1]}",
             "to_shelf": f"Bay {dest_key[0]}, Shelf {dest_key[1]}",
             "moved_facings": 1,
+            "width_cm": width_cm,
         })
 
-        if source.get("free_cm", 0) >= needed_cm:
+        if source_free >= needed_cm:
             return {
                 "space_source": "relocation",
                 "reductions": [],
@@ -694,6 +731,7 @@ def _run_strategy(
             candidate_keys = [k for k, _ in scored_all]
 
         options = []
+        candidate_debug = []
         for shelf_key in candidate_keys:
             shelf = shelves[shelf_key]
             fit = None
@@ -706,16 +744,36 @@ def _run_strategy(
             if fit is None:
                 fit = _try_relocation_fit(shelves, shelf_key, needed_cm, product_attrs)
             if fit is None:
+                candidate_debug.append({
+                    "shelf": f"Bay {shelf_key[0]}, Shelf {shelf_key[1]}",
+                    "fit": "no_fit",
+                    "free_cm": round(float(shelf.get("free_cm", 0)), 2),
+                    "net_available_cm": round(float(shelf.get("net_available_cm", 0)), 2),
+                })
                 continue
             tree_score = _score_tree_insertion(prod_groups, shelf["tree_groups"])
             shelf_delta = abs(shelf_key[1] - shelf_num) if shelf_num is not None else 0
             options.append({"shelf_key": shelf_key, "shelf_delta": shelf_delta,
                             "tree_score": tree_score, **fit})
+            candidate_debug.append({
+                "shelf": f"Bay {shelf_key[0]}, Shelf {shelf_key[1]}",
+                "fit": fit.get("space_source"),
+                "tree_score": tree_score,
+                "free_cm": round(float(shelf.get("free_cm", 0)), 2),
+                "reductions": len(fit.get("reductions", [])),
+                "relocations": len(fit.get("relocations", [])),
+                "time_min": fit.get("time_min", 0),
+            })
 
         if not options:
             row = {"product_code": product_code, "tiny_name": tiny_name,
                    "avg_sale_amount": avg_sale,
-                   "reason": "Insufficient space after all excess facing reductions exhausted"}
+                   "reason": "Insufficient space after all excess facing reductions exhausted",
+                   "decision_trace": {
+                       "needed_cm": needed_cm,
+                       "product_group": [g for g in prod_groups if g],
+                       "candidates": candidate_debug,
+                   }}
             unplaced.append(row)
             deferred_for_opportunistic.append(action)
             continue
@@ -729,7 +787,7 @@ def _run_strategy(
         reduction_time = sum(r.get("time_min", 1) for r in best.get("reductions", []))
         best["time_min"] = reduction_time + 1 * install_facings
 
-        _apply_fit(shelf, best, needed_cm)
+        _apply_fit(shelves, shelf_key, best, needed_cm, product_attrs)
 
         if prod_groups not in shelf["tree_groups"]:
             shelf["tree_groups"].append(prod_groups)
@@ -769,6 +827,16 @@ def _run_strategy(
             "reductions_required": best["reductions"],
             "relocations_required": best.get("relocations", []),
             "opportunistic": False,
+            "decision_trace": {
+                "needed_cm": needed_cm,
+                "product_group": [g for g in prod_groups if g],
+                "candidates": candidate_debug,
+                "selected": {
+                    "shelf": f"Bay {shelf_key[0]}, Shelf {shelf_key[1]}",
+                    "space_source": best.get("space_source"),
+                    "tree_score": ts,
+                },
+            },
         })
 
     # ── Opportunistic fill pass: retry unplaced products with relaxed constraints ──
@@ -808,7 +876,7 @@ def _run_strategy(
         shelf_groups_before = list(shelf["tree_groups"])
         reduction_time = sum(r.get("time_min", 1) for r in best.get("reductions", []))
         best["time_min"] = reduction_time + 1 * install_facings
-        _apply_fit(shelf, best, needed_cm)
+        _apply_fit(shelves, shelf_key, best, needed_cm, product_attrs)
 
         if prod_groups not in shelf["tree_groups"]:
             shelf["tree_groups"].append(prod_groups)
@@ -848,6 +916,15 @@ def _run_strategy(
             "reductions_required": best["reductions"],
             "relocations_required": best.get("relocations", []),
             "opportunistic": True,
+            "decision_trace": {
+                "needed_cm": needed_cm,
+                "product_group": [g for g in prod_groups if g],
+                "selected": {
+                    "shelf": f"Bay {shelf_key[0]}, Shelf {shelf_key[1]}",
+                    "space_source": best.get("space_source"),
+                    "tree_score": ts,
+                },
+            },
         })
         opportunistic_added += 1
         unplaced = [u for u in unplaced if u.get("product_code") != product_code]
@@ -880,6 +957,13 @@ def _run_strategy(
             "tree_score_max": TREE_SCORE_MAX,
             "tree_depth_levels": TREE_LEVEL_KEYS,
             "opportunistic_added_count": opportunistic_added,
+            "logic_steps": [
+                "Build baseline shelf state from realogram",
+                "Score candidate shelves by decision-tree depth",
+                "Try fit via free space, reduction, then relocation",
+                "Apply selected action only (no candidate mutation)",
+                "Run opportunistic pass for still-unplaced products",
+            ],
         },
     }
 
@@ -966,7 +1050,41 @@ def apply_placement_plan(
         for key, shelf in new_state.items()
     }
 
-    # Pass 1: apply facing reductions
+    # Pass 1a: apply relocations between shelves
+    for placement in placed_products:
+        for rel in placement.get("relocations_required", []):
+            from_bay, from_shelf = _parse_shelf_label(rel.get("from_shelf", ""))
+            to_bay, to_shelf = _parse_shelf_label(rel.get("to_shelf", ""))
+            if from_bay is None or to_bay is None:
+                continue
+            src = new_state.get((from_bay, from_shelf))
+            dst = new_state.get((to_bay, to_shelf))
+            if src is None or dst is None:
+                continue
+            code = rel.get("product_code")
+            moved_facings = int(rel.get("moved_facings", 1))
+            src_idx = shelf_prod_index.get((from_bay, from_shelf), {})
+            dst_idx = shelf_prod_index.get((to_bay, to_shelf), {})
+            prod = src_idx.get(code)
+            if prod is None or moved_facings <= 0:
+                continue
+            width_cm = float(prod.get("width_cm", 0))
+            prod["photo_facings"] = max(0, int(prod.get("photo_facings", 0)) - moved_facings)
+            src["used_cm"] = round(src["used_cm"] - width_cm * moved_facings, 2)
+            src["free_cm"] = round(src["free_cm"] + width_cm * moved_facings, 2)
+
+            dst_prod = dst_idx.get(code)
+            if dst_prod:
+                dst_prod["photo_facings"] = int(dst_prod.get("photo_facings", 0)) + moved_facings
+            else:
+                moved = copy.deepcopy(prod)
+                moved["photo_facings"] = moved_facings
+                dst["products"].append(moved)
+                dst_idx[code] = moved
+            dst["used_cm"] = round(dst["used_cm"] + width_cm * moved_facings, 2)
+            dst["free_cm"] = round(dst["free_cm"] - width_cm * moved_facings, 2)
+
+    # Pass 1b: apply facing reductions
     for placement in placed_products:
         bay_num, shelf_num = _parse_shelf_label(placement.get("actual_shelf", ""))
         shelf = new_state.get((bay_num, shelf_num))
@@ -1165,6 +1283,10 @@ def run_optimization(
             continue
         attrs = product_attrs.setdefault(code, {})
         pm = pm_by_code.get(code, {})
+        pm_width = float(pm.get("width_cm") or 0)
+        if pm_width > 0:
+            # Keep actions aligned with canonical product-map dimensions.
+            action["width_cm"] = pm_width
         if not attrs.get("product_name"):
             attrs["product_name"] = (
                 pm.get("product_name")
@@ -1241,6 +1363,7 @@ def run_optimization(
             "reductions": placement.get("reductions_required", []) if placement else [],
             "relocations": placement.get("relocations_required", []) if placement else [],
             "opportunistic": placement.get("opportunistic", False) if placement else False,
+            "decision_trace": placement.get("decision_trace", {}) if placement else {},
             "tree_score": placement.get("tree_score") if placement else None,
             "tree_score_max": placement.get("tree_score_max", TREE_SCORE_MAX) if placement else TREE_SCORE_MAX,
             "tree_group": placement.get("tree_group", "") if placement else "",

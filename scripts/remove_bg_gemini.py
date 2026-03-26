@@ -113,12 +113,23 @@ def download_image(image_url: str) -> Image.Image:
 
 
 def remove_background(client, image: Image.Image, max_retries: int = 3) -> Image.Image:
-    """Send image to Gemini for background removal, then convert white bg to transparent."""
+    """
+    Remove background while preserving original pixels.
+
+    IMPORTANT:
+    Gemini image generation often "re-renders" the product even with strict prompts.
+    To keep the exact original product pixels, we ask Gemini to output a *mask* only,
+    then apply that mask as alpha onto the original image.
+    """
     prompt = (
-        "Remove the background from this product image completely. "
-        "Keep ONLY the product itself with no background. "
-        "Output the product on a pure white background. "
-        "Do not crop or resize the product, preserve its original shape and details."
+        "Create a precise, FILLED segmentation MASK for this product photo.\n"
+        "- Output ONLY a mask image (no text).\n"
+        "- White (255): the ENTIRE product silhouette (solid fill, NO holes).\n"
+        "- Black (0): background.\n"
+        "- The mask must cover all product parts (cap, label, glass, contents) as one solid region.\n"
+        "- Keep the mask aligned pixel-perfect with the input (no crop / no resize).\n"
+        "- Do NOT redraw or enhance the product; this is a mask only.\n"
+        "- Clean edges; no halos.\n"
     )
 
     for attempt in range(max_retries):
@@ -139,8 +150,8 @@ def remove_background(client, image: Image.Image, max_retries: int = 3) -> Image
 
             for part in response.candidates[0].content.parts:
                 if part.inline_data is not None:
-                    gemini_img = Image.open(io.BytesIO(part.inline_data.data))
-                    return _white_to_transparent(gemini_img)
+                    mask_img = Image.open(io.BytesIO(part.inline_data.data))
+                    return _apply_mask_best_effort(image, mask_img)
 
             if attempt < max_retries - 1:
                 time.sleep(3)
@@ -154,6 +165,177 @@ def remove_background(client, image: Image.Image, max_retries: int = 3) -> Image
             raise RuntimeError("Gemini returned malformed response after retries")
 
     raise RuntimeError("Failed after all retries")
+
+
+def _mask_to_soft_alpha(m_gray):
+    """Turn a grayscale mask into soft alpha. Avoid binary_opening — it eats thin jars/labels."""
+    import numpy as np
+
+    try:
+        from scipy.ndimage import binary_closing, gaussian_filter
+
+        hard = m_gray > 127
+        # Closing fills small holes inside the product; no opening (that shrinks foreground).
+        hard = binary_closing(hard, iterations=1)
+        soft = gaussian_filter(hard.astype(np.float32), sigma=0.65)
+        return (soft * 255.0).clip(0, 255).astype(np.uint8)
+    except Exception:
+        return (m_gray > 127).astype(np.uint8) * 255
+
+
+def _score_rgba_foreground(rgba):
+    """Higher = more plausible product cutout (coverage + not empty white sheet)."""
+    import numpy as np
+
+    h, w = rgba.shape[:2]
+    a = rgba[:, :, 3]
+    opaque = a > 28
+    frac = opaque.mean()
+    if frac < 0.025 or frac > 0.93:
+        return -1.0
+    if opaque.sum() < max(80, (h * w) // 500):
+        return -1.0
+    rgb = rgba[:, :, :3].astype(np.float32)
+    gray = (0.299 * rgb[:, :, 0] + 0.587 * rgb[:, :, 1] + 0.114 * rgb[:, :, 2])
+    # Studio background is ~255; real pack pixels are usually darker / more saturated.
+    mean_l = float(gray[opaque].mean())
+    std_l = float(gray[opaque].std())
+    if mean_l > 249 and std_l < 8:
+        return -0.5
+    score = frac * (1.0 - mean_l / 255.0) * (1.0 + min(std_l / 64.0, 2.0))
+    return score
+
+
+def _apply_mask_to_original(original: Image.Image, mask_img: Image.Image, invert_mask: bool) -> Image.Image:
+    """Apply mask as alpha. If invert_mask, use 255 - mask before thresholding."""
+    import numpy as np
+
+    orig = original.convert("RGBA")
+    m = mask_img.convert("L")
+    if m.size != orig.size:
+        m = m.resize(orig.size, Image.BILINEAR)
+
+    orig_a = np.array(orig, dtype=np.uint8)
+    m_a = np.array(m, dtype=np.uint8)
+    if invert_mask:
+        m_a = 255 - m_a
+
+    alpha = _mask_to_soft_alpha(m_a)
+    out = orig_a.copy()
+    out[:, :, 3] = alpha
+    return Image.fromarray(out)
+
+
+def _apply_mask_best_effort(original: Image.Image, mask_img: Image.Image) -> Image.Image:
+    """
+    Gemini mask convention varies (white=FG vs white=BG). Try both polarities, score
+    composites, and compare to white-edge flood fill (good for studio white BG).
+    """
+    import numpy as np
+
+    best_img = None
+    best_score = -1.0
+    for inv in (False, True):
+        comp = _apply_mask_to_original(original, mask_img, invert_mask=inv)
+        sc = _score_rgba_foreground(np.array(comp))
+        if sc > best_score:
+            best_score = sc
+            best_img = comp
+
+    flood = _white_to_transparent(original.convert("RGBA"))
+    flood_sc = _score_rgba_foreground(np.array(flood))
+
+    if flood_sc > best_score:
+        return flood
+    if best_score < 0.035:
+        return flood
+    return best_img
+
+
+def _refine_cutout(img: Image.Image) -> Image.Image:
+    """
+    Clean edges for UI on dark backgrounds:
+    - Drop semi-transparent near-white pixels (classic Gemini / flood-fill halos).
+    - Light 1px alpha erosion to shave residual white rings.
+    - Straighten RGB where alpha is 0 (avoid black premultiply confusion in some viewers).
+    """
+    import numpy as np
+
+    data = np.array(img.convert("RGBA"), dtype=np.uint8)
+    r, g, b, a = data[:, :, 0], data[:, :, 1], data[:, :, 2], data[:, :, 3]
+    L = (0.299 * r + 0.587 * g + 0.114 * b).astype(np.float32)
+
+    # Matte / halo: partly opaque but still "background white"
+    halo = (a > 4) & (a < 254) & (L > 236)
+    data[halo, 3] = 0
+
+    # Very bright fringe with medium alpha
+    halo2 = (a >= 40) & (a < 255) & (L > 245)
+    data[halo2, 3] = 0
+
+    try:
+        from scipy.ndimage import binary_erosion
+
+        hard = data[:, :, 3] > 200
+        if hard.any() and hard.sum() > 30:
+            eroded = binary_erosion(hard, iterations=1)
+            trim = hard & ~eroded
+            data[trim, 3] = 0
+    except Exception:
+        pass
+
+    data[data[:, :, 3] == 0, 0:3] = 0
+    return Image.fromarray(data)
+
+
+def _strip_bright_surround_from_edges(img: Image.Image) -> Image.Image:
+    """
+    After masking, borders are often transparent so a plain white-edge flood never starts.
+    Flood from the image rim through: transparent pixels OR bright neutral (studio matte),
+    and clear alpha for the whole connected region. Removes opaque white rectangles around
+    the product without re-downloading the source.
+    """
+    import numpy as np
+
+    data = np.array(img.convert("RGBA"), dtype=np.uint8)
+    h, w = data.shape[:2]
+    r, g, b, a = data[:, :, 0], data[:, :, 1], data[:, :, 2], data[:, :, 3]
+    rgb_max = np.maximum(np.maximum(r, g), b)
+    rgb_min = np.minimum(np.minimum(r, g), b)
+    chroma = (rgb_max - rgb_min).astype(np.int16)
+    L = (0.299 * r + 0.587 * g + 0.114 * b).astype(np.float32)
+
+    def is_clearable(y: int, x: int) -> bool:
+        if a[y, x] < 42:
+            return True
+        if L[y, x] > 228 and chroma[y, x] < 38:
+            return True
+        return False
+
+    visited = np.zeros((h, w), dtype=bool)
+    queue = []
+    for x in range(w):
+        for y in (0, h - 1):
+            if is_clearable(y, x) and not visited[y, x]:
+                visited[y, x] = True
+                queue.append((y, x))
+    for y in range(h):
+        for x in (0, w - 1):
+            if is_clearable(y, x) and not visited[y, x]:
+                visited[y, x] = True
+                queue.append((y, x))
+
+    while queue:
+        cy, cx = queue.pop()
+        for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            ny, nx = cy + dy, cx + dx
+            if 0 <= ny < h and 0 <= nx < w and not visited[ny, nx] and is_clearable(ny, nx):
+                visited[ny, nx] = True
+                queue.append((ny, nx))
+
+    data[visited, 3] = 0
+    data[visited, 0:3] = 0
+    return Image.fromarray(data)
 
 
 def _white_to_transparent(img: Image.Image, tolerance: int = 20) -> Image.Image:
@@ -202,13 +384,34 @@ def _white_to_transparent(img: Image.Image, tolerance: int = 20) -> Image.Image:
     # Apply: make background fully transparent
     data[bg_mask, 3] = 0
 
-    # Soften edges: semi-transparent fringe (1px dilation of bg boundary)
+    # 1px boundary: make fully transparent (soft white fringe reads as halo on dark UI)
     from scipy.ndimage import binary_dilation
     dilated = binary_dilation(bg_mask, iterations=1)
     fringe = dilated & ~bg_mask
-    data[fringe, 3] = (data[fringe, 3] * 0.4).astype(np.uint8)
+    data[fringe, 3] = 0
 
     return Image.fromarray(data)
+
+
+def _bbox_for_opaque_core(img: Image.Image, alpha_floor: int = 56, pad: int = 2):
+    """
+    Tighter than Image.getbbox(): ignores very faint alpha (soft-mask dust / halos)
+    so the product fills more of the export canvas and thumbnails don't look tiny.
+    """
+    import numpy as np
+
+    a = np.array(img.convert("RGBA"))[:, :, 3]
+    ys, xs = np.where(a > alpha_floor)
+    if ys.size == 0:
+        return img.getbbox()
+    x0, x1 = int(xs.min()), int(xs.max()) + 1
+    y0, y1 = int(ys.min()), int(ys.max()) + 1
+    h, w = a.shape
+    x0 = max(0, x0 - pad)
+    y0 = max(0, y0 - pad)
+    x1 = min(w, x1 + pad)
+    y1 = min(h, y1 + pad)
+    return (x0, y0, x1, y1)
 
 
 def resize_to_proportions(image: Image.Image, width_cm: float, height_cm: float) -> Image.Image:
@@ -226,7 +429,7 @@ def resize_to_proportions(image: Image.Image, width_cm: float, height_cm: float)
 
     img = image.convert("RGBA")
 
-    bbox = img.getbbox()
+    bbox = _bbox_for_opaque_core(img)
     if bbox:
         img = img.crop(bbox)
 
@@ -271,12 +474,31 @@ def process_product(client, product: dict) -> str:
     original = download_image(image_url)
     print(f"OK ({original.size[0]}×{original.size[1]})")
 
-    # 2. Remove background via Gemini
+    # 2. Remove background via Gemini (mask on original pixels), or white-edge fallback
     print("  [2/4] Removing background via Gemini...", end=" ", flush=True)
     t0 = time.time()
-    no_bg = remove_background(client, original)
+    try:
+        no_bg = remove_background(client, original)
+    except RuntimeError as e:
+        err = str(e).lower()
+        if any(
+            x in err
+            for x in (
+                "no candidates",
+                "no image data",
+                "malformed response",
+                "failed after all retries",
+            )
+        ):
+            print(f"\n  [2/4] Gemini unavailable ({e}); white-edge flood fill...", end=" ", flush=True)
+            no_bg = _white_to_transparent(original.convert("RGBA"))
+        else:
+            raise
     elapsed = time.time() - t0
     print(f"OK ({no_bg.size[0]}×{no_bg.size[1]}, {elapsed:.1f}s)")
+
+    no_bg = _refine_cutout(no_bg)
+    no_bg = _strip_bright_surround_from_edges(no_bg)
 
     # 3. Resize to physical proportions
     target_w = int(round(width_cm * PIXELS_PER_CM))

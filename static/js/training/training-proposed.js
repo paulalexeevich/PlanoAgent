@@ -380,6 +380,18 @@
                           ).join(', ')}</div>` : '';
                     const timeHtml = a.installed && a.time_min
                         ? `<span class="pal-time">${a.time_min} min</span>` : '';
+                    const trace = a.decision_trace || {};
+                    const traceSelected = trace.selected
+                        ? `${trace.selected.shelf || ''}${trace.selected.space_source ? ` • ${trace.selected.space_source}` : ''}${trace.selected.tree_score !== undefined ? ` • tree ${trace.selected.tree_score}` : ''}`
+                        : '';
+                    const traceCandidates = Array.isArray(trace.candidates) ? trace.candidates : [];
+                    const traceHtml = (traceSelected || traceCandidates.length)
+                        ? `<details class="pal-trace">
+                               <summary>Why this action</summary>
+                               ${traceSelected ? `<div class="pal-trace-line"><strong>Selected:</strong> ${traceSelected}</div>` : ''}
+                               ${traceCandidates.length ? `<div class="pal-trace-line"><strong>Candidates checked:</strong> ${traceCandidates.length}</div>` : ''}
+                           </details>`
+                        : '';
 
                     // Tree score badge
                     let treeHtml = '';
@@ -411,6 +423,7 @@
                                 <div class="pal-where">${locationHtml}</div>
                                 ${reductionsHtml}
                                 ${treeHtml}
+                                ${traceHtml}
                             </div>
                             <div class="pal-status ${a.installed ? 'pal-ok' : 'pal-no'}">
                                 ${a.installed ? '✓' : '✗'}
