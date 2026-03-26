@@ -2642,6 +2642,10 @@ def optimize_placement():
             "photo_facings": "eq.0",
             "order": "avg_sale_amount.desc.nullslast",
         })
+        actions = [
+            a for a in actions
+            if (a.get("status") or "pending") != "out_of_stock"
+        ]
 
         if not actions:
             return jsonify({
@@ -2702,7 +2706,7 @@ def _build_shelf_state_from_realogram():
 
     # Load product map for sizes, tiny_name, and images
     product_map_rows = _supabase_get("test_coffee_product_map", {
-        "select": "product_code,tiny_name,product_name,width_cm,height_cm,recognition_id,image_no_bg_url",
+        "select": "product_code,tiny_name,product_name,width_cm,height_cm,recognition_id,image_no_bg_url,miniature_url",
     })
     size_map = {}
     recog_to_code = {}
@@ -2717,7 +2721,7 @@ def _build_shelf_state_from_realogram():
                 "tiny_name": r.get("tiny_name") or "",
                 "name": r.get("product_name") or "",
             }
-            img = r.get("image_no_bg_url") or ""
+            img = (r.get("image_no_bg_url") or r.get("miniature_url") or "").strip()
             if img:
                 no_bg_by_code[code] = img
             # Also index by recognition_id for direct lookup
@@ -2880,7 +2884,7 @@ def proposed_planogram():
             }), 400
 
         product_map_rows = _supabase_get("test_coffee_product_map", {
-            "select": "product_code,tiny_name,product_name,width_cm,height_cm,recognition_id,image_no_bg_url",
+            "select": "product_code,tiny_name,product_name,width_cm,height_cm,recognition_id,image_no_bg_url,miniature_url,category_l0,category_l1,category_l2,category_l3,package_type,brand",
         })
         planogram_rows = _supabase_get("test_coffee_planogram_positions", {
             "select": "eq_num_in_scene_group,shelf_number,external_product_id,faces_width",
@@ -2896,6 +2900,10 @@ def proposed_planogram():
             "photo_facings": "eq.0",
             "order": "avg_sale_amount.desc.nullslast",
         })
+        actions = [
+            a for a in actions
+            if (a.get("status") or "pending") != "out_of_stock"
+        ]
 
         print(
             f"[proposed-planogram] realogram={len(realogram_positions)} positions, "

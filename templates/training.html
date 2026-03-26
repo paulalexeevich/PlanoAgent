@@ -31,6 +31,11 @@
             <div class="step-arrow">&rarr;</div>
             <div class="step" id="step3Indicator" data-step="3">
                 <span class="step-num">3</span>
+                <span class="step-label">Review Out-of-Shelf</span>
+            </div>
+            <div class="step-arrow">&rarr;</div>
+            <div class="step" id="step4Indicator" data-step="4">
+                <span class="step-num">4</span>
                 <span class="step-label">Proposed Planogram</span>
             </div>
         </div>
@@ -145,14 +150,38 @@
                     </div>
                 </div>
 
-                <!-- Step 3: Proposed Planogram -->
+                <!-- Step 3: Review Out-of-Shelf -->
                 <div class="training-step locked" id="trainStep3">
                     <div class="training-step-header" id="trainStep3Header">
                         <span class="training-step-badge">Step 3</span>
-                        <h3>Proposed Planogram</h3>
+                        <h3>Review Out-of-Shelf</h3>
                         <button class="step-collapse-btn" id="collapseStep3" style="display:none" title="Toggle details">▾</button>
                     </div>
                     <div class="step-collapsible" id="trainStep3Body">
+                        <p class="training-step-desc">
+                            Review out-of-shelf products before optimization.
+                            Mark items as out-of-stock to exclude them from installation.
+                        </p>
+                        <button class="btn-training" id="btnLoadOosReview" disabled>
+                            <span id="oosReviewLabel">Load Out-of-Shelf Products</span>
+                            <span id="oosReviewSpinner" class="btn-spinner" style="display:none"></span>
+                        </button>
+                        <div id="oosReviewResult" class="training-result"></div>
+                        <div id="oosReviewList" class="oos-review-list" style="display:none"></div>
+                        <button class="btn-training" id="btnCompleteOosReview" style="display:none;margin-top:10px;">
+                            Continue to Step 4
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 4: Proposed Planogram -->
+                <div class="training-step locked" id="trainStep4">
+                    <div class="training-step-header" id="trainStep4Header">
+                        <span class="training-step-badge">Step 4</span>
+                        <h3>Proposed Planogram</h3>
+                        <button class="step-collapse-btn" id="collapseStep4" style="display:none" title="Toggle details">▾</button>
+                    </div>
+                    <div class="step-collapsible" id="trainStep4Body">
                         <p class="training-step-desc">
                             Run out-of-shelf optimization to place missing products.
                             Shows the best strategy result with new installations (green)
@@ -215,6 +244,7 @@
     <script src="/static/js/photo-viewer/planogram-mini.js"></script>
     <script src="/static/js/training/training-equipment.js"></script>
     <script src="/static/js/training/training-init.js?v=3"></script>
-    <script src="/static/js/training/training-proposed.js?v=6"></script>
+    <script src="/static/js/training/training-oos-review.js?v=1"></script>
+    <script src="/static/js/training/training-proposed.js?v=7"></script>
 </body>
 </html>

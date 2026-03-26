@@ -24,6 +24,48 @@ from typing import Dict, List, Optional, Tuple
 # ── Types ──────────────────────────────────────────────────────────────────────
 
 ShelfKey = Tuple[int, int]  # (bay_number, shelf_number)
+TREE_LEVEL_KEYS = [
+    "category_l0",
+    "category_l1",
+    "category_l2",
+    "category_l3",
+    "package_type",
+    "brand_name",
+]
+TREE_SCORE_MAX = len(TREE_LEVEL_KEYS)
+
+# Canonical category normalization used for scoring/placement only.
+# This protects decision-tree matching from taxonomy label variants.
+L0_NORMALIZATION = {
+    "Какао, горячий шоколад": "Кофе, какао",
+}
+
+
+def merge_product_map_images(
+    product_attrs: Dict[str, dict],
+    product_map_rows: list,
+) -> None:
+    """Fill image_url / image_no_bg_url / recognition_id for every product_code in the map.
+
+    Out-of-shelf actions reference SKUs that may not appear on the realogram yet; those
+    codes would otherwise have no image in proposed-planogram visuals.
+    """
+    for r in product_map_rows:
+        code = r.get("product_code")
+        if not code:
+            continue
+        no_bg = (r.get("image_no_bg_url") or "").strip()
+        mini = (r.get("miniature_url") or "").strip()
+        if not no_bg and not mini:
+            continue
+        attrs = product_attrs.setdefault(code, {})
+        rid = (r.get("recognition_id") or "").strip()
+        if rid:
+            attrs.setdefault("recognition_id", rid)
+        if no_bg:
+            attrs["image_no_bg_url"] = no_bg
+        # Display URL: prefer transparent no-bg, else miniature (with background)
+        attrs["image_url"] = no_bg or attrs.get("image_url") or mini
 
 
 @dataclass
@@ -54,7 +96,7 @@ def build_shelf_state_from_realogram(
             width_in, shelf_width_in.
         product_map_rows: rows from `test_coffee_product_map`.
             Required fields: product_code, recognition_id, tiny_name,
-            product_name, width_cm, height_cm, image_no_bg_url.
+            product_name, width_cm, height_cm, image_no_bg_url, miniature_url.
         planogram_rows: rows from `test_coffee_planogram_positions`.
             Required fields: external_product_id, eq_num_in_scene_group,
             shelf_number, faces_width, store_id.
@@ -82,8 +124,14 @@ def build_shelf_state_from_realogram(
                 "height_cm": float(r.get("height_cm") or 20.0),
                 "tiny_name": r.get("tiny_name") or "",
                 "name": r.get("product_name") or "",
+                "category_l0": r.get("category_l0") or "",
+                "category_l1": r.get("category_l1") or "",
+                "category_l2": r.get("category_l2") or "",
+                "category_l3": r.get("category_l3") or "",
+                "package_type": r.get("package_type") or "",
+                "brand": r.get("brand") or "",
             }
-            img = r.get("image_no_bg_url") or ""
+            img = (r.get("image_no_bg_url") or r.get("miniature_url") or "").strip()
             if img:
                 no_bg_by_code[code] = img
                 if rid:
@@ -127,6 +175,22 @@ def build_shelf_state_from_realogram(
         planogram_facings_by_shelf[triple] = planogram_facings_by_shelf.get(triple, 0) + f
         planogram_facings_global[eid]      = planogram_facings_global.get(eid, 0) + f
 
+    # Build category scope from planogram assortment.
+    # Realogram products outside this scope are treated as out-of-category noise
+    # and excluded before optimization so their shelf space becomes available.
+    allowed_l0: set = set()
+    allowed_l1: set = set()
+    for eid in planogram_target.keys():
+        sz = size_map.get(eid, {})
+        l0 = (sz.get("category_l0") or "").strip()
+        if l0 in L0_NORMALIZATION:
+            l0 = L0_NORMALIZATION[l0]
+        l1 = (sz.get("category_l1") or "").strip()
+        if l0:
+            allowed_l0.add(l0)
+        if l1:
+            allowed_l1.add(l1)
+
     # Also index by recognition_id so products map cleanly
     for rid, code in recog_to_code.items():
         if rid not in planogram_target and code in planogram_target:
@@ -148,6 +212,17 @@ def build_shelf_state_from_realogram(
         pid = row["product_id"]
         product_code = recog_to_code.get(pid, pid)
         sz = size_map.get(product_code, {})
+        # Pre-filter: keep only products within planogram category scope.
+        # This removes unrelated categories (e.g. cosmetics/alcohol) from the
+        # proposed-planogram baseline and frees space for real installations.
+        row_l0 = (sz.get("category_l0") or "").strip()
+        if row_l0 in L0_NORMALIZATION:
+            row_l0 = L0_NORMALIZATION[row_l0]
+        row_l1 = (sz.get("category_l1") or row.get("category", "") or "").strip()
+        if allowed_l0 and row_l0 and row_l0 not in allowed_l0:
+            continue
+        if allowed_l1 and row_l1 and row_l1 not in allowed_l1:
+            continue
         width_cm = round(row.get("width_in", 0) * 2.54, 2) or max(1.0, float(sz.get("width_cm") or 8.5))
         pk: PhotoKey = (product_code, bay_num, shelf_num)
         photo_facings_agg[pk] += max(1, int(row.get("facings_wide", 1)))
@@ -223,14 +298,26 @@ def build_shelf_state_from_realogram(
 
         if product_code not in product_attrs:
             image_url = no_bg_by_code.get(product_code) or no_bg_by_code.get(pid) or ""
+            category_l0 = sz.get("category_l0") or ""
+            category_l1 = sz.get("category_l1") or row.get("category", "")
+            category_l2 = sz.get("category_l2") or category_l1
+            category_l3 = sz.get("category_l3") or ""
+            package_type = sz.get("package_type") or ""
+            brand_name = sz.get("brand") or row.get("brand", "")
             product_attrs[product_code] = {
-                "category_name": row.get("category", ""),
-                "brand_name": row.get("brand", ""),
-                "brand_owner_name": row.get("brand", ""),
+                "category_l0": category_l0,
+                "category_l1": category_l1,
+                "category_l2": category_l2,
+                "category_l3": category_l3,
+                "category_name": category_l2,
+                "package_type": package_type,
+                "brand_name": brand_name,
+                "brand_owner_name": brand_name,
                 "image_url": image_url,
                 "product_name": sz.get("name") or row.get("product_name", "") or tiny_name,
                 "recognition_id": pid,
             }
+            _normalize_attrs_inplace(product_attrs[product_code])
 
     # ── Finalise shelf metrics ─────────────────────────────────────────────────
     for key, shelf in shelves.items():
@@ -247,11 +334,7 @@ def build_shelf_state_from_realogram(
         # algorithm knows what categories are already on each shelf.
         for prod in shelf["products"]:
             attrs = product_attrs.get(prod["product_code"], {})
-            grp = (
-                attrs.get("category_name", ""),
-                attrs.get("brand_owner_name", "") or attrs.get("brand_name", ""),
-                attrs.get("brand_name", ""),
-            )
+            grp = _group_for_attrs(attrs)
             if any(g for g in grp) and grp not in shelf["tree_groups"]:
                 shelf["tree_groups"].append(grp)
 
@@ -264,19 +347,68 @@ def _score_tree_insertion(prod_groups: tuple, shelf_tree_groups: list) -> int:
     """Score how well a product fits a shelf from a decision tree perspective.
 
     Returns:
-        2 — perfect match (exact brand/subcategory group already on shelf)
-        1 — compatible (same top-level category, different brand)
-        0 — category break (different category)
+        0..N where N=len(TREE_LEVEL_KEYS), using progressive level fallback.
+        Match tries from L0 first; if it conflicts, retries from L1, then L2, etc.
+        Deeper matched chain wins.
     """
     if not shelf_tree_groups:
-        return 1  # empty shelf → no conflict, but not "perfect"
-    if prod_groups in shelf_tree_groups:
-        return 2
-    prod_cat = prod_groups[0] if prod_groups else ""
-    shelf_cats = {g[0] for g in shelf_tree_groups if g}
-    if prod_cat and prod_cat in shelf_cats:
-        return 1
-    return 0
+        return 1  # empty shelf is category-compatible baseline
+    return max(_fallback_level_depth(prod_groups, grp) for grp in shelf_tree_groups)
+
+
+def _group_for_attrs(attrs: dict) -> tuple:
+    """Build a fixed-depth decision-tree tuple from product attrs."""
+    _normalize_attrs_inplace(attrs)
+    return (
+        attrs.get("category_l0", ""),
+        attrs.get("category_l1", ""),
+        attrs.get("category_l2", "") or attrs.get("category_name", ""),
+        attrs.get("category_l3", ""),
+        attrs.get("package_type", ""),
+        attrs.get("brand_name", ""),
+    )
+
+
+def _normalize_attrs_inplace(attrs: dict) -> None:
+    """Normalize taxonomy aliases in-place for consistent tree scoring."""
+    l0 = (attrs.get("category_l0") or "").strip()
+    l1 = (attrs.get("category_l1") or "").strip()
+    l2 = (attrs.get("category_l2") or "").strip()
+    if l0 in L0_NORMALIZATION:
+        attrs["category_l0"] = L0_NORMALIZATION[l0]
+    # If L0 missing/variant but L1/L2 clearly belongs to cocoa/hot chocolate,
+    # map to the canonical mixed root used by shelf products.
+    if not attrs.get("category_l0") and (
+        l1 == "Какао, горячий шоколад" or l2 == "Какао, горячий шоколад"
+    ):
+        attrs["category_l0"] = "Кофе, какао"
+
+
+def _fallback_level_depth(a: tuple, b: tuple) -> int:
+    """Compute best hierarchical match depth with explicit level fallback.
+
+    For each start level i (L0..LN), try matching from i downward:
+      - both present + equal => count
+      - both present + different => stop this chain (keep depth so far)
+      - missing on either side => skip (unknown)
+    Returns the maximum matched depth across all starts.
+    """
+    n = min(len(a), len(b))
+    best = 0
+    for start in range(n):
+        depth = 0
+        compared = 0
+        for idx in range(start, n):
+            av = a[idx]
+            bv = b[idx]
+            if av and bv:
+                compared += 1
+                if av != bv:
+                    break
+                depth += 1
+        if compared > 0 and depth > best:
+            best = depth
+    return best
 
 
 # ── Step 3: Fit computation (non-mutating) ─────────────────────────────────────
@@ -351,6 +483,93 @@ def _apply_fit(shelf: dict, fit: dict, needed_cm: float) -> None:
         shelf["pre_overflow_cm"] = max(0.0, round(shelf["used_cm"] - shelf["total_width_cm"], 1))
 
 
+def _try_relocation_fit(
+    shelves: Dict[ShelfKey, dict],
+    source_key: ShelfKey,
+    needed_cm: float,
+    product_attrs: Dict[str, dict],
+) -> Optional[dict]:
+    """Try to free space by moving one facing to another bay on same shelf number.
+
+    Returns a fit dict compatible with placement options when relocation succeeds.
+    """
+    source = shelves.get(source_key)
+    if not source:
+        return None
+
+    if source.get("free_cm", 0) >= needed_cm:
+        return {"space_source": "free_space", "reductions": [], "time_min": 1, "relocations": []}
+
+    # Prefer moving lowest-sales products first.
+    movable = sorted(
+        [p for p in source.get("products", []) if p.get("photo_facings", 0) > 0],
+        key=lambda p: float(p.get("avg_sale_amount") or 0),
+    )
+    if not movable:
+        return None
+
+    relocations = []
+    same_shelf_dest = sorted(
+        [k for k in shelves.keys() if k[1] == source_key[1] and k[0] != source_key[0]],
+        key=lambda k: abs(k[0] - source_key[0]),
+    )
+
+    for prod in movable:
+        width_cm = float(prod.get("width_cm") or 0)
+        if width_cm <= 0:
+            continue
+
+        # Find destination bay on same shelf with enough free space.
+        dest_key = next(
+            (k for k in same_shelf_dest if shelves[k].get("free_cm", 0) >= width_cm),
+            None,
+        )
+        if not dest_key:
+            continue
+
+        dest = shelves[dest_key]
+        code = prod.get("product_code")
+        if not code:
+            continue
+
+        # Move exactly one facing.
+        prod["photo_facings"] -= 1
+        source["used_cm"] = round(source.get("used_cm", 0) - width_cm, 2)
+        source["free_cm"] = round(source.get("free_cm", 0) + width_cm, 2)
+
+        existing = next((p for p in dest.get("products", []) if p.get("product_code") == code), None)
+        if existing:
+            existing["photo_facings"] = int(existing.get("photo_facings", 0)) + 1
+        else:
+            moved = copy.deepcopy(prod)
+            moved["photo_facings"] = 1
+            dest.setdefault("products", []).append(moved)
+            attrs = product_attrs.get(code, {})
+            grp = _group_for_attrs(attrs)
+            if any(g for g in grp) and grp not in dest.get("tree_groups", []):
+                dest.setdefault("tree_groups", []).append(grp)
+
+        dest["used_cm"] = round(dest.get("used_cm", 0) + width_cm, 2)
+        dest["free_cm"] = round(dest.get("free_cm", 0) - width_cm, 2)
+
+        relocations.append({
+            "product_code": code,
+            "from_shelf": f"Bay {source_key[0]}, Shelf {source_key[1]}",
+            "to_shelf": f"Bay {dest_key[0]}, Shelf {dest_key[1]}",
+            "moved_facings": 1,
+        })
+
+        if source.get("free_cm", 0) >= needed_cm:
+            return {
+                "space_source": "relocation",
+                "reductions": [],
+                "time_min": 2 + len(relocations),  # move + install overhead
+                "relocations": relocations,
+            }
+
+    return None
+
+
 # ── Step 4: Single strategy run ────────────────────────────────────────────────
 
 def _run_strategy(
@@ -364,8 +583,8 @@ def _run_strategy(
 
     Strategies
     ----------
-    sales_first_strict   — highest sales first, only exact planogram shelf
-    sales_first_flexible — highest sales first, ±1 shelf allowed
+    sales_first_strict   — highest sales first, best realogram tree shelf
+    sales_first_flexible — highest sales first, best realogram tree shelf
     tree_first           — group by category/brand for tree compliance, then sales
     min_time             — prefer free-space slots (no reductions needed) first
     """
@@ -377,15 +596,32 @@ def _run_strategy(
         sorted_actions = sorted(
             actions,
             key=lambda x: (
-                product_attrs.get(x.get("product_code", ""), {}).get("category_name", "zzz"),
+                product_attrs.get(x.get("product_code", ""), {}).get("category_l0", "zzz"),
+                product_attrs.get(x.get("product_code", ""), {}).get("category_l1", "zzz"),
+                product_attrs.get(x.get("product_code", ""), {}).get("category_l2", "zzz"),
+                product_attrs.get(x.get("product_code", ""), {}).get("category_l3", "zzz"),
+                product_attrs.get(x.get("product_code", ""), {}).get("package_type", "zzz"),
+                product_attrs.get(x.get("product_code", ""), {}).get("brand_name", "zzz"),
                 -float(x.get("avg_sale_amount") or 0),
             ),
         )
     elif strategy == "min_time":
         def _min_time_key(a):
-            tgt = planogram_target.get(a.get("product_code", ""))
-            needed = float(a.get("width_cm") or 8.5)
-            if tgt and shelves.get(tgt, {}).get("free_cm", 0) >= needed:
+            code = a.get("product_code", "")
+            needed = max(1.0, float(a.get("width_cm") or 8.5)) * max(
+                1, int(a.get("planogram_facings") or 1)
+            )
+            prod_groups = _group_for_attrs(product_attrs.get(code, {}))
+            scored = [
+                (k, _score_tree_insertion(prod_groups, shelf["tree_groups"]))
+                for k, shelf in shelves.items()
+            ]
+            best_depth = max((d for _, d in scored), default=0)
+            if best_depth > 0:
+                candidate_keys = [k for k, d in scored if d == best_depth]
+            else:
+                candidate_keys = list(shelves.keys())
+            if any(shelves[k].get("free_cm", 0) >= needed for k in candidate_keys):
                 return (0, -float(a.get("avg_sale_amount") or 0))
             return (1, -float(a.get("avg_sale_amount") or 0))
         sorted_actions = sorted(actions, key=_min_time_key)
@@ -394,6 +630,7 @@ def _run_strategy(
 
     placed: list = []
     unplaced: list = []
+    deferred_for_opportunistic: list = []
 
     for action in sorted_actions:
         product_code = action.get("product_code", "")
@@ -404,56 +641,50 @@ def _run_strategy(
         avg_sale = float(action.get("avg_sale_amount") or 0)
 
         target_key = planogram_target.get(product_code)
-        if not target_key:
-            unplaced.append({"product_code": product_code, "tiny_name": tiny_name,
-                             "avg_sale_amount": avg_sale, "reason": "No planogram position found"})
-            continue
-
-        eq_num, shelf_num = target_key
-        candidate_keys = (
-            [target_key]
-            if strategy == "sales_first_strict"
-            else [k for k in [(eq_num, shelf_num), (eq_num, shelf_num - 1), (eq_num, shelf_num + 1)]
-                  if k in shelves]
-        )
+        eq_num, shelf_num = target_key if target_key else (None, None)
 
         attrs = product_attrs.get(product_code, {})
-        prod_groups = (
-            attrs.get("category_name", ""),
-            attrs.get("brand_owner_name", "") or attrs.get("brand_name", ""),
-            attrs.get("brand_name", ""),
-        )
+        prod_groups = _group_for_attrs(attrs)
 
-        # For flexible strategies, also consider shelves where the product's
-        # category already exists (tree score == 2).  This ensures products land
-        # next to their category peers rather than just ±1 from planogram.
-        # If no perfect-match shelf is found anywhere in the bay, also try
-        # compatible (score 1) shelves so products with sparse realogram data
-        # still have options beyond the narrow ±1 window.
-        if strategy != "sales_first_strict":
-            bay_shelves = sorted(k for k in shelves if k[0] == eq_num and k not in candidate_keys)
-            tree2_keys = [k for k in bay_shelves
-                          if _score_tree_insertion(prod_groups, shelves[k]["tree_groups"]) == 2]
-            candidate_keys += tree2_keys
-            if not tree2_keys:  # no perfect match — try category-compatible shelves
-                tree1_keys = [k for k in bay_shelves
-                              if _score_tree_insertion(prod_groups, shelves[k]["tree_groups"]) == 1]
-                candidate_keys += tree1_keys
+        # Candidate shelves are selected from REALOGRAM only:
+        # choose shelves with the deepest decision-tree match. If no match exists,
+        # allow all shelves as a fallback.
+        scored_all = sorted(
+            ((k, _score_tree_insertion(prod_groups, s["tree_groups"])) for k, s in shelves.items()),
+            key=lambda x: (x[1], -x[0][0], -x[0][1]),
+            reverse=True,
+        )
+        best_depth = max((d for _, d in scored_all), default=0)
+        if best_depth > 0:
+            candidate_keys = [k for k, d in scored_all if d == best_depth]
+        else:
+            candidate_keys = [k for k, _ in scored_all]
 
         options = []
         for shelf_key in candidate_keys:
             shelf = shelves[shelf_key]
-            fit = _compute_fit(shelf, needed_cm)
+            fit = None
+            # For low-priority / zero-sales installs, prefer relocation first:
+            # it preserves on-shelf category blocks better than aggressive reductions.
+            if avg_sale <= 0:
+                fit = _try_relocation_fit(shelves, shelf_key, needed_cm, product_attrs)
+            if fit is None:
+                fit = _compute_fit(shelf, needed_cm)
+            if fit is None:
+                fit = _try_relocation_fit(shelves, shelf_key, needed_cm, product_attrs)
             if fit is None:
                 continue
             tree_score = _score_tree_insertion(prod_groups, shelf["tree_groups"])
-            options.append({"shelf_key": shelf_key, "shelf_delta": abs(shelf_key[1] - shelf_num),
+            shelf_delta = abs(shelf_key[1] - shelf_num) if shelf_num is not None else 0
+            options.append({"shelf_key": shelf_key, "shelf_delta": shelf_delta,
                             "tree_score": tree_score, **fit})
 
         if not options:
-            unplaced.append({"product_code": product_code, "tiny_name": tiny_name,
-                             "avg_sale_amount": avg_sale,
-                             "reason": "Insufficient space after all excess facing reductions exhausted"})
+            row = {"product_code": product_code, "tiny_name": tiny_name,
+                   "avg_sale_amount": avg_sale,
+                   "reason": "Insufficient space after all excess facing reductions exhausted"}
+            unplaced.append(row)
+            deferred_for_opportunistic.append(action)
             continue
 
         best = max(options, key=lambda o: (o["tree_score"], -o["time_min"]))
@@ -471,21 +702,22 @@ def _run_strategy(
             shelf["tree_groups"].append(prod_groups)
 
         ts = best["tree_score"]
+        ts_max = TREE_SCORE_MAX
         if not shelf_groups_before:
             tree_reason = "Empty shelf — no conflict"
-        elif ts == 2:
-            tree_reason = "Exact group match on shelf"
-        elif ts == 1:
-            tree_reason = "Same category, different brand"
+        elif ts == ts_max:
+            tree_reason = "Exact full-tree match on shelf"
+        elif ts > 0:
+            tree_reason = f"Matched {ts} decision-tree level(s) with fallback"
         else:
-            shelf_cats = ", ".join(sorted({g[0] for g in shelf_groups_before if g and g[0]})) or "other"
-            tree_reason = f"Category break — shelf has: {shelf_cats}"
+            shelf_roots = ", ".join(sorted({g[0] for g in shelf_groups_before if g and g[0]})) or "other"
+            tree_reason = f"Category break at root — shelf has: {shelf_roots}"
 
         placed.append({
             "product_code": product_code,
             "tiny_name": tiny_name,
             "avg_sale_amount": avg_sale,
-            "planogram_shelf": f"Bay {eq_num}, Shelf {shelf_num}",
+            "planogram_shelf": (f"Bay {eq_num}, Shelf {shelf_num}" if eq_num is not None else ""),
             "actual_shelf": f"Bay {shelf_key[0]}, Shelf {shelf_key[1]}",
             "shelf_delta": best["shelf_delta"],
             "needed_cm": round(needed_cm, 1),
@@ -493,7 +725,7 @@ def _run_strategy(
             "unit_width_cm": round(unit_width_cm, 1),
             "space_source": best["space_source"],
             "tree_score": ts,
-            "tree_score_max": 2,
+            "tree_score_max": ts_max,
             "tree_group": " > ".join(g for g in prod_groups if g) or "(unknown category)",
             "tree_follows_dt": ts >= 1,
             "tree_reason": tree_reason,
@@ -502,7 +734,90 @@ def _run_strategy(
             ) or "—",
             "time_min": best["time_min"],
             "reductions_required": best["reductions"],
+            "relocations_required": best.get("relocations", []),
+            "opportunistic": False,
         })
+
+    # ── Opportunistic fill pass: retry unplaced products with relaxed constraints ──
+    # Goal: use visible free space even for weaker tree matches.
+    opportunistic_added = 0
+    for action in sorted(deferred_for_opportunistic, key=lambda x: float(x.get("avg_sale_amount") or 0), reverse=True):
+        product_code = action.get("product_code", "")
+        tiny_name = action.get("tiny_name", "")
+        unit_width_cm = max(1.0, float(action.get("width_cm") or 8.5))
+        install_facings = max(1, int(action.get("planogram_facings") or 1))
+        needed_cm = round(unit_width_cm * install_facings, 1)
+        avg_sale = float(action.get("avg_sale_amount") or 0)
+
+        attrs = product_attrs.get(product_code, {})
+        prod_groups = _group_for_attrs(attrs)
+
+        options = []
+        for shelf_key, shelf in shelves.items():
+            fit = _compute_fit(shelf, needed_cm)
+            if fit is None:
+                fit = _try_relocation_fit(shelves, shelf_key, needed_cm, product_attrs)
+            if fit is None:
+                continue
+            tree_score = _score_tree_insertion(prod_groups, shelf["tree_groups"])
+            options.append({
+                "shelf_key": shelf_key,
+                "tree_score": tree_score,
+                **fit,
+            })
+
+        if not options:
+            continue
+
+        best = max(options, key=lambda o: (o["tree_score"], -o["time_min"]))
+        shelf_key = best["shelf_key"]
+        shelf = shelves[shelf_key]
+        shelf_groups_before = list(shelf["tree_groups"])
+        reduction_time = sum(r.get("time_min", 1) for r in best.get("reductions", []))
+        best["time_min"] = reduction_time + 1 * install_facings
+        _apply_fit(shelf, best, needed_cm)
+
+        if prod_groups not in shelf["tree_groups"]:
+            shelf["tree_groups"].append(prod_groups)
+
+        ts = best["tree_score"]
+        ts_max = TREE_SCORE_MAX
+        if not shelf_groups_before:
+            tree_reason = "Opportunistic fill on empty shelf"
+        elif ts > 0:
+            tree_reason = f"Opportunistic fill, matched {ts} level(s)"
+        else:
+            tree_reason = "Opportunistic fill despite weak tree match"
+
+        target_key = planogram_target.get(product_code)
+        eq_num, shelf_num = target_key if target_key else (None, None)
+
+        placed.append({
+            "product_code": product_code,
+            "tiny_name": tiny_name,
+            "avg_sale_amount": avg_sale,
+            "planogram_shelf": (f"Bay {eq_num}, Shelf {shelf_num}" if eq_num is not None else ""),
+            "actual_shelf": f"Bay {shelf_key[0]}, Shelf {shelf_key[1]}",
+            "shelf_delta": abs(shelf_key[1] - shelf_num) if shelf_num is not None else 0,
+            "needed_cm": round(needed_cm, 1),
+            "install_facings": install_facings,
+            "unit_width_cm": round(unit_width_cm, 1),
+            "space_source": "opportunistic_" + best["space_source"],
+            "tree_score": ts,
+            "tree_score_max": ts_max,
+            "tree_group": " > ".join(g for g in prod_groups if g) or "(unknown category)",
+            "tree_follows_dt": ts >= 1,
+            "tree_reason": tree_reason,
+            "shelf_groups_before": "; ".join(
+                " > ".join(g for g in grp if g) for grp in shelf_groups_before
+            ) or "—",
+            "time_min": best["time_min"],
+            "reductions_required": best["reductions"],
+            "relocations_required": best.get("relocations", []),
+            "opportunistic": True,
+        })
+        opportunistic_added += 1
+        unplaced = [u for u in unplaced if u.get("product_code") != product_code]
 
     tree_scores = [p["tree_score"] for p in placed]
     installed_sales = sum(p["avg_sale_amount"] for p in placed)
@@ -524,9 +839,14 @@ def _run_strategy(
             ),
             "total_time_min": total_time,
             "installed_sales_value": round(installed_sales, 1),
-            "tree_compliance_pct": round(sum(tree_scores) / max(len(tree_scores) * 2, 1) * 100, 1),
+            "tree_compliance_pct": round(
+                sum(tree_scores) / max(len(tree_scores) * TREE_SCORE_MAX, 1) * 100, 1
+            ),
             "follows_dt_count": follows_dt,
             "violates_dt_count": len(placed) - follows_dt,
+            "tree_score_max": TREE_SCORE_MAX,
+            "tree_depth_levels": TREE_LEVEL_KEYS,
+            "opportunistic_added_count": opportunistic_added,
         },
     }
 
@@ -734,6 +1054,8 @@ def build_visual(
                 change_type = "existing"
 
             attrs = product_attrs.get(code, {})
+            no_bg = (attrs.get("image_no_bg_url") or "").strip()
+            mini_or_display = (attrs.get("image_url") or "").strip()
             entry: dict = {
                 "product_code": code,
                 "tiny_name": prod.get("tiny_name", code),
@@ -744,7 +1066,8 @@ def build_visual(
                 "avg_sale_amount": prod.get("avg_sale_amount", 0),
                 "change_type": change_type,
                 "color": _product_color(code),
-                "image_url": attrs.get("image_url") or "",
+                "image_no_bg_url": no_bg,
+                "image_url": no_bg or mini_or_display,
                 "recognition_id": attrs.get("recognition_id") or "",
             }
             if change_type == "reduced" and orig_f is not None:
@@ -795,18 +1118,50 @@ def run_optimization(
         realogram_positions, product_map_rows, planogram_rows, sales_rows
     )
 
+    merge_product_map_images(product_attrs, product_map_rows)
+    pm_by_code = {
+        r.get("product_code"): r
+        for r in product_map_rows
+        if r.get("product_code")
+    }
+
     # Enrich product_attrs from action metadata (product_name, brand, etc.)
     for action in actions:
         code = action.get("product_code", "")
         if not code:
             continue
         attrs = product_attrs.setdefault(code, {})
+        pm = pm_by_code.get(code, {})
         if not attrs.get("product_name"):
-            attrs["product_name"] = action.get("product_name") or action.get("tiny_name", "")
+            attrs["product_name"] = (
+                pm.get("product_name")
+                or action.get("product_name")
+                or action.get("tiny_name", "")
+            )
         if not attrs.get("brand_name"):
-            attrs["brand_name"] = action.get("brand", "")
+            attrs["brand_name"] = pm.get("brand") or action.get("brand", "")
+        if not attrs.get("brand_owner_name"):
+            attrs["brand_owner_name"] = pm.get("brand") or action.get("brand", "")
+        if not attrs.get("category_l0"):
+            attrs["category_l0"] = pm.get("category_l0") or action.get("category_l0", "")
+        if not attrs.get("category_l1"):
+            attrs["category_l1"] = pm.get("category_l1") or action.get("category_l1", "")
+        if not attrs.get("category_l2"):
+            attrs["category_l2"] = pm.get("category_l2") or action.get("category_l2", "")
+        if not attrs.get("category_l3"):
+            attrs["category_l3"] = pm.get("category_l3") or action.get("category_l3", "")
+        if not attrs.get("package_type"):
+            attrs["package_type"] = pm.get("package_type") or action.get("package_type", "")
         if not attrs.get("category_name"):
-            attrs["category_name"] = action.get("category_l1", "")
+            attrs["category_name"] = (
+                attrs.get("category_l2")
+                or pm.get("category_l2")
+                or attrs.get("category_l1")
+                or pm.get("category_l1")
+                or action.get("category_l2")
+                or action.get("category_l1", "")
+            )
+        _normalize_attrs_inplace(attrs)
 
     if not actions:
         bays = build_visual(shelf_state, shelf_state, [], product_attrs)
@@ -841,7 +1196,9 @@ def run_optimization(
             "avg_sale_amount": float(action.get("avg_sale_amount") or 0),
             "planogram_facings": action.get("planogram_facings", 1),
             "width_cm": action.get("width_cm", 0),
+            "category_l0": action.get("category_l0", ""),
             "category_l1": action.get("category_l1", ""),
+            "category_l2": action.get("category_l2", ""),
             "installed": bool(placement),
             "actual_shelf": placement.get("actual_shelf", "") if placement else "",
             "planogram_shelf": placement.get("planogram_shelf", "") if placement else "",
@@ -849,8 +1206,10 @@ def run_optimization(
             "time_min": placement.get("time_min", 0) if placement else 0,
             "space_source": placement.get("space_source", "") if placement else "",
             "reductions": placement.get("reductions_required", []) if placement else [],
+            "relocations": placement.get("relocations_required", []) if placement else [],
+            "opportunistic": placement.get("opportunistic", False) if placement else False,
             "tree_score": placement.get("tree_score") if placement else None,
-            "tree_score_max": placement.get("tree_score_max", 2) if placement else 2,
+            "tree_score_max": placement.get("tree_score_max", TREE_SCORE_MAX) if placement else TREE_SCORE_MAX,
             "tree_group": placement.get("tree_group", "") if placement else "",
             "tree_follows_dt": placement.get("tree_follows_dt", False) if placement else False,
             "tree_reason": placement.get("tree_reason", "") if placement else "",

@@ -82,12 +82,16 @@
             const followsDT = s.follows_dt_count || 0;
             const violatesDT = s.violates_dt_count || 0;
             const placed = s.placed_count || 0;
+            const opportunisticAdded = s.opportunistic_added_count || 0;
             const treePct = (s.tree_compliance_pct || 0).toFixed(0);
-            const treeTooltip = `Tree compliance: sum of scores / (placed × 2) × 100\nScore per product: 2=perfect, 1=compatible, 0=break\nFollows DT: ${followsDT}, Violates: ${violatesDT}`;
+            const treeMax = s.tree_score_max || 3;
+            const treeDepth = (s.tree_depth_levels || []).join(' > ') || 'category_l1 > category_l2 > brand';
+            const treeTooltip = `Tree compliance: sum of scores / (placed × ${treeMax}) × 100\nScore per product: depth of common tree prefix (0..${treeMax})\nDepth keys: ${treeDepth}\nFollows DT: ${followsDT}, Violates: ${violatesDT}`;
             statsEl.innerHTML = `
                 <div class="pp-stat-row">
                     <span>Score: <strong>${((data.combined_score || 0) * 100).toFixed(0)}%</strong></span>
                     <span>Installed: <strong>${placed} / ${s.total_out_of_shelf || 0}</strong></span>
+                    ${opportunisticAdded > 0 ? `<span>Opportunistic: <strong>${opportunisticAdded}</strong></span>` : ''}
                     <span>Time: <strong>${(s.total_time_min || 0).toFixed(0)} min</strong></span>
                     <span title="${treeTooltip}" style="cursor:help">Tree: <strong>${treePct}%</strong> <span style="font-size:9px;color:var(--text-secondary)">(${followsDT} ok / ${violatesDT} break)</span></span>
                 </div>
@@ -102,9 +106,9 @@
             lblEl.textContent = 'Reload';
             btn.disabled = false;
 
-            document.getElementById('step3Indicator').classList.add('completed');
-            document.getElementById('trainStep3').classList.add('completed');
-            if (typeof enableStepCollapse === 'function') enableStepCollapse(3);
+            document.getElementById('step4Indicator').classList.add('completed');
+            document.getElementById('trainStep4').classList.add('completed');
+            if (typeof enableStepCollapse === 'function') enableStepCollapse(4);
         } catch (e) {
             spinEl.style.display = 'none';
             resultEl.innerHTML = `<div class="training-error">Failed: ${e.message}</div>`;
@@ -219,7 +223,9 @@
                         ? PV.recog.productsMap[prod.recognition_id] : null;
                     const planoInfo = facingsMap[prod.tiny_name] || {};
                     const imageUrl = (recogProduct && (recogProduct.image_no_bg_url || recogProduct.image_url))
+                        || prod.image_no_bg_url
                         || prod.image_url
+                        || planoInfo.image_no_bg_url
                         || planoInfo.image_url
                         || null;
 
@@ -261,7 +267,8 @@
                         else
                             changeHtml = '<span class="tt-tag tt-existing">Unchanged</span>';
                         const ttImg = (recogProduct && (recogProduct.image_no_bg_url || recogProduct.image_url))
-                            || prod.image_url || planoInfo.image_url || null;
+                            || prod.image_no_bg_url || prod.image_url
+                            || planoInfo.image_no_bg_url || planoInfo.image_url || null;
                         const imgHtml = ttImg ? `<img src="${ttImg}" class="tt-img" alt="">` : '';
                         const displayName = prod.product_name || prod.tiny_name || prod.product_code;
                         const codeHtml = prod.tiny_name && prod.tiny_name !== displayName
@@ -365,6 +372,8 @@
                         : `<span class="pal-reason">${a.reason || 'No space'}</span>`;
                     const sourceHtml = a.installed && a.space_source === 'excess_facings'
                         ? `<span class="pal-source-tag">via reduction</span>` : '';
+                    const opportunisticHtml = a.installed && a.opportunistic
+                        ? `<span class="pal-source-tag">opportunistic</span>` : '';
                     const reductionsHtml = (a.reductions && a.reductions.length)
                         ? `<div class="pal-reductions">Reduced: ${a.reductions.map(r =>
                             `<span class="pal-red-item" title="${r.product_code}">${r.tiny_name || r.product_code} ${r.reduce_from}→${r.reduce_to}</span>`
@@ -376,14 +385,15 @@
                     let treeHtml = '';
                     if (a.installed && a.tree_score !== null && a.tree_score !== undefined) {
                         const ts = a.tree_score;
-                        const tsClass = ts === 2 ? 'tree-perfect' : ts === 1 ? 'tree-ok' : 'tree-break';
-                        const tsLabel = ts === 2 ? '●●' : ts === 1 ? '●○' : '○○';
-                        const tsText = ts === 2 ? 'Perfect' : ts === 1 ? 'Compatible' : 'Break';
+                        const tsMax = a.tree_score_max || 3;
+                        const tsClass = ts >= 4 ? 'tree-perfect' : ts >= 1 ? 'tree-ok' : 'tree-break';
+                        const tsLabel = '●'.repeat(Math.max(0, ts)) + '○'.repeat(Math.max(0, tsMax - ts));
+                        const tsText = ts === tsMax ? 'Exact' : ts > 0 ? `Depth ${ts}` : 'Break';
                         treeHtml = `
                             <div class="pal-tree ${tsClass}" title="${a.tree_reason}\nShelf had: ${a.shelf_groups_before}\nProduct: ${a.tree_group}">
                                 <span class="tree-dots">${tsLabel}</span>
                                 <span class="tree-label">${tsText}</span>
-                                <span class="tree-score-num">${ts}/${a.tree_score_max || 2}</span>
+                                <span class="tree-score-num">${ts}/${tsMax}</span>
                             </div>`;
                     }
 
@@ -396,7 +406,7 @@
                                     ${a.brand ? `<span class="tag-brand">${a.brand}</span>` : ''}
                                     ${a.installed && a.install_facings > 1 ? `<span class="pal-facings">${a.install_facings} facings</span>` : ''}
                                     ${sale > 0 ? `<span class="pal-sale">${sale.toLocaleString('ru-RU', {maximumFractionDigits:0})} ₽/wk</span>` : ''}
-                                    ${timeHtml}${sourceHtml}
+                                    ${timeHtml}${sourceHtml}${opportunisticHtml}
                                 </div>
                                 <div class="pal-where">${locationHtml}</div>
                                 ${reductionsHtml}
@@ -424,28 +434,28 @@
         tt.style.top = y + 'px';
     }
 
-    // Unlock step 3 when step 2 completes (step2Indicator gets class "completed")
-    function unlockStep3() {
-        document.getElementById('trainStep3').classList.remove('locked');
-        document.getElementById('trainStep3').classList.add('active');
+    // Unlock step 4 when step 3 completes (step3Indicator gets class "completed")
+    function unlockStep4() {
+        document.getElementById('trainStep4').classList.remove('locked');
+        document.getElementById('trainStep4').classList.add('active');
         btn.disabled = false;
-        var s3ind = document.getElementById('step3Indicator');
-        if (s3ind) s3ind.classList.add('active');
+        var s4ind = document.getElementById('step4Indicator');
+        if (s4ind) s4ind.classList.add('active');
     }
 
-    var step2Ind = document.getElementById('step2Indicator');
-    if (step2Ind) {
+    var step3Ind = document.getElementById('step3Indicator');
+    if (step3Ind) {
         // Already completed (page reload after build)?
-        if (step2Ind.classList.contains('completed')) {
-            unlockStep3();
+        if (step3Ind.classList.contains('completed')) {
+            unlockStep4();
         } else {
             var obs = new MutationObserver(function() {
-                if (step2Ind.classList.contains('completed')) {
-                    unlockStep3();
+                if (step3Ind.classList.contains('completed')) {
+                    unlockStep4();
                     obs.disconnect();
                 }
             });
-            obs.observe(step2Ind, { attributes: true, attributeFilter: ['class'] });
+            obs.observe(step3Ind, { attributes: true, attributeFilter: ['class'] });
         }
     }
 })();
