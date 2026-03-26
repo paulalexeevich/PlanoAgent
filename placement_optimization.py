@@ -427,28 +427,61 @@ def _compute_fit(shelf: dict, needed_cm: float) -> Optional[dict]:
     reductions = []
     time_min = 1
     still_needed = round(needed_cm - shelf["free_cm"], 2)
-    simulated: Dict[str, int] = {}
 
-    for cand in shelf["reduction_candidates"]:
-        if still_needed <= 0:
-            break
-        already = simulated.get(cand["product_code"], 0)
-        available = cand["excess_facings"] - already
-        if available <= 0:
+    # Build per-facing "units" and choose a minimal-overfree combination.
+    # Each unit = remove exactly 1 excess facing from one product.
+    need_int = max(1, int(round(still_needed * 10)))
+    units: List[Tuple[int, int, int]] = []  # (width_int, cand_idx, sales_penalty)
+    for idx, cand in enumerate(shelf["reduction_candidates"]):
+        width_int = max(1, int(round(float(cand["width_cm"]) * 10)))
+        available = max(0, int(cand.get("excess_facings", 0)))
+        sales_penalty = int(round(float(cand.get("avg_sale_amount") or 0) * 100))
+        for _ in range(available):
+            units.append((width_int, idx, sales_penalty))
+
+    if not units:
+        return None
+
+    # DP by freed-width sum: for each sum keep the cheapest tuple by
+    # (unit_count, sales_penalty). Overshoot is optimized at selection time.
+    dp: Dict[int, Tuple[int, int, Tuple[int, ...]]] = {
+        0: (0, 0, tuple(0 for _ in shelf["reduction_candidates"]))
+    }
+    for width_int, cand_idx, sales_penalty in units:
+        snapshot = list(dp.items())
+        for s, (cnt, sp, picks) in snapshot:
+            ns = s + width_int
+            npicks = list(picks)
+            npicks[cand_idx] += 1
+            candidate = (cnt + 1, sp + sales_penalty, tuple(npicks))
+            prev = dp.get(ns)
+            if prev is None or (candidate[0], candidate[1]) < (prev[0], prev[1]):
+                dp[ns] = candidate
+
+    feasible = [(s, meta) for s, meta in dp.items() if s >= need_int]
+    if not feasible:
+        return None
+
+    # Prefer minimal overshoot; then fewer removed facings; then lower sales impact.
+    best_sum, (_, _, best_picks) = min(
+        feasible,
+        key=lambda item: (item[0] - need_int, item[1][0], item[1][1]),
+    )
+
+    for idx, take in enumerate(best_picks):
+        if take <= 0:
             continue
-        take = min(available, max(1, -(-int(still_needed / cand["width_cm"]))))
-        freed = round(take * cand["width_cm"], 1)
+        cand = shelf["reduction_candidates"][idx]
+        freed = round(take * float(cand["width_cm"]), 1)
         reductions.append({
             "product_code": cand["product_code"],
             "tiny_name": cand["tiny_name"],
-            "reduce_from": cand["photo_facings"] - already,
-            "reduce_to": cand["photo_facings"] - already - take,
+            "reduce_from": int(cand["photo_facings"]),
+            "reduce_to": int(cand["photo_facings"]) - int(take),
             "freed_cm": freed,
-            "time_min": take * 1,
+            "time_min": int(take),
         })
-        time_min += take * 1
-        simulated[cand["product_code"]] = already + take
-        still_needed = round(still_needed - freed, 2)
+        time_min += int(take)
 
     return {"space_source": "excess_facings", "reductions": reductions, "time_min": time_min}
 
