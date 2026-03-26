@@ -597,12 +597,15 @@ body.photo-viewer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-secondary);
     margin-bottom: 4px;
 }
 
-.actions-stat-row strong { color: var(--text-primary); }
+.actions-stat-row strong {
+    color: var(--text-primary);
+    font-size: 14px;
+}
 
 .actions-filters {
     padding: 10px 20px;

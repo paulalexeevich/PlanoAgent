@@ -333,7 +333,7 @@
    PROPOSED PLANOGRAM — Step 3
    ============================================================ */
 .pp-stats-inline {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--text-secondary);
     margin: 8px 0;
 }
@@ -341,10 +341,13 @@
 .pp-stat-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 14px;
+    gap: 6px 18px;
 }
 
-.pp-stat-row strong { color: var(--text-primary); }
+.pp-stat-row strong {
+    color: var(--text-primary);
+    font-size: 14px;
+}
 
 .pp-legend-inline {
     display: flex;

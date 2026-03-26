@@ -31,12 +31,8 @@
             <button class="btn btn-secondary" onclick="removeProducts()">Remove Products</button>
             {% endif %}
             {% if mode == 'coffee' %}
-            <a class="btn btn-secondary" href="/photo-viewer">Photo Viewer</a>
-            <a class="btn btn-secondary" href="/training">Training</a>
-            <a class="btn btn-secondary" href="/training2">Training 2</a>
-            <a class="btn btn-secondary" href="/training3">Training 3</a>
+            <a class="btn btn-secondary" href="/">&#8592; Back</a>
             {% endif %}
-            <a class="btn btn-secondary" href="/?mode={{ 'coffee' if mode == 'beer' else 'beer' }}">Switch to {{ 'Coffee' if mode == 'beer' else 'Beer' }}</a>
         </div>
         <div class="header-actions">
             <div class="scale-control">
@@ -159,6 +155,7 @@
             </div>
         </div>
 
+        {% if mode == 'beer' %}
         <!-- Summary Dashboard -->
         <div class="s-panel" id="bottomPanel">
             <div class="s-panel-header" onclick="togglePanel()">
@@ -197,6 +194,7 @@
         </div>
         <!-- Hidden file input for assortment upload -->
         <input type="file" id="assortmentFileInput" accept=".csv,.txt,.json" style="display:none" onchange="handleAssortmentUpload(event)">
+        {% endif %}
     </div>
 
     {% if mode == 'beer' %}

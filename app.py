@@ -6,7 +6,7 @@ Provides API endpoints for generating and viewing planograms.
 Supports both rule-based and Gemini AI-powered generation.
 """
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect, url_for
 import json
 import os
 import traceback
@@ -284,6 +284,14 @@ def _build_no_bg_image_map() -> dict:
 
 
 CM_TO_IN = 1.0 / 2.54
+
+# Temporary master-data correction (cm) for specific SKUs where the source dims
+# are known to be wrong. Applied at response time so planogram rendering uses
+# consistent sizes without needing an immediate Supabase migration.
+COFFEE_PLANOGRAM_DIM_OVERRIDES_CM = {
+    # UPC -> corrected physical dimensions (cm)
+    "8000063015": {"width_cm": 8.0, "height_cm": 17.0},
+}
 
 
 
@@ -762,35 +770,247 @@ def _load_coffee_planogram(source: str = "auto"):
 
 @app.route("/")
 def index():
-    """Serve the main visualization page. ?mode=beer (default) or ?mode=coffee."""
-    mode = request.args.get("mode", "beer").lower()
-    if mode not in ("beer", "coffee"):
-        mode = "beer"
+    """Serve Training at root; render planogram when mode is requested."""
+    mode = request.args.get("mode", "").lower()
+    if mode in ("beer", "coffee"):
+        if mode == "coffee":
+            desired_id = "PLN-CSV-COFFEE-617533"
+            if (
+                current_planogram is None
+                or current_planogram.category != "Coffee"
+                or getattr(current_planogram, "id", None) != desired_id
+            ):
+                # Force planogram positions (avoid recognition-based realogram state)
+                _load_coffee_planogram(source="positions")
+        else:
+            if current_planogram is None or current_planogram.category == "Coffee":
+                init_default_planogram()
+        return render_template("index.html", mode=mode)
 
-    if mode == "coffee":
-        if current_planogram is None or current_planogram.category != "Coffee":
-            _load_coffee_planogram()
-    else:
-        if current_planogram is None or current_planogram.category == "Coffee":
-            init_default_planogram()
-
-    return render_template("index.html", mode=mode)
+    try:
+        photos = _supabase_photo_list()
+    except Exception:
+        photos = []
+    return render_template("training.html", photos=photos)
 
 
 def _enrich_products_with_images(planogram_dict: dict) -> dict:
-    """Enrich products with fresh image URLs from Supabase.
-    Always uses latest image_no_bg_url when available."""
+    """Enrich coffee products with latest master-data images and sizes.
+    Always uses latest image_no_bg_url when available and refreshes dimensions."""
     if planogram_dict.get("category") != "Coffee":
         return planogram_dict
     
     image_map = _build_image_map()
+    size_map = _load_product_sizes()
     products = planogram_dict.get("products", [])
     for prod in products:
-        upc = prod.get("upc", "")
+        upc = str(prod.get("upc") or "").strip()
+        if not upc:
+            pid = str(prod.get("id") or "").strip()
+            if pid.startswith("CSV-"):
+                upc = pid[4:]
+
         if upc and upc in image_map:
             prod["image_url"] = image_map[upc]["image_url"]
             if image_map[upc]["image_no_bg_url"]:
                 prod["image_no_bg_url"] = image_map[upc]["image_no_bg_url"]
+
+        dims = size_map.get(upc, {}) if upc else {}
+        width_cm = float(dims.get("width_cm") or 0)
+        height_cm = float(dims.get("height_cm") or 0)
+
+        # Prefer master product_name for UI display (avoid tiny_name codes).
+        if dims.get("name"):
+            prod["name"] = dims.get("name")
+        if width_cm > 0:
+            prod["width_in"] = round(width_cm * CM_TO_IN, 2)
+        if height_cm > 0:
+            prod["height_in"] = round(height_cm * CM_TO_IN, 2)
+
+        # Apply known corrections (optional, per-SKU)
+        if upc in COFFEE_PLANOGRAM_DIM_OVERRIDES_CM:
+            ov = COFFEE_PLANOGRAM_DIM_OVERRIDES_CM[upc]
+            prod["width_in"] = round(float(ov["width_cm"]) * CM_TO_IN, 2)
+            prod["height_in"] = round(float(ov["height_cm"]) * CM_TO_IN, 2)
+    return planogram_dict
+
+
+def _reflow_planogram_positions(planogram_dict: dict) -> dict:
+    """Re-pack shelf positions left-to-right using current product widths.
+
+    This removes stale gaps when product master dimensions were updated after
+    the planogram snapshot was built.
+    """
+    equipment = planogram_dict.get("equipment") or {}
+    bays = equipment.get("bays") or []
+    products = planogram_dict.get("products") or []
+    if not bays or not products:
+        return planogram_dict
+
+    product_width_by_id = {}
+    for p in products:
+        pid = p.get("id")
+        if not pid:
+            continue
+        try:
+            product_width_by_id[pid] = float(p.get("width_in") or 0)
+        except Exception:
+            product_width_by_id[pid] = 0.0
+
+    for bay in bays:
+        for shelf in (bay.get("shelves") or []):
+            positions = shelf.get("positions") or []
+            x_cursor = 0.0
+            for pos in positions:
+                pid = pos.get("product_id")
+                facings = max(1, int(pos.get("facings_wide") or 1))
+                width_in = product_width_by_id.get(pid, 0.0)
+
+                # If width is missing/invalid, keep tiny fallback to avoid overlap.
+                if width_in <= 0:
+                    width_in = 1.0
+
+                pos["x_position"] = round(x_cursor, 2)
+                x_cursor += width_in * facings
+
+    return planogram_dict
+
+
+def _recompute_bay_and_shelf_widths(planogram_dict: dict) -> dict:
+    """Recompute bay/shelf width_in from current x_position + product widths.
+
+    Needed because coffee dimension corrections happen at response time and we
+    may have already reflowed x positions, but bay width metadata can remain
+    stale.
+    """
+    if planogram_dict.get("category") != "Coffee":
+        return planogram_dict
+
+    products = planogram_dict.get("products") or []
+    product_by_id = {}
+    for p in products:
+        pid = p.get("id")
+        if pid:
+            try:
+                product_by_id[str(pid)] = float(p.get("width_in") or 0)
+            except Exception:
+                product_by_id[str(pid)] = 0.0
+
+    equipment = planogram_dict.get("equipment") or {}
+    for bay in equipment.get("bays") or []:
+        bay_endmax = 0.0
+        for shelf in (bay.get("shelves") or []):
+            endmax = 0.0
+            for pos in (shelf.get("positions") or []):
+                pid = pos.get("product_id")
+                w = product_by_id.get(str(pid), 0.0) if pid else 0.0
+                fw = max(1, int(pos.get("facings_wide") or 1))
+                x = float(pos.get("x_position") or 0.0)
+                endmax = max(endmax, x + w * fw)
+            bay_endmax = max(bay_endmax, endmax)
+
+        # Keep same convention as generator: +1.0 inch padding.
+        bay_width_in = round(bay_endmax + 1.0, 1)
+        bay["width_in"] = bay_width_in
+        for shelf in (bay.get("shelves") or []):
+            shelf["width_in"] = bay_width_in
+
+    return planogram_dict
+
+
+def _load_product_sizes_by_recognition_id() -> dict:
+    """Load product dimensions keyed by recognition_id.
+
+    test_coffee_product_map uses both product_code and recognition_id; photo
+    viewer realogram positions reference recognition_id as product_id.
+    """
+    try:
+        rows = _supabase_get("test_coffee_product_map", {
+            "select": "recognition_id,product_code,tiny_name,product_name,width_cm,height_cm,brand,package_type,weight_g",
+            "recognition_id": "not.is.null",
+        })
+        out = {}
+        for r in rows:
+            rid = r.get("recognition_id")
+            if not rid:
+                continue
+            width_cm = float(r.get("width_cm") or 0)
+            height_cm = float(r.get("height_cm") or 0)
+            out[rid] = {
+                "product_code": r.get("product_code") or "",
+                "tiny_name": r.get("tiny_name") or "",
+                "name": r.get("product_name") or "",
+                "width_cm": width_cm,
+                "height_cm": height_cm,
+                "brand": r.get("brand") or "",
+                "package_type": r.get("package_type") or "",
+                "weight_g": float(r["weight_g"]) if r.get("weight_g") else 0,
+            }
+        return out
+    except Exception as e:
+        print(f"[product_sizes_recog] Supabase failed: {e}", flush=True)
+        return {}
+
+
+def _refresh_products_from_coffee_master(planogram_dict: dict) -> dict:
+    """Refresh coffee product dimensions + image fields from master data.
+
+    Used for photo viewer / realogram rendering where saved state may contain
+    stale dimensions.
+    """
+    if planogram_dict.get("category") != "Coffee":
+        return planogram_dict
+
+    image_map = _build_image_map()  # product_code -> {image_url, image_no_bg_url}
+    size_by_recog_id = _load_product_sizes_by_recognition_id()
+    size_by_code = _load_product_sizes()  # product_code -> {width_cm,height_cm,...}
+    no_bg_map = _build_no_bg_image_map()  # recognition_id -> image_no_bg_url
+
+    for prod in (planogram_dict.get("products") or []):
+        rid = str(prod.get("id") or "").strip()
+        upc = str(prod.get("upc") or "").strip()
+
+        # --- dimensions (width/height) ---
+        dims = None
+        if rid and rid in size_by_recog_id:
+            dims = size_by_recog_id[rid]
+        elif upc and upc in size_by_code:
+            dims = size_by_code[upc]
+
+        if dims:
+            width_cm = float(dims.get("width_cm") or 0)
+            height_cm = float(dims.get("height_cm") or 0)
+            if width_cm > 0:
+                prod["width_in"] = round(width_cm * CM_TO_IN, 2)
+            if height_cm > 0:
+                prod["height_in"] = round(height_cm * CM_TO_IN, 2)
+
+            # keep brand/package_type aligned when available
+            if dims.get("brand"):
+                prod["brand"] = dims.get("brand")
+            if dims.get("package_type"):
+                prod["package_type"] = dims.get("package_type")
+
+            # Prefer master product_name for UI display, but do NOT overwrite
+            # `name` because photo-viewer uses `name` as the "art" key.
+            if dims.get("name"):
+                prod["full_name"] = dims.get("name")
+
+        # Apply known corrections (optional, per-SKU)
+        if upc in COFFEE_PLANOGRAM_DIM_OVERRIDES_CM:
+            ov = COFFEE_PLANOGRAM_DIM_OVERRIDES_CM[upc]
+            prod["width_in"] = round(float(ov["width_cm"]) * CM_TO_IN, 2)
+            prod["height_in"] = round(float(ov["height_cm"]) * CM_TO_IN, 2)
+
+        # --- images (prefer no-bg cutouts) ---
+        if rid and rid in no_bg_map and no_bg_map[rid]:
+            prod["image_no_bg_url"] = no_bg_map[rid]
+            prod["image_url"] = no_bg_map[rid]
+        elif upc and upc in image_map:
+            prod["image_url"] = image_map[upc]["image_url"]
+            if image_map[upc]["image_no_bg_url"]:
+                prod["image_no_bg_url"] = image_map[upc]["image_no_bg_url"]
+
     return planogram_dict
 
 
@@ -800,8 +1020,17 @@ def get_planogram():
     global current_planogram, current_summary, current_compliance, current_decision_tree
     mode = request.args.get("mode", "").lower()
     if mode == "coffee":
-        if current_planogram is None or current_planogram.category != "Coffee":
-            _load_coffee_planogram()
+        desired_id = "PLN-CSV-COFFEE-617533"
+        if (
+            current_planogram is None
+            or current_planogram.category != "Coffee"
+            or getattr(current_planogram, "id", None) != desired_id
+        ):
+            # Force planogram positions (avoid recognition-based realogram state)
+            try:
+                _load_coffee_planogram(source="positions")
+            except Exception:
+                _load_coffee_planogram(source="auto")
     elif mode == "beer":
         if current_planogram is None or current_planogram.category == "Coffee":
             init_default_planogram()
@@ -812,6 +1041,9 @@ def get_planogram():
     
     planogram_data = current_planogram.to_dict()
     planogram_data = _enrich_products_with_images(planogram_data)
+    if mode == "coffee":
+        planogram_data = _reflow_planogram_positions(planogram_data)
+        planogram_data = _recompute_bay_and_shelf_widths(planogram_data)
     
     return jsonify({
         "planogram": planogram_data,
@@ -1699,14 +1931,20 @@ def training():
     return render_template("training.html", photos=photos)
 
 
-@app.route("/training2")
-def training2():
+@app.route("/decision-tree")
+def decision_tree_page():
     """Serve Training 2 — Decision Tree visualization with product highlighting."""
     try:
         photos = _supabase_photo_list()
     except Exception:
         photos = []
     return render_template("training2.html", photos=photos)
+
+
+@app.route("/training2")
+def training2():
+    """Backward-compatible redirect to decision-tree route."""
+    return redirect(url_for("decision_tree_page"))
 
 
 @app.route("/training3")
@@ -1950,6 +2188,13 @@ def build_from_recognition():
         from dataclasses import asdict
         current_equipment = asdict(current_planogram.equipment) if current_planogram.equipment else None
         _save_state()
+
+        # Ensure master-data dimensions/images are reflected even if saved
+        # products existed with older dimensions.
+        planogram_dict = current_planogram.to_dict()
+        planogram_dict = _refresh_products_from_coffee_master(planogram_dict)
+        planogram_dict = _reflow_planogram_positions(planogram_dict)
+        current_planogram = Planogram.from_dict(planogram_dict)
 
         return jsonify({
             "status": "success",
@@ -2218,6 +2463,10 @@ def load_realogram():
         planogram_data = row["planogram_data"]
         # Enrich product names with tiny_name for consistent planogram comparison
         _enrich_product_names(planogram_data)
+        # Refresh coffee product dimensions + images from master data
+        planogram_data = _refresh_products_from_coffee_master(planogram_data)
+        # Reflow shelf positions so refreshed widths don't create gaps/overlaps
+        planogram_data = _reflow_planogram_positions(planogram_data)
         return jsonify({
             "status": "success",
             "planogram": planogram_data,

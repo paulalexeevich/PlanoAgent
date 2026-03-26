@@ -4,11 +4,13 @@ let activeKpi = null;
 let customAssortmentList = null;
 
 function togglePanel() {
-    document.getElementById('bottomPanel').classList.toggle('collapsed');
+    const panel = document.getElementById('bottomPanel');
+    if (!panel) return;
+    panel.classList.toggle('collapsed');
 }
 
 function renderSummary() {
-    if (!summaryData) return;
+    if (!summaryData || !document.getElementById('bottomPanel')) return;
     renderKpiCards();
     if (activeKpi) renderKpiDetailContent(activeKpi);
 }
@@ -16,6 +18,7 @@ function renderSummary() {
 function renderKpiCards() {
     const s = summaryData;
     if (!s) return;
+    if (!document.getElementById('kpiAssortment')) return;
 
     const assort = s.assortment || {};
     let assortPct, assortPlaced, assortTotal;
@@ -68,6 +71,7 @@ function renderKpiCards() {
 
 function toggleKpiDetail(kpiId) {
     const panel = document.getElementById('kpiDetailPanel');
+    if (!panel || !document.getElementById('bottomPanel')) return;
     if (activeKpi === kpiId) {
         activeKpi = null;
         panel.classList.remove('open');
@@ -89,6 +93,7 @@ function toggleKpiDetail(kpiId) {
 
 function renderKpiDetailContent(kpiId) {
     const panel = document.getElementById('kpiDetailPanel');
+    if (!panel) return;
     if (!summaryData) { panel.innerHTML = ''; return; }
 
     switch(kpiId) {
@@ -330,6 +335,7 @@ function clearAssortmentList() {
 }
 
 function renderDecisionTree() {
+    if (!document.getElementById('bottomPanel')) return;
     renderKpiCards();
     if (activeKpi === 'compliance') renderKpiDetailContent('compliance');
 }
